@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: airbyte_raw
+    schema: airbyte_raw
+    description: Raw data loaded by Airbyte from OpenWeather API
+    tables:
+      - name: current_weather
+        description: Current weather observations per city from OpenWeather 2.5 API
+      - name: air_pollution
+        description: Air quality index and pollutant data from OpenWeather 2.5 API
