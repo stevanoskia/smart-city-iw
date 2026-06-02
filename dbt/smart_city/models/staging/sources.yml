@@ -9,3 +9,9 @@ sources:
         description: Current weather observations per city from OpenWeather 2.5 API
       - name: air_pollution
         description: Air quality index and pollutant data from OpenWeather 2.5 API
+      - name: weather_forecast
+        description: 5-day / 3-hour weather forecast from OpenWeather 2.5 API (40 records per sync)
+      - name: traffic_flow
+        description: Real-time traffic speed and congestion per road segment from TomTom API
+      - name: traffic_incidents
+        description: Active traffic incidents (accidents, closures, congestion) from TomTom API
