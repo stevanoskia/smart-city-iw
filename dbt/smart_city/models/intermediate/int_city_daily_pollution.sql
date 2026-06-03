@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ ref('stg_air_pollution') }}
+    select * from {{ source('postgres_staging', 'stg_air_pollution') }}
 ),
 
 daily as (

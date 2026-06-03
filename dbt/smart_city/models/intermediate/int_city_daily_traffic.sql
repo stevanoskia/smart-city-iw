@@ -1,9 +1,9 @@
 with flow as (
-    select * from {{ ref('stg_traffic_flow') }}
+    select * from {{ source('postgres_staging', 'stg_traffic_flow') }}
 ),
 
 incidents as (
-    select * from {{ ref('stg_traffic_incidents') }}
+    select * from {{ source('postgres_staging', 'stg_traffic_incidents') }}
 ),
 
 daily_flow as (

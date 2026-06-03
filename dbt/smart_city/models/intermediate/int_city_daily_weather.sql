@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ ref('stg_current_weather') }}
+    select * from {{ source('postgres_staging', 'stg_current_weather') }}
 ),
 
 daily as (

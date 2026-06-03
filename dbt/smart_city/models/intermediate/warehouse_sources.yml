@@ -1,0 +1,18 @@
+version: 2
+
+sources:
+  - name: postgres_staging
+    database: pg_landing
+    schema: staging
+    description: Staging views in PostgreSQL, read by DuckDB via postgres ATTACH extension
+    tables:
+      - name: stg_current_weather
+        description: Cleaned current weather per city from OpenWeather API
+      - name: stg_air_pollution
+        description: Cleaned air quality data per city from OpenWeather API
+      - name: stg_weather_forecast
+        description: 5-day forecast data per city from OpenWeather API
+      - name: stg_traffic_flow
+        description: Road segment traffic flow from TomTom API
+      - name: stg_traffic_incidents
+        description: Active traffic incidents from TomTom API
