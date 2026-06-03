@@ -1,6 +1,26 @@
 version: 2
 
 models:
+  - name: mart_weather_forecast
+    description: >
+      5-day hourly weather forecast per city sourced from the latest Airbyte sync.
+      Deduplicates across syncs so only the most recent forecast window is shown.
+      Includes rain alerts (>=70% precipitation probability) and days_from_now for
+      easy Power BI time-based filtering.
+    columns:
+      - name: city
+        tests:
+          - not_null
+      - name: forecast_at
+        tests:
+          - not_null
+      - name: heavy_rain_alert
+        tests:
+          - not_null
+    tests:
+      - unique:
+          column_name: "city || '|' || forecast_at::text"
+
   - name: mart_temperature_trends
     description: >
       Daily temperature metrics per city with 7-day and 30-day rolling averages.

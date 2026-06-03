@@ -224,13 +224,28 @@ def discover_catalog(source_id: str) -> dict:
     }
 
 
+def set_connection_manual(connection_id: str, conn_name: str) -> None:
+    """Switch an existing connection to manual schedule (Airflow owns triggering)."""
+    result = api(
+        "POST", "connections/update",
+        json={
+            "connectionId": connection_id,
+            "scheduleType": "manual",
+        },
+    )
+    schedule = result.get("scheduleType", "unknown")
+    print(f"  ✓ Connection '{conn_name}' schedule set to: {schedule}")
+
+
 def ensure_connection(workspace_id: str, source_id: str, destination_id: str,
                       conn_name: str, streams: list, sync_cfg: dict,
                       existing_by_source: dict) -> str:
     if source_id in existing_by_source:
         conn = existing_by_source[source_id]
-        print(f"  ✓ Connection '{conn_name}' already exists — skipping")
-        return conn["connectionId"]
+        conn_id = conn["connectionId"]
+        print(f"  ✓ Connection '{conn_name}' already exists — setting to manual schedule")
+        set_connection_manual(conn_id, conn_name)
+        return conn_id
 
     sync_catalog = discover_catalog(source_id)
     result = api(
