@@ -17,8 +17,8 @@ interactive smart city dashboards. Simulates a real-world smart city analytics s
 | Airbyte (abctl) | ✅ Running | localhost:8000, Kind/Kubernetes |
 | Airbyte destination | ✅ Configured | smart_city_postgres → airbyte_raw schema |
 | DuckDB warehouse | ✅ Running | warehouse/smart_city.duckdb — analytics warehouse |
-| Power BI Desktop | 🔜 Pending | ODBC driver install needed |
-| Airflow | 🔜 Pending | docker-compose ready at airflow/, DAGs not written |
+| Airflow | ✅ Running | localhost:8080, DAG smart_city_pipeline deployed |
+| Power BI Desktop | ✅ Connected | ODBC → DuckDB, mart tables loaded |
 
 ### Data Ingestion (APIs)
 | API / Stream | Status | Cities | Notes |
@@ -47,10 +47,17 @@ interactive smart city dashboards. Simulates a real-world smart city analytics s
 | Marts | DuckDB | `mart_city_comparison` | ✅ Built |
 | Marts | DuckDB | `mart_smart_city_kpis` | ✅ Built |
 
+### Orchestration
+| Component | Status | Notes |
+|---|---|---|
+| Airflow DAG `smart_city_pipeline` | ✅ Deployed | Triggers all 6 syncs → dbt staging → dbt warehouse |
+| Hourly schedule | ✅ Configured | `@hourly` via Airflow scheduler |
+| Airbyte OAuth auth | ✅ Working | client_id/client_secret via Applications API |
+
 ### Dashboards
 | Feature | Status |
 |---|---|
-| Power BI connected to DuckDB | 🔜 ODBC driver pending |
+| Power BI connected to DuckDB | ✅ Done |
 | Temperature trend charts | ❌ Not built |
 | AQI monitoring widgets | ❌ Not built |
 | Traffic density charts | ❌ Not built |
@@ -66,7 +73,7 @@ interactive smart city dashboards. Simulates a real-world smart city analytics s
 ```
                         ┌──────────────────────────────────────┐
                         │          Apache Airflow               │
-                        │   (orchestrates every step below)     │
+                        │   smart_city_pipeline DAG (@hourly)  │
                         └──────┬───────────────┬───────────────┘
                                │ triggers sync  │ triggers dbt
                                ▼               ▼
@@ -87,7 +94,7 @@ interactive smart city dashboards. Simulates a real-world smart city analytics s
 
 **Two-tier ELT:**
 - **PostgreSQL** — ingestion/landing database. Airbyte writes raw data here. dbt builds staging views here.
-- **DuckDB** — analytics warehouse. dbt reads PostgreSQL staging via postgres ATTACH extension and materializes intermediate views + mart tables here. Power BI reads from marts.
+- **DuckDB** — analytics warehouse. dbt reads PostgreSQL staging via postgres ATTACH extension and materializes intermediate views + mart tables here. Power BI reads from marts via ODBC.
 
 | Layer | Tool | Location | Purpose |
 |---|---|---|---|
@@ -95,7 +102,7 @@ interactive smart city dashboards. Simulates a real-world smart city analytics s
 | Landing DB | PostgreSQL 18 | localhost:5432 | airbyte_raw + staging schemas |
 | Warehouse | DuckDB | warehouse/smart_city.duckdb | intermediate + marts schemas |
 | Transformation | dbt (Python venv313) | — | SQL models, tests |
-| Orchestration | Airflow (Docker) | localhost:8080 | DAG scheduling (pending) |
+| Orchestration | Airflow (Docker) | localhost:8080 | DAG scheduling, automated pipeline |
 | Visualization | Power BI Desktop | — | Dashboards (pending) |
 
 ---
@@ -115,7 +122,7 @@ source /c/Users/Andrej/Desktop/IWCONNECT-PRAKSA/smart-city-iw/venv313/Scripts/ac
 
 ---
 
-## Running dbt
+## Running dbt (manually)
 
 Always run from `dbt/smart_city/`. Two separate commands, two targets.
 
@@ -173,8 +180,8 @@ dbt test --select intermediate marts --target warehouse
 | `postgres_staging` | (attached read-only view of PostgreSQL staging) | attached |
 
 dbt project root: `dbt/smart_city/`
-Profiles: `~/.dbt/profiles.yml` (targets: `staging` → PostgreSQL, `warehouse` → DuckDB)
-Schema macro: `macros/generate_schema_name.sql`
+Profiles: `~/.dbt/profiles.yml` (host) + `dbt/smart_city/profiles.yml` (Docker/Airflow)
+Targets: `staging` → PostgreSQL, `warehouse` → DuckDB
 
 ---
 
@@ -185,11 +192,10 @@ Schema macro: `macros/generate_schema_name.sql`
 - UI: `localhost:8000`
 - Kubeconfig: `~/.airbyte/abctl/abctl.kubeconfig`
 
-### Config-Driven Setup (recommended)
+### Config-Driven Setup
 
 ```bash
-# First add AIRBYTE_PG_HOST=<your LAN IP> to .env
-pip install requests pyyaml
+# Set AIRBYTE_CLIENT_ID and AIRBYTE_CLIENT_SECRET in .env first
 python ingestion/scripts/setup_airbyte.py
 ```
 
@@ -198,6 +204,11 @@ Outputs `ingestion/config/connection_ids.yml` with connection UUIDs for Airflow.
 Config files: `ingestion/config/sources.yml`, `ingestion/config/connections.yml`
 Connector YAMLs: `ingestion/connections/open_weather_free_2_5.yaml`, `ingestion/connections/tomtom_traffic.yaml`
 
+### Auth
+Airbyte API uses OAuth application tokens (not basic auth).
+Get `client_id` / `client_secret` from Airbyte UI → User → Applications.
+Set `AIRBYTE_CLIENT_ID` and `AIRBYTE_CLIENT_SECRET` in `.env`.
+
 ### Known quirks
 - Destination host must be LAN IP (`AIRBYTE_PG_HOST`) — not localhost (sync pods run in Kind)
 - Schema refresh may 403 on connector version change — delete and recreate the connection instead
@@ -205,28 +216,45 @@ Connector YAMLs: `ingestion/connections/open_weather_free_2_5.yaml`, `ingestion/
 
 ---
 
-## Power BI Connection
+## Airflow
 
-1. Download **DuckDB ODBC driver for Windows**: https://duckdb.org/docs/api/odbc/windows
-2. Run the installer
-3. Open **Power BI Desktop** → Get Data → ODBC
-4. Connection string: `Driver={DuckDB Driver};Database=C:\Users\Andrej\Desktop\IWCONNECT-PRAKSA\smart-city-iw\warehouse\smart_city.duckdb`
-5. Navigate to `marts` schema → load the 5 mart tables
+### Starting Airflow
+```bash
+cd airflow
+docker compose up -d     # start all services
+docker compose down -v   # full teardown (wipes DB)
+
+# First time setup (after teardown):
+docker compose run --rm airflow-init
+docker compose up -d
+```
+
+UI: `localhost:8080` — login: `admin / admin`
+
+### DAG: `smart_city_pipeline`
+- Schedule: `@hourly`
+- Triggers all 6 Airbyte syncs in parallel
+- Waits for all syncs to complete
+- Runs `dbt run --select staging --target staging`
+- Runs `dbt run --select intermediate marts --target warehouse`
+
+### Airflow env vars (from `airflow/.env` and docker-compose)
+| Var | Purpose |
+|---|---|
+| `SMART_CITY_PG_HOST` | `host.docker.internal` — PostgreSQL from inside Docker |
+| `SMART_CITY_PG_PASSWORD` | PostgreSQL password |
+| `AIRBYTE_URL` | `http://host.docker.internal:8000` |
+| `AIRBYTE_CLIENT_ID` | Airbyte OAuth client ID |
+| `AIRBYTE_CLIENT_SECRET` | Airbyte OAuth client secret |
 
 ---
 
-## Airflow DAG Design (next to build)
+## Power BI Connection
 
-Connection IDs from `ingestion/config/connection_ids.yml` (run `setup_airbyte.py` first).
-
-```
-trigger_airbyte_sync(connection_id) >> wait_for_sync >> dbt_staging >> dbt_warehouse
-```
-
-DAGs to build:
-- `dag_weather_pipeline.py` — OpenWeather sync + dbt, every hour
-- `dag_traffic_pipeline.py` — Traffic sync + dbt, every hour
-- `dag_daily_aggregations.py` — Full dbt run, daily at midnight
+1. DuckDB ODBC driver installed at `D:\DUCKDB\duckdb_odbc.dll`
+2. Power BI Desktop → Get Data → ODBC
+3. Connection string: `Driver={DuckDB Driver};Database=C:\Users\Andrej\Desktop\IWCONNECT-PRAKSA\smart-city-iw\warehouse\smart_city.duckdb;access_mode=read_only`
+4. Navigate to `marts` schema → load the 5 mart tables
 
 ---
 
@@ -261,9 +289,12 @@ TOMTOM_API_KEY=<from developer.tomtom.com>
 
 # Airbyte
 AIRBYTE_PG_HOST=10.2.x.x   # LAN IP — NOT localhost
-AIRBYTE_URL=http://localhost:8001
-AIRBYTE_USERNAME=airbyte
-AIRBYTE_PASSWORD=password
+AIRBYTE_URL=http://localhost:8000
+AIRBYTE_USERNAME=<your email>
+AIRBYTE_PASSWORD=<your password>
+AIRBYTE_CLIENT_ID=<from Airbyte UI → User → Applications>
+AIRBYTE_CLIENT_SECRET=<from Airbyte UI → User → Applications>
+AIRBYTE_WORKSPACE_ID=<from Airbyte UI URL>
 ```
 
 ---
@@ -275,10 +306,11 @@ AIRBYTE_PASSWORD=password
 - `AIRBYTE_PG_HOST` must be LAN IP — Airbyte pods can't reach host `localhost`
 - DuckDB warehouse is a local file — not committed to git
 - Airflow runs in Docker (not natively on Windows)
-- dbt runs in `venv313` on the host machine
+- dbt runs in `venv313` on the host machine (manual) OR inside Airflow container (automated)
 - All timestamps stored as UTC
 - Never manually edit `airbyte_raw` tables — Airbyte owns that schema
 - `city` column injected by Airbyte `AddFields` — rows before this change have NULL city (filtered out)
+- `airflow/.env` must exist with POSTGRES_PASSWORD, AIRBYTE_CLIENT_ID, AIRBYTE_CLIENT_SECRET
 
 ---
 
@@ -298,11 +330,16 @@ smart-city-iw/
 │   │   └── setup_airbyte.py
 │   └── README.md
 ├── airflow/
+│   ├── Dockerfile               ← extends apache/airflow:2.9.3 with dbt
 │   ├── docker-compose.yml
-│   └── dags/                    ← DAGs to be written
+│   ├── .env                     ← POSTGRES_PASSWORD, AIRBYTE_* (not committed)
+│   └── dags/
+│       ├── airbyte_utils.py     ← OAuth trigger/wait helpers
+│       └── dag_smart_city_pipeline.py
 ├── dbt/
 │   └── smart_city/              ← dbt project root (run dbt here)
 │       ├── dbt_project.yml
+│       ├── profiles.yml         ← Docker/Airflow profiles (container paths)
 │       ├── macros/
 │       └── models/
 │           ├── staging/         ← 5 models → PostgreSQL

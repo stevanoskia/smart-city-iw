@@ -1,0 +1,27 @@
+smart_city:
+  outputs:
+
+    staging:                          # PostgreSQL — staging models
+      type: postgres
+      host: "{{ env_var('SMART_CITY_PG_HOST', 'host.docker.internal') }}"
+      port: 5432
+      dbname: smart_city
+      user: postgres
+      pass: "{{ env_var('SMART_CITY_PG_PASSWORD') }}"
+      schema: staging
+      threads: 4
+
+    warehouse:                        # DuckDB — intermediate + mart models
+      type: duckdb
+      path: /opt/airflow/warehouse/smart_city.duckdb
+      schema: marts
+      threads: 1
+      extensions:
+        - postgres
+      attach:
+        - path: "host={{ env_var('SMART_CITY_PG_HOST', 'host.docker.internal') }} port=5432 dbname=smart_city user=postgres password={{ env_var('SMART_CITY_PG_PASSWORD') }}"
+          alias: pg_landing
+          type: postgres
+          read_only: true
+
+  target: staging

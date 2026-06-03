@@ -1,5 +1,7 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.9.3
+  build: .
+  env_file:
+    - ../.env
   environment:
     AIRFLOW__CORE__EXECUTOR: LocalExecutor
     AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:airflow@airflow-postgres/airflow
@@ -7,18 +9,23 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-    AIRFLOW_CONN_AIRBYTE_CONN: 'airbyte://airbyte:password@host.docker.internal:8001'
-    # Smart city DB connection (for dbt and direct queries)
+    # Smart city DB connection (used by dbt staging target inside container)
     SMART_CITY_PG_HOST: host.docker.internal
     SMART_CITY_PG_PORT: '5432'
     SMART_CITY_PG_DB: smart_city
     SMART_CITY_PG_USER: postgres
     SMART_CITY_PG_PASSWORD: ${POSTGRES_PASSWORD}
+    # Airbyte OAuth credentials (used by airbyte_utils.py in DAGs)
+    AIRBYTE_URL: 'http://host.docker.internal:8000'
+    AIRBYTE_CLIENT_ID: ${AIRBYTE_CLIENT_ID}
+    AIRBYTE_CLIENT_SECRET: ${AIRBYTE_CLIENT_SECRET}
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ../dbt:/opt/airflow/dbt
+    - ../warehouse:/opt/airflow/warehouse
+    - ../ingestion/config:/opt/airflow/ingestion_config
   depends_on:
     airflow-postgres:
       condition: service_healthy
@@ -53,9 +60,5 @@ services:
 
   airflow-init:
     <<: *airflow-common
-    command: >
-      bash -c "airflow db migrate &&
-               airflow users create --username admin --password admin
-               --firstname Admin --lastname User
-               --role Admin --email admin@smartcity.local"
+    command: bash -c "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@smartcity.local || true"
     restart: "no"

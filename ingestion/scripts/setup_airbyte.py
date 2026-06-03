@@ -2,7 +2,7 @@
 Idempotent Airbyte setup script.
 
 Reads ingestion/config/sources.yml and connections.yml, then creates any missing
-sources, destinations, and connections via the Airbyte REST API.
+sources, destinations, and connections via the Airbyte public API (v1).
 Safe to re-run — skips resources that already exist.
 
 After running, writes ingestion/config/connection_ids.yml with the UUID of every
@@ -13,6 +13,10 @@ Usage:
 
 Requirements:
     pip install requests pyyaml python-dotenv
+
+Auth:
+    Requires AIRBYTE_CLIENT_ID and AIRBYTE_CLIENT_SECRET in .env.
+    Get them from Airbyte UI → User (bottom-left) → Applications.
 """
 
 import os
@@ -34,72 +38,114 @@ CONNECTION_IDS_FILE = CONFIG_DIR / "connection_ids.yml"
 
 load_dotenv(ROOT / ".env")
 
-AIRBYTE_URL = os.getenv("AIRBYTE_URL", "http://localhost:8001").rstrip("/")
-AIRBYTE_USER = os.getenv("AIRBYTE_USERNAME", "airbyte")
-AIRBYTE_PASS = os.getenv("AIRBYTE_PASSWORD", "password")
-AUTH = (AIRBYTE_USER, AIRBYTE_PASS)
+AIRBYTE_URL          = os.getenv("AIRBYTE_URL", "http://localhost:8000").rstrip("/")
+AIRBYTE_CLIENT_ID    = os.getenv("AIRBYTE_CLIENT_ID")
+AIRBYTE_CLIENT_SECRET = os.getenv("AIRBYTE_CLIENT_SECRET")
+AIRBYTE_WORKSPACE_ID = os.getenv("AIRBYTE_WORKSPACE_ID")
 
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
-TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY")
-PG_HOST = os.getenv("AIRBYTE_PG_HOST")          # LAN IP — NOT localhost
+TOMTOM_API_KEY      = os.getenv("TOMTOM_API_KEY")
+PG_HOST = os.getenv("AIRBYTE_PG_HOST")
 PG_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
-PG_DB = os.getenv("POSTGRES_DB", "smart_city")
+PG_DB   = os.getenv("POSTGRES_DB", "smart_city")
 PG_USER = os.getenv("POSTGRES_USER", "postgres")
 PG_PASS = os.getenv("POSTGRES_PASSWORD")
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Auth ──────────────────────────────────────────────────────────────────────
+
+_token: str | None = None
+
+def get_token() -> str:
+    global _token
+    if _token:
+        return _token
+    if not AIRBYTE_CLIENT_ID or not AIRBYTE_CLIENT_SECRET:
+        raise RuntimeError(
+            "AIRBYTE_CLIENT_ID and AIRBYTE_CLIENT_SECRET must be set in .env.\n"
+            "Get them from Airbyte UI → User → Applications."
+        )
+    resp = requests.post(
+        f"{AIRBYTE_URL}/api/v1/applications/token",
+        json={
+            "client_id": AIRBYTE_CLIENT_ID,
+            "client_secret": AIRBYTE_CLIENT_SECRET,
+            "grant_type": "client_credentials",
+        },
+        timeout=30,
+    )
+    if not resp.ok:
+        raise RuntimeError(
+            f"Failed to obtain Airbyte token: {resp.status_code} {resp.text[:300]}"
+        )
+    _token = resp.json()["access_token"]
+    print("  ✓ Token obtained")
+    return _token
+
+# ── API helpers (new public API at /v1/) ─────────────────────────────────────
 
 def api(method: str, path: str, **kwargs):
+    """Call the Airbyte API with bearer token auth."""
     url = f"{AIRBYTE_URL}/api/v1/{path.lstrip('/')}"
-    resp = requests.request(method, url, auth=AUTH, json=kwargs.get("json"), timeout=30)
+    headers = {"Authorization": f"Bearer {get_token()}"}
+    resp = requests.request(
+        method, url, headers=headers,
+        json=kwargs.get("json"), params=kwargs.get("params"),
+        timeout=30,
+    )
     if not resp.ok:
         print(f"  ERROR {resp.status_code} {method} {path}: {resp.text[:300]}")
         resp.raise_for_status()
+    if not resp.text.strip():
+        return {}
     return resp.json()
 
 
 def get_workspace_id() -> str:
-    data = api("POST", "/workspaces/list")
+    if AIRBYTE_WORKSPACE_ID:
+        return AIRBYTE_WORKSPACE_ID
+    data = api("POST", "workspaces/list")
     workspaces = data.get("workspaces", [])
     if not workspaces:
-        raise RuntimeError("No Airbyte workspaces found")
+        raise RuntimeError(
+            "No workspaces found. Set AIRBYTE_WORKSPACE_ID in .env — "
+            "find it in the Airbyte UI URL: localhost:8000/workspaces/<uuid>/..."
+        )
     return workspaces[0]["workspaceId"]
 
 
 def list_sources(workspace_id: str) -> dict:
-    data = api("POST", "/sources/list", json={"workspaceId": workspace_id})
+    data = api("POST", "sources/list", json={"workspaceId": workspace_id})
     return {s["name"]: s for s in data.get("sources", [])}
 
 
 def list_destinations(workspace_id: str) -> dict:
-    data = api("POST", "/destinations/list", json={"workspaceId": workspace_id})
+    data = api("POST", "destinations/list", json={"workspaceId": workspace_id})
     return {d["name"]: d for d in data.get("destinations", [])}
 
 
 def list_connections(workspace_id: str) -> dict:
-    data = api("POST", "/connections/list", json={"workspaceId": workspace_id})
+    data = api("POST", "connections/list", json={"workspaceId": workspace_id})
     return {c["sourceId"]: c for c in data.get("connections", [])}
 
 
 def find_custom_source_definition(workspace_id: str, name: str) -> str:
     data = api(
-        "POST",
-        "/source_definitions/list_for_workspace",
+        "POST", "source_definitions/list_for_workspace",
         json={"workspaceId": workspace_id},
     )
     for defn in data.get("sourceDefinitions", []):
-        if defn["name"] == name:
+        if defn.get("name") == name:
             return defn["sourceDefinitionId"]
     raise RuntimeError(
-        f"Connector '{name}' not found in Airbyte connector builder. "
-        "Make sure the connector is published in the Connector Builder UI."
+        f"Connector '{name}' not found. "
+        "Make sure it is published in the Airbyte Connector Builder UI."
     )
 
 
 def find_postgres_destination_definition() -> str:
-    data = api("GET", "/destination_definitions/list")
+    data = api("GET", "destination_definitions/list")
     for defn in data.get("destinationDefinitions", []):
-        if "postgres" in defn["name"].lower():
+        if "postgres" in defn.get("name", "").lower():
             return defn["destinationDefinitionId"]
     raise RuntimeError("PostgreSQL destination definition not found")
 
@@ -118,8 +164,7 @@ def ensure_destination(workspace_id: str, cfg: dict, existing: dict) -> str:
 
     defn_id = find_postgres_destination_definition()
     result = api(
-        "POST",
-        "/destinations/create",
+        "POST", "destinations/create",
         json={
             "workspaceId": workspace_id,
             "name": name,
@@ -146,8 +191,7 @@ def ensure_source(workspace_id: str, defn_id: str, source_name: str,
         return existing[source_name]["sourceId"]
 
     result = api(
-        "POST",
-        "/sources/create",
+        "POST", "sources/create",
         json={
             "workspaceId": workspace_id,
             "name": source_name,
@@ -159,40 +203,47 @@ def ensure_source(workspace_id: str, defn_id: str, source_name: str,
     return result["sourceId"]
 
 
+def discover_catalog(source_id: str) -> dict:
+    """Discover the source schema and return a syncCatalog ready for connection create."""
+    print(f"    Discovering schema for source {source_id}...")
+    data = api("POST", "sources/discover_schema", json={"sourceId": source_id})
+    catalog = data.get("catalog", {})
+    streams = catalog.get("streams", [])
+    return {
+        "streams": [
+            {
+                "stream": s["stream"],
+                "config": {
+                    "syncMode": "full_refresh",
+                    "destinationSyncMode": "append",
+                    "selected": True,
+                },
+            }
+            for s in streams
+        ]
+    }
+
+
 def ensure_connection(workspace_id: str, source_id: str, destination_id: str,
                       conn_name: str, streams: list, sync_cfg: dict,
                       existing_by_source: dict) -> str:
     if source_id in existing_by_source:
+        conn = existing_by_source[source_id]
         print(f"  ✓ Connection '{conn_name}' already exists — skipping")
-        return existing_by_source[source_id]["connectionId"]
+        return conn["connectionId"]
 
-    stream_configs = [
-        {
-            "stream": {
-                "name": stream,
-                "supportedSyncModes": ["full_refresh"],
-            },
-            "config": {
-                "syncMode": "full_refresh",
-                "destinationSyncMode": "append",
-            },
-        }
-        for stream in streams
-    ]
-
+    sync_catalog = discover_catalog(source_id)
     result = api(
-        "POST",
-        "/connections/create",
+        "POST", "connections/create",
         json={
             "sourceId": source_id,
             "destinationId": destination_id,
             "name": conn_name,
             "status": "active",
-            "scheduleType": "cron",
-            "scheduleData": {"cron": {"cronExpression": sync_cfg["schedule"], "cronTimeZone": "UTC"}},
-            "syncCatalog": {"streams": stream_configs},
+            "scheduleType": "manual",   # Airflow triggers syncs — no internal schedule
+            "syncCatalog": sync_catalog,
             "namespaceDefinition": "customformat",
-            "namespaceFormat": sync_cfg.get("schema", "airbyte_raw"),
+            "namespaceFormat": "airbyte_raw",
         },
     )
     print(f"  + Connection '{conn_name}' created")
@@ -203,39 +254,38 @@ def ensure_connection(workspace_id: str, source_id: str, destination_id: str,
 
 def main():
     sources_cfg = yaml.safe_load(SOURCES_FILE.read_text())
-    conn_cfg = yaml.safe_load(CONNECTIONS_FILE.read_text())
-    sync = conn_cfg["sync"]
+    conn_cfg    = yaml.safe_load(CONNECTIONS_FILE.read_text())
+    sync        = conn_cfg["sync"]
 
     print("Connecting to Airbyte at", AIRBYTE_URL)
     workspace_id = get_workspace_id()
     print(f"Workspace: {workspace_id}\n")
 
-    existing_sources = list_sources(workspace_id)
+    existing_sources      = list_sources(workspace_id)
     existing_destinations = list_destinations(workspace_id)
-    existing_connections = list_connections(workspace_id)
+    existing_connections  = list_connections(workspace_id)
 
     # Destination
     print("── Destination ─────────────────────────────")
     destination_id = ensure_destination(workspace_id, conn_cfg, existing_destinations)
 
-    # Track all connection IDs for Airflow
     connection_ids = {}
 
     # OpenWeather sources
     print("\n── OpenWeather sources ──────────────────────")
-    ow_cfg = sources_cfg["openweather"]
+    ow_cfg    = sources_cfg["openweather"]
     ow_defn_id = find_custom_source_definition(workspace_id, ow_cfg["connector_name"])
 
     for city in ow_cfg["cities"]:
-        name = f"OpenWeather {city['city']}"
-        source_config = {
-            "city": city["city"],
-            "lat": city["lat"],
-            "lon": city["lon"],
+        name = f"openweather_{city['city'].lower()}"
+        source_cfg = {
+            "city":  city["city"],
+            "lat":   city["lat"],
+            "lon":   city["lon"],
             "appid": OPENWEATHER_API_KEY,
         }
-        source_id = ensure_source(workspace_id, ow_defn_id, name, source_config, existing_sources)
-        conn_id = ensure_connection(
+        source_id = ensure_source(workspace_id, ow_defn_id, name, source_cfg, existing_sources)
+        conn_id   = ensure_connection(
             workspace_id, source_id, destination_id,
             name, ow_cfg["streams"], sync, existing_connections,
         )
@@ -243,23 +293,23 @@ def main():
 
     # TomTom sources
     print("\n── TomTom sources ───────────────────────────")
-    tt_cfg = sources_cfg["tomtom"]
+    tt_cfg    = sources_cfg["tomtom"]
     tt_defn_id = find_custom_source_definition(workspace_id, tt_cfg["connector_name"])
 
     for city in tt_cfg["cities"]:
-        name = f"TomTom {city['city']}"
-        source_config = {
-            "city": city["city"],
-            "lat": city["lat"],
-            "lon": city["lon"],
+        name = f"tomtom_{city['city'].lower()}"
+        source_cfg = {
+            "city":    city["city"],
+            "lat":     city["lat"],
+            "lon":     city["lon"],
             "min_lat": city["min_lat"],
             "min_lon": city["min_lon"],
             "max_lat": city["max_lat"],
             "max_lon": city["max_lon"],
             "api_key": TOMTOM_API_KEY,
         }
-        source_id = ensure_source(workspace_id, tt_defn_id, name, source_config, existing_sources)
-        conn_id = ensure_connection(
+        source_id = ensure_source(workspace_id, tt_defn_id, name, source_cfg, existing_sources)
+        conn_id   = ensure_connection(
             workspace_id, source_id, destination_id,
             name, tt_cfg["streams"], sync, existing_connections,
         )
