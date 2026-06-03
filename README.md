@@ -1,8 +1,7 @@
 # Smart City Analytics Pipeline
 
 End-to-end ELT platform that collects weather, air pollution, and transportation data
-from public APIs, transforms it with dbt, orchestrates with Airflow, and serves
-interactive smart city dashboards through Metabase.
+from public APIs, transforms it with dbt, and serves smart city dashboards through Power BI.
 
 ---
 
@@ -10,106 +9,109 @@ interactive smart city dashboards through Metabase.
 
 ```
 OpenWeather API  ──┐
-Traffic API (TBD)──┼──► Airbyte ──► PostgreSQL ──► dbt ──► Metabase
-                   │      ↑              ↑
-                   └──────┘         Airflow (orchestration)
+TomTom API  ───────┼──► Airbyte ──► PostgreSQL (landing) ──► dbt ──► DuckDB (warehouse) ──► Power BI
+                   │                    staging                        intermediate + marts
+                   └───────────────────────────────────────────────────────────────────────
+                                     Airflow (orchestration — pending)
 ```
 
 | Layer | Tool | Status |
 |---|---|---|
 | Ingestion | Airbyte (abctl / Kubernetes) | ✅ Running |
-| Storage | PostgreSQL 18 (local) | ✅ Running |
-| Transformation | dbt-postgres | ✅ Staging models built |
+| Landing DB | PostgreSQL 18 (local) | ✅ Running |
+| Transformation | dbt-postgres + dbt-duckdb | ✅ All models built |
+| Warehouse | DuckDB (local file) | ✅ Running |
 | Orchestration | Apache Airflow | 🔜 Pending |
-| Dashboard | Metabase | ✅ Running, dashboards pending |
+| Visualization | Power BI Desktop | 🔜 ODBC setup pending |
 
 ---
 
 ## Data Sources
 
-| Source | Data | Status |
-|---|---|---|
-| OpenWeather Current Weather | temperature, humidity, wind, pressure, rain | ✅ Flowing (Skopje, hourly) |
-| OpenWeather Air Pollution | AQI, PM2.5, PM10, CO, NO2, O3 | ✅ Flowing (Skopje, hourly) |
-| OpenWeather Forecast | 5-day forecast, rain probability | ❌ Not yet configured |
-| Traffic API (TomTom/HERE) | congestion, speed, density | ❌ Not yet configured |
+| Source | Streams | Cities | Status |
+|---|---|---|---|
+| OpenWeather Free 2.5 | current weather, air pollution, forecast | Skopje, Berlin, London | ✅ Flowing |
+| TomTom Traffic | traffic flow, traffic incidents | London, Berlin, Amsterdam | ✅ Flowing |
 
 ---
 
-## Prerequisites
+## Quick Start
 
-- Python 3.8+
-- PostgreSQL 18 installed locally on port 5432
+### Prerequisites
+- Python 3.13
+- PostgreSQL 18 (local, port 5432)
 - Docker Desktop
 - abctl (Airbyte CLI)
-- Git
 
----
-
-## Starting the Stack
-
-### 1. Airbyte
-```bash
-abctl local deploy
-# UI: http://localhost:8000  (takes ~2 min to be ready)
-```
-
-### 2. PostgreSQL
-Starts automatically with Windows. Verify:
-```bash
-psql -U postgres -d smart_city -c "SELECT version();"
-```
-If not running: **Windows Services → postgresql-x64-18 → Start**
-
-### 3. Metabase
-```bash
-docker start metabase
-# or first time:
-docker run -d --name metabase -p 3000:3000 metabase/metabase
-# UI: http://localhost:3000
-```
-
-### 4. Airflow _(coming soon)_
-```bash
-cd airflow && docker compose up -d
-# UI: http://localhost:8080  (admin / admin)
-```
-
----
-
-## Local Development Setup
+### Setup
 
 ```bash
-# Clone
 git clone https://github.com/stevanoskia/smart-city-iw.git
 cd smart-city-iw
 
-# Virtual environment
-python -m venv venv
-source venv/Scripts/activate        # Git Bash / WSL
-# venv\Scripts\activate             # CMD / PowerShell
+# Create venv with Python 3.13
+py -3.13 -m venv venv313
+source venv313/Scripts/activate
 
 # Install dependencies
-pip install --upgrade pip
-pip install psycopg2-binary==2.9.9 --only-binary=psycopg2-binary
-pip install dbt-postgres python-dotenv
+pip install dbt-postgres==1.8.2 dbt-duckdb==1.8.4 psycopg2-binary \
+            python-dotenv requests pyyaml
 
-# Credentials
+# Configure credentials
 cp .env.example .env
-# Fill in POSTGRES_PASSWORD and OPENWEATHER_API_KEY
+# Fill in POSTGRES_PASSWORD, OPENWEATHER_API_KEY, TOMTOM_API_KEY, AIRBYTE_PG_HOST
 ```
 
----
+### Configure dbt profiles
 
-## Running dbt
+Add to `~/.dbt/profiles.yml`:
+
+```yaml
+smart_city:
+  outputs:
+    staging:
+      type: postgres
+      host: localhost
+      port: 5432
+      dbname: smart_city
+      user: postgres
+      pass: <your password>
+      schema: staging
+      threads: 4
+    warehouse:
+      type: duckdb
+      path: "<absolute path>/warehouse/smart_city.duckdb"
+      schema: marts
+      threads: 1
+      extensions:
+        - postgres
+      attach:
+        - path: "host=localhost port=5432 dbname=smart_city user=postgres password=<your password>"
+          alias: pg_landing
+          type: postgres
+          read_only: true
+  target: staging
+```
+
+### Run the pipeline
 
 ```bash
 cd dbt/smart_city
-dbt debug                        # verify connection
-dbt run --select staging         # run staging models
-dbt run                          # run all models
-dbt test                         # run data quality tests
+
+# Build staging in PostgreSQL
+dbt run --select staging --target staging
+
+# Build intermediate + marts in DuckDB
+dbt run --select intermediate marts --target warehouse
 ```
+
+### Connect Power BI
+
+1. Download the **DuckDB ODBC driver for Windows** from https://duckdb.org/docs/api/odbc/windows
+2. Run the installer
+3. Power BI Desktop → Get Data → ODBC
+4. Connection string: `Driver={DuckDB Driver};Database=<path>\warehouse\smart_city.duckdb`
+5. Load tables from the `marts` schema
 
 ---
 
@@ -118,39 +120,32 @@ dbt test                         # run data quality tests
 | Service | URL | Credentials |
 |---|---|---|
 | Airbyte | http://localhost:8000 | airbyte / password |
-| Airflow | http://localhost:8080 | admin / admin |
-| Metabase | http://localhost:3000 | set during setup |
+| Airflow | http://localhost:8080 | admin / admin (pending) |
 | PostgreSQL | localhost:5432 | postgres / (from .env) |
+| DuckDB | warehouse/smart_city.duckdb | file-based |
 
 ---
 
 ## Database Schemas
 
-| Schema | Purpose |
-|---|---|
-| `airbyte_raw` | Raw API data loaded by Airbyte — never edit manually |
-| `staging` | Cleaned, typed dbt views — 1:1 with raw tables |
-| `intermediate` | Joined and aggregated dbt models |
-| `marts` | Final analytics tables consumed by Metabase |
+| Database | Schema | Purpose |
+|---|---|---|
+| PostgreSQL | `airbyte_raw` | Raw API data — written by Airbyte, never edit |
+| PostgreSQL | `staging` | Typed dbt views, 1:1 with raw tables |
+| DuckDB | `intermediate` | Daily aggregations per city (dbt views) |
+| DuckDB | `marts` | Final analytics tables — Power BI reads here |
 
 ---
 
-## What's been built
+## Airbyte Setup (config-driven)
 
-- Airbyte custom connector for OpenWeather free 2.5 API (YAML at `ingestion/connections/`)
-- PostgreSQL destination wired to `airbyte_raw` schema
-- Hourly sync of weather + air pollution data for Skopje
-- dbt staging models: `stg_current_weather`, `stg_air_pollution`
-- Metabase connected to `smart_city` database
+```bash
+# Add AIRBYTE_PG_HOST=<your LAN IP> to .env first
+python ingestion/scripts/setup_airbyte.py
+```
 
-## What's next
-
-1. Add OpenWeather Forecast stream (5-day forecast, rain probability)
-2. Add Traffic API source (TomTom or HERE)
-3. Add more cities as additional Airbyte sources
-4. Build dbt intermediate + mart models
-5. Write Airflow DAGs
-6. Build Metabase dashboards
+Creates all sources, destinations, and connections from `ingestion/config/sources.yml`.
+Outputs `ingestion/config/connection_ids.yml` with UUIDs needed for Airflow DAGs.
 
 ---
 
@@ -158,21 +153,14 @@ dbt test                         # run data quality tests
 
 ```
 smart-city-iw/
-├── ingestion/
-│   ├── connections/                  # Airbyte connector YAML configs
-│   └── README.md                     # Airbyte setup guide
-├── airflow/
-│   ├── docker-compose.yml
-│   └── dags/
-├── dbt/
-│   └── smart_city/                   # dbt project root
-│       ├── dbt_project.yml
-│       ├── macros/
-│       └── models/
-│           ├── staging/
-│           ├── intermediate/
-│           └── marts/
-├── dashboard/
-├── .env                              # secrets (not committed)
-└── .env.example
+├── ingestion/         # Airbyte connector YAMLs + config-driven setup script
+├── airflow/           # Airflow docker-compose + DAGs (pending)
+├── dbt/smart_city/    # dbt project root — run all dbt commands here
+│   └── models/
+│       ├── staging/       → PostgreSQL
+│       ├── intermediate/  → DuckDB
+│       └── marts/         → DuckDB (Power BI reads here)
+├── warehouse/         # DuckDB file lives here (git-ignored)
+├── venv313/           # Python 3.13 venv (always use this)
+└── .env               # secrets (not committed)
 ```
