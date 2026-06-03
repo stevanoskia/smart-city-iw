@@ -1,0 +1,171 @@
+version: 7.10.0
+
+type: DeclarativeSource
+
+check:
+  type: CheckStream
+  stream_names:
+    - traffic_incidents
+
+streams:
+  - type: DeclarativeStream
+    name: traffic_flow
+    transformations:
+      - type: AddFields
+        fields:
+          - path: ["city"]
+            value: "{{ config['city'] }}"
+            value_type: string
+    retriever:
+      type: SimpleRetriever
+      requester:
+        type: HttpRequester
+        url: >-
+          https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/14/json
+        http_method: GET
+        request_parameters:
+          key: "{{ config['api_key'] }}"
+          unit: kmph
+          point: "{{ config['lat'] }},{{ config['lon'] }}"
+      record_selector:
+        type: RecordSelector
+        extractor:
+          type: DpathExtractor
+          field_path:
+            - flowSegmentData
+    schema_loader:
+      type: InlineSchemaLoader
+      schema:
+        type: object
+        $schema: http://json-schema.org/draft-07/schema#
+        properties:
+          city:
+            type: string
+          frc:
+            type: string
+          confidence:
+            type: number
+          roadClosure:
+            type: boolean
+          currentSpeed:
+            type: integer
+          freeFlowSpeed:
+            type: integer
+          currentTravelTime:
+            type: integer
+          freeFlowTravelTime:
+            type: integer
+
+  - type: DeclarativeStream
+    name: traffic_incidents
+    transformations:
+      - type: AddFields
+        fields:
+          - path: ["city"]
+            value: "{{ config['city'] }}"
+            value_type: string
+    retriever:
+      type: SimpleRetriever
+      requester:
+        type: HttpRequester
+        url: https://api.tomtom.com/traffic/services/5/incidentDetails
+        http_method: GET
+        request_parameters:
+          key: "{{ config['api_key'] }}"
+          bbox: >-
+            {{ config['min_lon'] }},{{ config['min_lat'] }},{{ config['max_lon']
+            }},{{ config['max_lat'] }}
+          language: en-GB
+          categoryFilter: 0,1,2,3,4,5,6,7,8,9,10,11
+          timeValidityFilter: present
+      record_selector:
+        type: RecordSelector
+        extractor:
+          type: DpathExtractor
+          field_path:
+            - incidents
+    schema_loader:
+      type: InlineSchemaLoader
+      schema:
+        type: object
+        $schema: http://json-schema.org/draft-07/schema#
+        properties:
+          city:
+            type: string
+          type:
+            type: string
+          geometry:
+            type: object
+            properties:
+              type:
+                type: string
+              coordinates:
+                type: array
+          properties:
+            type: object
+            properties:
+              id:
+                type: string
+              to:
+                type: string
+              from:
+                type: string
+              delay:
+                type: integer
+              length:
+                type: number
+              endTime:
+                type: string
+              startTime:
+                type: string
+              iconCategory:
+                type: integer
+              timeValidity:
+                type: string
+              numberOfReports:
+                type: integer
+              magnitudeOfDelay:
+                type: integer
+              probabilityOfOccurrence:
+                type: string
+
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    $schema: http://json-schema.org/draft-07/schema#
+    required:
+      - api_key
+      - lat
+      - lon
+      - min_lat
+      - min_lon
+      - max_lat
+      - max_lon
+      - city
+    properties:
+      city:
+        type: string
+        title: City Name
+      lat:
+        type: number
+        title: Latitude
+      lon:
+        type: number
+        title: Longitude
+      api_key:
+        type: string
+        title: API Key
+        airbyte_secret: true
+      max_lat:
+        type: number
+        title: Max Latitude (bbox)
+      max_lon:
+        type: number
+        title: Max Longitude (bbox)
+      min_lat:
+        type: number
+        title: Min Latitude (bbox)
+      min_lon:
+        type: number
+        title: Min Longitude (bbox)

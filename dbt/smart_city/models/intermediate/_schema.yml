@@ -1,0 +1,63 @@
+version: 2
+
+models:
+  - name: int_city_daily_weather
+    description: Daily weather aggregations per city — avg/min/max temperature, wind, precipitation, dominant condition.
+    columns:
+      - name: city
+        tests:
+          - not_null
+      - name: date_utc
+        tests:
+          - not_null
+    tests:
+      - unique:
+          column_name: "city || '|' || date_utc::text"
+
+  - name: int_city_daily_pollution
+    description: Daily air quality aggregations per city — avg/max AQI, pollutant averages, hours of poor air.
+    columns:
+      - name: city
+        tests:
+          - not_null
+      - name: date_utc
+        tests:
+          - not_null
+      - name: avg_aqi
+        tests:
+          - not_null
+    tests:
+      - unique:
+          column_name: "city || '|' || date_utc::text"
+
+  - name: int_city_daily_traffic
+    description: Daily traffic aggregations per city — congestion score, speed, incident counts.
+    columns:
+      - name: city
+        tests:
+          - not_null
+      - name: date_utc
+        tests:
+          - not_null
+    tests:
+      - unique:
+          column_name: "city || '|' || date_utc::text"
+
+  - name: int_composite_city_score
+    description: >
+      Joins daily weather, pollution, and traffic into a single per-city per-day row.
+      Computes normalized scores and a composite comfort_index (0=worst, 1=best).
+      Formula: 0.4 * norm_temp + 0.4 * (1 - norm_aqi) + 0.2 * norm_traffic.
+    columns:
+      - name: city
+        tests:
+          - not_null
+      - name: date_utc
+        tests:
+          - not_null
+      - name: comfort_index
+        tests:
+          - not_null
+    tests:
+      - unique:
+          column_name: "city || '|' || date_utc::text"
