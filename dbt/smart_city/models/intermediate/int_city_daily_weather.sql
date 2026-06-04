@@ -35,6 +35,7 @@ daily as (
         count(*)                                                        as observation_count
 
     from source
+    where city is not null
     group by city, country, date_trunc('day', observed_at)::date
 )
 

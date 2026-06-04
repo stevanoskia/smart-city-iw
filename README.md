@@ -16,14 +16,14 @@ TomTom API  -------+--> Airbyte --> PostgreSQL (landing) --> dbt --> DuckDB (war
                                Airflow (smart_city_pipeline DAG, @hourly)
 ```
 
-| Layer | Tool | Status |
-|---|---|---|
-| Ingestion | Airbyte (abctl / Kubernetes) | Running |
-| Landing DB | PostgreSQL 18 (local, port 5432) | Running |
-| Transformation | dbt-postgres + dbt-duckdb | All 14 models built |
-| Warehouse | DuckDB (warehouse/smart_city.duckdb) | Running |
-| Orchestration | Apache Airflow (Docker, port 8080) | Running |
-| Visualization | Power BI Desktop (ODBC to DuckDB) | Connected |
+| Layer | Tool |
+|---|---|
+| Ingestion | Airbyte (abctl / Kubernetes)
+| Landing DB | PostgreSQL 18 (local, port 5432) 
+| Transformation | dbt-postgres + dbt-duckdb
+| Warehouse | DuckDB (warehouse/smart_city.duckdb)
+| Orchestration | Apache Airflow (Docker, port 8080)
+| Visualization | Power BI Desktop (ODBC to DuckDB)
 
 ---
 
@@ -56,31 +56,40 @@ cp .env.example .env   # fill in credentials
 See `~/.dbt/profiles.yml` — two targets: `staging` (PostgreSQL) and `warehouse` (DuckDB).
 Full config in CLAUDE.md.
 
-### 3. Configure Airbyte
+### 3. Install and start Airbyte
+```powershell
+# First-time install (takes ~5 min, downloads Kind cluster + Airbyte pods)
+abctl local install
+# UI: localhost:8000  — get credentials with:
+abctl local credentials
+```
+
+### 4. Configure Airbyte connections
 ```bash
 # Add AIRBYTE_CLIENT_ID, AIRBYTE_CLIENT_SECRET, AIRBYTE_WORKSPACE_ID to .env
+# (get client_id / client_secret from Airbyte UI → User → Applications)
 python ingestion/scripts/setup_airbyte.py
 # Creates ingestion/config/connection_ids.yml
 ```
 
-### 4. Run dbt manually
+### 5. Run dbt manually
 ```bash
 cd dbt/smart_city
 dbt run --select staging --target staging
 dbt run --select intermediate marts --target warehouse
 ```
 
-### 5. Start Airflow
+### 6. Start Airflow
 ```bash
 cd airflow
-# Copy credentials to airflow/.env (POSTGRES_PASSWORD, AIRBYTE_CLIENT_ID, AIRBYTE_CLIENT_SECRET)
+# First time only — initialises the Airflow DB and creates the admin user
 docker compose run --rm airflow-init
 docker compose up -d
 # UI: localhost:8080  (admin / admin)
 # Enable DAG: smart_city_pipeline
 ```
 
-### 6. Connect Power BI
+### 7. Connect Power BI
 - Install DuckDB ODBC driver from duckdb.org/docs/api/odbc/windows
 - Get Data -> ODBC -> `Driver={DuckDB Driver};Database=<path>\warehouse\smart_city.duckdb;access_mode=read_only`
 - Load 5 tables from the `marts` schema
@@ -107,6 +116,24 @@ docker compose up -d
 - **Comfort Index**: `0.4 * norm_temp + 0.4 * (1 - norm_aqi) + 0.2 * norm_traffic` (0-1)
 - **AQI Alert**: triggered when a city has 3+ hours of AQI >= 4 in a single day
 - **Anomaly detection**: temperature > 2 standard deviations from 30-day rolling mean
+
+---
+
+## Restarting after a reboot
+
+PostgreSQL starts automatically with Windows. For everything else:
+
+```powershell
+# 1. Airbyte — Kind container exits on reboot, restart it then reinstall pods
+docker start airbyte-abctl-control-plane
+abctl local install
+# Check: abctl local status
+
+# 2. Airflow
+cd airflow
+docker compose up -d
+# UI: localhost:8080
+```
 
 ---
 

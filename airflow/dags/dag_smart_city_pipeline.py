@@ -39,9 +39,13 @@ CONNECTION_IDS: dict[str, str] = yaml.safe_load(
 DBT_PROJECT_DIR  = "/opt/airflow/dbt/smart_city"
 DBT_PROFILES_DIR = "/opt/airflow/dbt/smart_city"
 
+# dbt runs from its isolated virtualenv (see airflow/Dockerfile), not Airflow's
+# Python env — keeps dbt's protobuf/typing_extensions off Airflow's pins.
+DBT_BIN = "/home/airflow/dbt_venv/bin/dbt"
+
 def dbt_cmd(select: str, target: str) -> str:
     return (
-        f"dbt run --select {select} --target {target} "
+        f"{DBT_BIN} run --select {select} --target {target} "
         f"--project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} "
         f"--no-partial-parse"
     )

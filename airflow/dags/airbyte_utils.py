@@ -44,13 +44,38 @@ def _headers() -> dict:
 
 
 def trigger_sync(connection_id: str) -> str:
-    """Trigger an Airbyte sync and return the job ID."""
+    """Trigger an Airbyte sync and return the job ID.
+    If a sync is already running (409), return the existing running job ID."""
     resp = requests.post(
         f"{AIRBYTE_URL}/api/v1/connections/sync",
         headers=_headers(),
         json={"connectionId": connection_id},
         timeout=30,
     )
+    if resp.status_code == 409:
+        # Sync already running — find the active job and return it
+        print(f"  Sync already running for {connection_id}, finding active job...")
+        # /api/v1/jobs/list is a Config-API endpoint — POST with a JSON body.
+        # (A GET returns 403 Forbidden.)
+        jobs = requests.post(
+            f"{AIRBYTE_URL}/api/v1/jobs/list",
+            headers=_headers(),
+            json={"configId": connection_id, "configTypes": ["sync"]},
+            timeout=30,
+        )
+        jobs.raise_for_status()
+        job_list = jobs.json().get("jobs", [])
+        active = [
+            j for j in job_list
+            if j["job"]["status"] in ("running", "pending", "incomplete")
+        ]
+        if active:
+            job_id = str(active[0]["job"]["id"])
+            print(f"  Attached to existing job {job_id}")
+            return job_id
+        # No running job found — may have just finished, return sentinel
+        print(f"  No running job found for {connection_id}, skipping wait")
+        return "skip"
     resp.raise_for_status()
     job_id = resp.json()["job"]["id"]
     print(f"  Triggered sync for connection {connection_id} → job {job_id}")
@@ -59,12 +84,17 @@ def trigger_sync(connection_id: str) -> str:
 
 def wait_for_sync(job_id: str, timeout: int = 3600, poll_interval: int = 30) -> None:
     """Poll Airbyte until the job completes. Raises on failure or timeout."""
+    if job_id == "skip":
+        print("  Sync already completed before we attached — skipping wait")
+        return
     deadline = time.time() + timeout
     while time.time() < deadline:
-        resp = requests.get(
+        # /api/v1/jobs/get is a Config-API endpoint — POST with a JSON body.
+        # (A GET returns 403 Forbidden, which previously failed every wait task.)
+        resp = requests.post(
             f"{AIRBYTE_URL}/api/v1/jobs/get",
             headers=_headers(),
-            params={"id": job_id},
+            json={"id": int(job_id)},
             timeout=30,
         )
         resp.raise_for_status()

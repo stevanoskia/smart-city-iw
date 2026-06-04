@@ -219,6 +219,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+# Claude Code
+CLAUDE.md
+
 # Project specific
 
 # DuckDB warehouse files (binary, environment-specific)
@@ -230,6 +233,7 @@ ingestion/config/connection_ids.yml
 # dbt artifacts
 dbt/smart_city/target/
 dbt/smart_city/logs/
+dbt/smart_city/.user.yml
 
 # Airflow logs
 airflow/logs/
