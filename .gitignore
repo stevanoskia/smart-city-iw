@@ -151,6 +151,9 @@ activemq-data/
 
 # Environments
 .env
+
+# Airbyte secrets backup - NE commituvaj!
+airflow/scripts/airbyte_secrets.env
 .envrc
 .venv
 env/
