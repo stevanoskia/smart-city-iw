@@ -75,6 +75,9 @@ streams:
           bbox: >-
             {{ config['min_lon'] }},{{ config['min_lat'] }},{{ config['max_lon']
             }},{{ config['max_lat'] }}
+          # Without `fields`, TomTom v5 returns only type+geometry+iconCategory.
+          # Explicitly request the full detail set the inline schema declares.
+          fields: "{incidents{type,geometry{type,coordinates},properties{id,iconCategory,magnitudeOfDelay,startTime,endTime,from,to,length,delay,timeValidity,probabilityOfOccurrence,numberOfReports}}}"
           language: en-GB
           categoryFilter: 0,1,2,3,4,5,6,7,8,9,10,11
           timeValidityFilter: present
