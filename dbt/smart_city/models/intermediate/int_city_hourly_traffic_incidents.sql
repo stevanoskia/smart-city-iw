@@ -1,14 +1,11 @@
--- Durable hourly per-city traffic-incident facts (one raw incident feature per sync).
+-- Durable hourly per-city traffic-incident facts (one incident per sync).
 -- Incremental + append-only: accumulates history forever, independent of
 -- airbyte_raw retention. The daily rollup is built from this.
 --
--- ⚠ UPSTREAM LIMITATION: the TomTom incidents connector currently returns only
--- `iconCategory` + geometry per feature — NOT id/magnitudeOfDelay/delay/from/to/
--- startTime. So incident_id (and the other detail fields below) are always NULL
--- until the connector's `fields` parameter is fixed. With no incident id to key
--- or dedupe on, the grain is one raw feature per sync, keyed on raw_id (the only
--- guaranteed-unique, non-null identifier). Once the connector returns real
--- incident ids, switch the key/dedupe back to (city, incident_id, observed_at).
+-- TomTom incidents have no event timestamp — observed_at is the Airbyte sync
+-- time, so the grain is (city, incident_id, observed_at). Rows without an
+-- incident_id are excluded: some TomTom features (and all pre-`fields`-fix rows)
+-- lack an id and can't be identified or keyed.
 
 {{ config(
     materialized='incremental',
@@ -20,8 +17,9 @@ with new_rows as (
     select *
     from {{ ref('stg_traffic_incidents') }}
     where city is not null
+      and incident_id is not null
     {% if is_incremental() %}
-      -- 6h lookback absorbs late/re-synced rows; raw_id-keyed delete+insert below
+      -- 6h lookback absorbs late/re-synced rows; the dedupe + delete+insert below
       -- makes reprocessing idempotent (no duplicates land).
       and extracted_at > (select max(extracted_at) - interval '6 hours' from {{ this }})
     {% endif %}
@@ -30,14 +28,14 @@ with new_rows as (
 deduped as (
     select *,
            row_number() over (
-               partition by raw_id                  -- raw_id is unique; one row per raw feature
+               partition by city, incident_id, observed_at   -- one row per incident per sync
                order by extracted_at desc
            ) as _rn
     from new_rows
 )
 
 select
-    md5(raw_id::text)                               as city_incident_key,
+    md5(city || '|' || incident_id || '|' || observed_at::text)  as city_incident_key,
     city,
     incident_id,
     observed_at,
