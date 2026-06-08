@@ -1,16 +1,16 @@
 # =============================================================
-# ingest.py — Ingestion скрипта за Smart City проект
+# ingest.py — Ingestion script for the Smart City project
 #
-# Тек на извршување:
-#   за секој град во config.CITIES:
+# Execution flow:
+#   for each city in config.CITIES:
 #       1. OpenWeather → current_weather
 #       2. OpenWeather → air_pollution
-#       3. OpenWeather → weather_forecast (5 дена)
+#       3. OpenWeather → weather_forecast (5 days)
 #       4. TomTom     → traffic_flow
-#       5. TomTom     → traffic_incidents (по bbox)
-#   Сè се зачувува во airbyte_raw schema (PostgreSQL)
+#       5. TomTom     → traffic_incidents (by bbox)
+#   Everything is saved to the airbyte_raw schema (PostgreSQL)
 #
-# Употреба:
+# Usage:
 #   python ingest.py
 # =============================================================
 
@@ -23,38 +23,38 @@ from config import CITIES, OPENWEATHER_API_KEY, TOMTOM_API_KEY, DB_CONFIG
 
 
 # -------------------------------------------------------------
-# ПОМОШНА ФУНКЦИЈА — INSERT во airbyte_raw табела
+# HELPER FUNCTION — INSERT into airbyte_raw table
 # -------------------------------------------------------------
 def insert_raw(cursor, table: str, data: dict):
     """
-    Зачувува еден запис во airbyte_raw.<table>.
+    Saves one record into airbyte_raw.<table>.
 
-    Секој ред добива:
-      _airbyte_raw_id       — уникатен UUID за секој запис
-      _airbyte_extracted_at — момент кога е земено
-      останатите полиња     — директно од API одговорот (рамни колони)
+    Each row gets:
+      _airbyte_raw_id       — unique UUID per record
+      _airbyte_extracted_at — timestamp when data was fetched
+      remaining fields      — directly from the API response (flat columns)
 
-    dict/list вредности се конвертираат во JSON string
-    бидејќи psycopg2 не може директно да вметне Python dict во PostgreSQL.
+    dict/list values are converted to JSON string
+    because psycopg2 cannot directly insert a Python dict into PostgreSQL.
     """
     now = datetime.now(timezone.utc)
 
-    # Конвертирај dict/list вредности во JSON string
-    # Прескокни клучеви со специјални знаци (пр. @version од TomTom) — невалидни SQL колони
+    # Convert dict/list values to JSON string
+    # Skip keys with special characters (e.g. @version from TomTom) — invalid SQL column names
     serialized = {}
     for key, value in data.items():
-        if not key.isidentifier():          # прескокни @version, @type и слични
+        if not key.isidentifier():          # skip @version, @type and similar
             continue
         if isinstance(value, (dict, list)):
             serialized[key] = json.dumps(value)
         else:
             serialized[key] = value
 
-    # Задолжителни Airbyte системски колони
+    # Required Airbyte system columns
     columns = ["_airbyte_raw_id", "_airbyte_extracted_at", "_airbyte_meta", "_airbyte_generation_id"] + list(serialized.keys())
     values  = [str(uuid.uuid4()), now, json.dumps({}), 0] + list(serialized.values())
 
-    # Двојни кавички за да се зачува case (currentSpeed ≠ currentspeed)
+    # Double quotes to preserve case (currentSpeed ≠ currentspeed)
     col_str = ", ".join(f'"{c}"' for c in columns)
     val_str = ", ".join(["%s"] * len(values))
 
@@ -65,13 +65,13 @@ def insert_raw(cursor, table: str, data: dict):
 
 
 # -------------------------------------------------------------
-# OPENWEATHER — МОМЕНТАЛНА ВРЕМЕНСКА СОСТОЈБА
-# Документација: https://openweathermap.org/current
+# OPENWEATHER — CURRENT WEATHER
+# Docs: https://openweathermap.org/current
 # -------------------------------------------------------------
 def fetch_current_weather(city: dict) -> dict:
     """
-    Враќа моменталната временска состојба за градот:
-    температура, влажност, притисок, ветер, облачност...
+    Returns the current weather conditions for the city:
+    temperature, humidity, pressure, wind, cloudiness...
     """
     url = "https://api.openweathermap.org/data/2.5/weather"
 
@@ -79,26 +79,26 @@ def fetch_current_weather(city: dict) -> dict:
         "lat":   city["lat"],
         "lon":   city["lon"],
         "appid": OPENWEATHER_API_KEY,
-        "units": "metric",    # Целзиус, km/h
+        "units": "metric",    # Celsius, km/h
     }
 
     response = requests.get(url, params=params, timeout=10)
     response.raise_for_status()
 
     data = response.json()
-    # city_name не се додава — табелата нема таа колона
-    # името на градот е веќе во полето "name" од API одговорот
+    # Force our city name from config.py instead of API district name (Mitte, Sol...)
+    data["name"] = city["name"]
     return data
 
 
 # -------------------------------------------------------------
-# OPENWEATHER — ЗАГАДУВАЊЕ НА ВОЗДУХОТ
-# Документација: https://openweathermap.org/api/air-pollution
+# OPENWEATHER — AIR POLLUTION
+# Docs: https://openweathermap.org/api/air-pollution
 # -------------------------------------------------------------
 def fetch_air_pollution(city: dict) -> dict:
     """
-    Враќа AQI (1=добар → 5=многу лош) и
-    концентрации на: CO, NO, NO2, O3, SO2, PM2.5, PM10, NH3
+    Returns AQI (1=good → 5=very poor) and
+    concentrations of: CO, NO, NO2, O3, SO2, PM2.5, PM10, NH3
     """
     url = "https://api.openweathermap.org/data/2.5/air_pollution"
 
@@ -111,20 +111,20 @@ def fetch_air_pollution(city: dict) -> dict:
     response = requests.get(url, params=params, timeout=10)
     response.raise_for_status()
 
-    # API враќа {"coord": ..., "list": [{...}]}
-    # Табелата очекува полиња од list[0]: main, components, dt
+    # API returns {"coord": ..., "list": [{...}]}
+    # Table expects fields from list[0]: main, components, dt
     data = response.json()["list"][0]
     return data
 
 
 # -------------------------------------------------------------
-# OPENWEATHER — ПРОГНОЗА ЗА 5 ДЕНА
-# Документација: https://openweathermap.org/forecast5
+# OPENWEATHER — 5-DAY FORECAST
+# Docs: https://openweathermap.org/forecast5
 # -------------------------------------------------------------
 def fetch_weather_forecast(city: dict) -> list:
     """
-    Враќа листа од 40 прогнози (на секои 3 часа, 5 дена).
-    Секоја прогноза е посебен ред во базата.
+    Returns a list of 40 forecasts (every 3 hours, 5 days).
+    Each forecast is a separate row in the database.
     """
     url = "https://api.openweathermap.org/data/2.5/forecast"
 
@@ -144,13 +144,13 @@ def fetch_weather_forecast(city: dict) -> list:
 
 
 # -------------------------------------------------------------
-# TOMTOM — СООБРАЌАЕН ПРОТОК
-# Документација: https://developer.tomtom.com/traffic-api/documentation/traffic-flow/flow-segment-data
+# TOMTOM — TRAFFIC FLOW
+# Docs: https://developer.tomtom.com/traffic-api/documentation/traffic-flow/flow-segment-data
 # -------------------------------------------------------------
 def fetch_traffic_flow(city: dict) -> dict:
     """
-    Враќа тековна брзина vs слободна брзина за сегментот
-    најблизу до координатите на градот.
+    Returns current speed vs free-flow speed for the segment
+    closest to the city coordinates.
     congestion_score = 1 - (currentSpeed / freeFlowSpeed)
     """
     url = "https://api.tomtom.com/traffic/services/4/flowSegmentData/absolute/10/json"
@@ -164,9 +164,9 @@ def fetch_traffic_flow(city: dict) -> dict:
     response = requests.get(url, params=params, timeout=10)
     response.raise_for_status()
 
-    # API враќа {"flowSegmentData": {...}}
-    # Табелата очекува само: frc, currentSpeed, freeFlowSpeed, currentTravelTime, freeFlowTravelTime, confidence, roadClosure
-    # "coordinates" го нема во табелата — го отстрануваме
+    # API returns {"flowSegmentData": {...}}
+    # Table expects only: frc, currentSpeed, freeFlowSpeed, currentTravelTime, freeFlowTravelTime, confidence, roadClosure
+    # "coordinates" is not in the table — we remove it
     ALLOWED_KEYS = {"frc", "currentSpeed", "freeFlowSpeed", "currentTravelTime",
                     "freeFlowTravelTime", "confidence", "roadClosure"}
     raw  = response.json()["flowSegmentData"]
@@ -175,22 +175,26 @@ def fetch_traffic_flow(city: dict) -> dict:
 
 
 # -------------------------------------------------------------
-# TOMTOM — СООБРАЌАЈНИ ИНЦИДЕНТИ
-# Документација: https://developer.tomtom.com/traffic-api/documentation/traffic-incidents/incident-details
+# TOMTOM — TRAFFIC INCIDENTS
+# Docs: https://developer.tomtom.com/traffic-api/documentation/traffic-incidents/incident-details
 # -------------------------------------------------------------
 def fetch_traffic_incidents(city: dict) -> list:
     """
-    Враќа листа на активни инциденти (несреќи, затворања, задоцнувања)
-    во bounding box-от на градот.
-    Секој инцидент е посебен ред во базата.
+    Returns a list of active incidents (accidents, closures, delays)
+    within the city's bounding box.
+    Each incident is a separate row in the database.
     """
     url = "https://api.tomtom.com/traffic/services/5/incidentDetails"
 
     params = {
-        "bbox":     city["bbox"],   # minLon,minLat,maxLon,maxLat
-        "key":      TOMTOM_API_KEY,
-        "language": "en-GB",
-        "categoryFilter": "0,1,2,3,4,5,6,7,8,9,10,11",  # сите категории
+        "bbox":             city["bbox"],
+        "key":              TOMTOM_API_KEY,
+        "language":         "en-GB",
+        "categoryFilter":   "0,1,2,3,4,5,6,7,8,9,10,11",
+        "timeValidityFilter": "present",
+        # Without fields, TomTom returns only type+geometry+iconCategory
+        # With fields we get full details: id, from, to, delay, length...
+        "fields": "{incidents{type,geometry{type,coordinates},properties{id,iconCategory,magnitudeOfDelay,startTime,endTime,from,to,length,delay,timeValidity,probabilityOfOccurrence,numberOfReports}}}",
     }
 
     response = requests.get(url, params=params, timeout=10)
@@ -201,10 +205,10 @@ def fetch_traffic_incidents(city: dict) -> list:
 
 
 # -------------------------------------------------------------
-# ГЛАВНА ФУНКЦИЈА
+# MAIN FUNCTION
 # -------------------------------------------------------------
 def run_ingestion():
-    print(f"\n[{datetime.now()}] ▶ Почнуваме ingestion за {len(CITIES)} градови...")
+    print(f"\n[{datetime.now()}] ▶ Starting ingestion for {len(CITIES)} cities...")
 
     conn   = psycopg2.connect(**DB_CONFIG)
     cursor = conn.cursor()
@@ -212,17 +216,17 @@ def run_ingestion():
     for city in CITIES:
         print(f"\n  🌍 {city['name']}")
 
-        # 1. Моментална временска состојба
+        # 1. Current weather
         try:
             cursor.execute("SAVEPOINT sp")
             data = fetch_current_weather(city)
             insert_raw(cursor, "current_weather", data)
             print(f"     ✓ current_weather")
         except Exception as e:
-            cursor.execute("ROLLBACK TO SAVEPOINT sp")  # откажи само овој insert
+            cursor.execute("ROLLBACK TO SAVEPOINT sp")  # roll back only this insert
             print(f"     ✗ current_weather: {e}")
 
-        # 2. Загадување на воздухот
+        # 2. Air pollution
         try:
             cursor.execute("SAVEPOINT sp")
             data = fetch_air_pollution(city)
@@ -232,18 +236,18 @@ def run_ingestion():
             cursor.execute("ROLLBACK TO SAVEPOINT sp")
             print(f"     ✗ air_pollution: {e}")
 
-        # 3. Прогноза (40 редови по град)
+        # 3. Forecast (40 rows per city)
         try:
             cursor.execute("SAVEPOINT sp")
             forecasts = fetch_weather_forecast(city)
             for forecast in forecasts:
                 insert_raw(cursor, "weather_forecast", forecast)
-            print(f"     ✓ weather_forecast ({len(forecasts)} прогнози)")
+            print(f"     ✓ weather_forecast ({len(forecasts)} forecasts)")
         except Exception as e:
             cursor.execute("ROLLBACK TO SAVEPOINT sp")
             print(f"     ✗ weather_forecast: {e}")
 
-        # 4. Сообраќаен проток
+        # 4. Traffic flow
         try:
             cursor.execute("SAVEPOINT sp")
             data = fetch_traffic_flow(city)
@@ -253,13 +257,13 @@ def run_ingestion():
             cursor.execute("ROLLBACK TO SAVEPOINT sp")
             print(f"     ✗ traffic_flow: {e}")
 
-        # 5. Сообраќајни инциденти
+        # 5. Traffic incidents
         try:
             cursor.execute("SAVEPOINT sp")
             incidents = fetch_traffic_incidents(city)
             for incident in incidents:
                 insert_raw(cursor, "traffic_incidents", incident)
-            print(f"     ✓ traffic_incidents ({len(incidents)} инциденти)")
+            print(f"     ✓ traffic_incidents ({len(incidents)} incidents)")
         except Exception as e:
             cursor.execute("ROLLBACK TO SAVEPOINT sp")
             print(f"     ✗ traffic_incidents: {e}")
@@ -268,11 +272,11 @@ def run_ingestion():
     cursor.close()
     conn.close()
 
-    print(f"\n[{datetime.now()}] ✅ Завршено!\n")
+    print(f"\n[{datetime.now()}] ✅ Done!\n")
 
 
 # -------------------------------------------------------------
-# ТОЧКА НА ВЛЕЗ
+# ENTRY POINT
 # -------------------------------------------------------------
 if __name__ == "__main__":
     run_ingestion()

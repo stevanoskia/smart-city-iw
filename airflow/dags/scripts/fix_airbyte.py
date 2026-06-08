@@ -1,41 +1,41 @@
-# Library za da moze Python da povikuva komandi vo terminal
+# Library for running terminal commands from Python
 import subprocess
-# Library za vreme / sleep
+# Library for time / sleep
 import time
-# Library za izlez so greshka (sys.exit)
+# Library for exiting with error (sys.exit)
 import sys
 
 
-# Funkcija koja gi izvrsuva chmod komandite za Airbyte po restart
+# Function that runs the chmod commands for Airbyte after restart
 def fix_airbyte_permissions():
-    print("Fixiram Airbyte permissions...")
+    print("Fixing Airbyte permissions...")
 
-    # Lista so dvete komandi koi gi davaat dozvoli na Airbyte volumi
+    # List of two commands that grant permissions on Airbyte volumes
     commands = [
         "docker exec airbyte-abctl-control-plane chmod 777 /var/local-path-provisioner/airbyte-volume-db",
         "docker exec airbyte-abctl-control-plane chmod 777 /var/local-path-provisioner/airbyte-local-pv",
     ]
 
-    # Loop — za sekoja komanda od listata se izvrsuva vo terminal
+    # Loop — each command from the list is executed in the terminal
     for cmd in commands:
-        print(f"Izvrsuvam: {cmd}")
+        print(f"Running: {cmd}")
         result = subprocess.run(cmd, shell=True)
-        # Ako komandата ne uspea, pokazi greshka i stopi
+        # If the command failed, show error and stop
         if result.returncode != 0:
-            print(f"GRESHKA: komandата ne uspea (exit code {result.returncode})")
-            print("Provjeri dali Docker raboti i dali containerot 'airbyte-abctl-control-plane' e up.")
+            print(f"ERROR: command failed (exit code {result.returncode})")
+            print("Check if Docker is running and if the 'airbyte-abctl-control-plane' container is up.")
             sys.exit(1)
         print("  OK")
 
-    # Se ceka 3 minuti — vo toa vreme Airbyte treba da se startira
-    print("\nCekam 3 minuti za Airbyte da se startira...")
+    # Wait 3 minutes — Airbyte should start up during this time
+    print("\nWaiting 3 minutes for Airbyte to start...")
     for i in range(3, 0, -1):
-        print(f"  {i} min ostanati...")
+        print(f"  {i} min remaining...")
         time.sleep(60)
 
-    print("\nGotovo! Otvori http://localhost:8000")
+    print("\nDone! Open http://localhost:8000")
 
 
-# Povikuvanje na funkцijata — se izvrsuva samo koga skriptata se pokrenuva direktno
+# Call the function — only runs when the script is executed directly
 if __name__ == "__main__":
     fix_airbyte_permissions()

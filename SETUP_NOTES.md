@@ -1,75 +1,75 @@
 # Smart City Analytics Pipeline - Setup Notes
-## Date: 2026-06-03
+## Last Updated: 2026-06-08
 
 ---
 
 ## MACHINE INFO
 - OS: Windows 11
-- WSL: Ubuntu
-- Python: 3.12.x (via venv) — 3.14 NE E KOMPATIBILNO so dbt
+- WSL: Ubuntu (moved to D:\WSL\Ubuntu)
+- Python: 3.12.x (via venv) — 3.14 NOT COMPATIBLE with dbt
 - Project path: D:\IWConnect\smart-city-iw
 
 ---
 
-## 1. AIRBYTE — INSTALACIJA I PROBLEMI
+## 1. AIRBYTE — INSTALLATION & ISSUES
 
 ### Problem
-- Airbyte se instaliras so `abctl` (Kubernetes/kind vo Docker)
-- Sekojpat po restart na kompjuter, PostgreSQL pod (`airbyte-db-0`) pada so:
+- Airbyte is installed with `abctl` (Kubernetes/kind via Docker)
+- After every restart, PostgreSQL pod (`airbyte-db-0`) fails with:
   `mkdir: can't create directory '/var/lib/postgresql/data/pgdata': Permission denied`
 
-### Resenie (sekojpat po restart)
-Vo WSL terminal:
+### Fix (run after every restart)
+In WSL terminal:
 ```bash
-export KUBECONFIG=/home/<user>/.airbyte/abctl/abctl.kubeconfig
+export KUBECONFIG=/home/irina/.airbyte/abctl/abctl.kubeconfig
 docker exec airbyte-abctl-control-plane chmod 777 /var/local-path-provisioner/airbyte-volume-db
 docker exec airbyte-abctl-control-plane chmod 777 /var/local-path-provisioner/airbyte-local-pv
 ```
-Pa cekaj 2-3 minuti za site podovi da se startuvaat.
+Wait 2-3 minutes for all pods to start.
 
 ### Airbyte Login
 - URL: http://localhost:8000
-- Nginx basic auth: samo password (bez username)
-- Password: `<AIRBYTE_PASSWORD>` — see local `.env` file
+- Nginx basic auth: password only (no username)
+- Password: see local `.env` file
 
-### Ako pak ne raboti
+### If it still doesn't work
 ```bash
-export KUBECONFIG=/home/<user>/.airbyte/abctl/abctl.kubeconfig
-kubectl get pods -n airbyte-abctl  # provjeri status
-kubectl delete pod airbyte-db-0 -n airbyte-abctl  # restart DB ako treba
-abctl local install  # ako treba full reinstall
+export KUBECONFIG=/home/irina/.airbyte/abctl/abctl.kubeconfig
+kubectl get pods -n airbyte-abctl          # check status
+kubectl delete pod airbyte-db-0 -n airbyte-abctl   # restart DB if needed
+abctl local install                         # full reinstall if needed
 ```
 
 ---
 
-## 2. POSTGRESQL — LOKALNA BAZA
+## 2. POSTGRESQL — LOCAL DATABASE
 
-### Instalacija
-- Instaliran direktno na Windows vo: `D:\postgre\`
+### Installation
+- Installed directly on Windows: `D:\postgre\`
 - Data directory: `D:\postgre\data\`
-- Port: **5434** (5432 bese zafaten)
+- Port: **5434** (5432 was taken)
 - User: `postgres`
-- Password: `<POSTGRES_PASSWORD>` — see local `.env` file
+- Password: see local `.env` file
 - Service name: `postgresql-x64-18`
 
-### Bazi
-- `smart_city` — za Airbyte destination + dbt
-- `airflow` — za Airflow metadata
+### Databases
+- `smart_city` — for ingestion destination + dbt
+- `airflow` — for Airflow metadata (old WSL version)
 
 ### pg_hba.conf
-Dodadeni linii vo `D:\postgre\data\pg_hba.conf`:
+Added lines in `D:\postgre\data\pg_hba.conf`:
 ```
 host    all    all    10.2.0.0/16    scram-sha-256
 host    all    all    172.26.0.0/16  scram-sha-256
 ```
-Prvata dozvoluva konekcii od Kubernetes/Airbyte, vtorata od WSL.
+First allows connections from Kubernetes/Airbyte, second from WSL.
 
-### Restart na servis
+### Restart service
 ```powershell
 Restart-Service postgresql-x64-18
 ```
 
-### DBeaver konekcija
+### DBeaver connection
 - Host: localhost
 - Port: 5434
 - Database: smart_city
@@ -78,11 +78,11 @@ Restart-Service postgresql-x64-18
 
 ---
 
-## 3. AIRBYTE CONNECTIONS — POSTAVENI
+## 3. AIRBYTE CONNECTIONS — CONFIGURED (backup, replaced by ingest.py)
 
 ### Destination
 - Name: `smart_city_postgres`
-- Host: `<WIFI_IP>` (moze da se promeni po restart!)
+- Host: `<WIFI_IP>` (may change after restart!)
 - Port: 5434
 - Database: smart_city
 - Schema: airbyte_raw
@@ -96,26 +96,26 @@ Restart-Service postgresql-x64-18
 2. **TomTom Traffic** — custom YAML connector
    - Streams: traffic data
 
-### Connections (6 vkupno — site HEALTHY)
-| Source | Grad | Destination | Sync |
+### Original Connections (replaced by ingest.py)
+| Source | City | Destination | Sync |
 |--------|------|-------------|------|
-| OpenWeather Free 2.5 | Berlin (lat:52.52, lon:13.405) | smart_city_postgres | 1h |
-| OpenWeather Free 2.5 | London (lat:51.5074, lon:-0.1278) | smart_city_postgres | 1h |
-| OpenWeather Free 2.5 | Amsterdam (lat:52.3676, lon:4.9041) | smart_city_postgres | 1h |
+| OpenWeather Free 2.5 | Berlin | smart_city_postgres | 1h |
+| OpenWeather Free 2.5 | London | smart_city_postgres | 1h |
+| OpenWeather Free 2.5 | Amsterdam | smart_city_postgres | 1h |
 | TomTom Traffic | Berlin | smart_city_postgres | 1h |
 | TomTom Traffic | London | smart_city_postgres | 1h |
 | TomTom Traffic | Amsterdam | smart_city_postgres | 1h |
 
-### Tabeli vo airbyte_raw schema
+### Tables in airbyte_raw schema
 - `air_pollution`
 - `current_weather`
 - `traffic_flow`
-- `traffic_incidents` (~2445 zapisi)
-- `weather_forecast` (~80 zapisi)
+- `traffic_incidents`
+- `weather_forecast`
 
 ---
 
-## 4. DBT — POSTAVENO I RABOTI
+## 4. DBT — CONFIGURED AND WORKING
 
 ### Virtual Environment (Windows)
 ```powershell
@@ -124,7 +124,7 @@ cd "D:\IWConnect\smart-city-iw\dbt\smart_city"
 ```
 
 ### profiles.yml
-Lokacija: `C:\Users\<user>\.dbt\profiles.yml`
+Location: `C:\Users\Iwi\.dbt\profiles.yml`
 ```yaml
 smart_city:
   target: dev
@@ -140,14 +140,14 @@ smart_city:
       threads: 4
 ```
 
-### dbt komandi
+### dbt commands
 ```powershell
-dbt debug   # test konekcija
-dbt run     # pokreni modeli
-dbt test    # testovi
+dbt debug   # test connection
+dbt run     # run models
+dbt test    # run tests
 ```
 
-### Staging modeli (KRERANI - site 5 PASS)
+### Staging models (CREATED - all 5 PASS)
 - `staging.stg_air_pollution`
 - `staging.stg_current_weather`
 - `staging.stg_traffic_flow`
@@ -156,33 +156,33 @@ dbt test    # testovi
 
 ---
 
-## 5. AIRFLOW — DOCKER (AKTIVNA VERZIJA)
+## 5. AIRFLOW — DOCKER (ACTIVE VERSION)
 
-### Lokacija
+### Location
 - docker-compose.yaml: `D:\IWConnect\airflow\docker-compose.yaml`
-- DAG fajl: `D:\IWConnect\airflow\dags\dbt_smart_city.py`
-- dbt profiles za Docker: `D:\IWConnect\airflow\config\profiles.yml`
+- DAG file: `D:\IWConnect\airflow\dags\dbt_smart_city.py`
+- dbt profiles for Docker: `D:\IWConnect\airflow\config\profiles.yml`
 
-### Startup (od D:\IWConnect\airflow)
+### Startup (from D:\IWConnect\airflow)
 ```powershell
 cd D:\IWConnect\airflow
 docker compose up -d
 ```
 UI: http://localhost:8080 (airflow/airflow)
 
-### Restart (posle promena na docker-compose ili DAG)
+### Restart (after changes to docker-compose or DAG)
 ```powershell
 cd D:\IWConnect\airflow
 docker compose down
 docker compose up -d
 ```
 
-### Kako funkcionira
-- Docker montura `D:/IWConnect/smart-city-iw` na `/opt/smart-city` vo kontejnerot
-- dbt profiles.yml e vo `D:\IWConnect\airflow\config\profiles.yml` (monturan na `/opt/airflow/config`)
-- dbt se povrzuva na PostgreSQL preku `host.docker.internal:5434`
-- dbt se instalira avtomatski pri startup (`_PIP_ADDITIONAL_REQUIREMENTS: dbt-core==1.8.2 dbt-postgres==1.8.2`)
-- VAZNO: mora da se pinuva `dbt-core==1.8.2` — dbt-core 2.0+ (Fusion) ne go podrzuva postgres adapterot
+### How it works
+- Docker mounts `D:/IWConnect/smart-city-iw` to `/opt/smart-city` in the container
+- dbt profiles.yml is in `D:\IWConnect\airflow\config\profiles.yml` (mounted to `/opt/airflow/config`)
+- dbt connects to PostgreSQL via `host.docker.internal:5434`
+- dbt is installed automatically at startup (`_PIP_ADDITIONAL_REQUIREMENTS: dbt-core==1.8.2 dbt-postgres==1.8.2`)
+- IMPORTANT: must pin `dbt-core==1.8.2` — dbt-core 2.0+ (Fusion) does not support the postgres adapter
 
 ### dbt profiles.yml (Docker)
 ```yaml
@@ -194,34 +194,30 @@ smart_city:
       host: host.docker.internal
       port: 5434
       user: postgres
-      password: <POSTGRES_PASSWORD>   # see C:\Users\<user>\.dbt\profiles.yml — NE e "postgres"!
+      password: <POSTGRES_PASSWORD>   # see C:\Users\Iwi\.dbt\profiles.yml — NOT "postgres"!
       dbname: smart_city
       schema: public
       threads: 4
 ```
 
 ### DAG
-- Fajl: `D:\IWConnect\airflow\dags\dbt_smart_city.py`
-- Schedule: `@hourly` (parameter `schedule=`, NE `schedule_interval=` — Airflow 3.x)
-- Task: `dbt run` so site 5 staging modeli
-- dbt project path vo kontejner: `/opt/smart-city/dbt/smart_city`
+- File: `D:\IWConnect\airflow\dags\dbt_smart_city.py`
+- Schedule: `@hourly` (parameter `schedule=`, NOT `schedule_interval=` — Airflow 3.x)
+- Tasks: `ingest_run → dbt_run`
+- dbt project path in container: `/opt/smart-city/dbt/smart_city`
 
-### VAZNO: LOAD_EXAMPLES = false
-docker-compose ima `AIRFLOW__CORE__LOAD_EXAMPLES: 'false'` — samo tvojot DAG e vidliv.
-Tvojot DAG `dbt_smart_city` ke bide vidliv po ~30 sekundi od startup.
+### IMPORTANT: LOAD_EXAMPLES = false
+docker-compose has `AIRFLOW__CORE__LOAD_EXAMPLES: 'false'` — only your DAG is visible.
+Your DAG `dbt_smart_city` will be visible ~30 seconds after startup.
+
+### Fixed issues (for reference)
+- `schedule_interval` → `schedule` (Airflow 3.x breaking change)
+- `dbt-core==1.8.2` pinned — dbt 2.0 (Fusion) does not support postgres
+- Docker profiles.yml password must match `C:\Users\Iwi\.dbt\profiles.yml`
 
 ---
 
-## 5b. AIRFLOW (STARA WSL VERZIJA — NE SE KORISTI)
-
-### Instalacija (WSL - Python 3.12 venv)
-```bash
-python3.12 -m venv ~/airflow-venv
-source ~/airflow-venv/bin/activate
-pip install apache-airflow==2.9.3 apache-airflow-providers-postgres \
-  --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.3/constraints-3.12.txt"
-pip install "dbt-postgres==1.8.2" "dbt-core<2.0"
-```
+## 5b. AIRFLOW (OLD WSL VERSION — NOT IN USE)
 
 ### Startup
 ```bash
@@ -229,31 +225,9 @@ pip install "dbt-postgres==1.8.2" "dbt-core<2.0"
 ```
 UI: http://localhost:8080 (admin/admin)
 
-### DAG
-- Fajl: `airflow/dags/dbt_smart_city.py` (vo ovoj repo)
-- Schedule: `@hourly`
-- Task: `dbt run` so site 5 staging modeli
-
-### dbt profiles.yml za WSL
-Lokacija: `~/.dbt/profiles.yml`
-```yaml
-smart_city:
-  target: dev
-  outputs:
-    dev:
-      type: postgres
-      host: <WINDOWS_IP>   # ip route show default | awk '{print $3}'
-      port: 5434
-      user: postgres
-      password: <POSTGRES_PASSWORD>
-      dbname: smart_city
-      schema: public
-      threads: 4
-```
-
 ---
 
-## 6. GITHUB KOLABORACIJA
+## 6. GITHUB COLLABORATION
 
 ### Repo
 - URL: https://github.com/stevanoskia/smart-city-iw
@@ -262,103 +236,107 @@ smart_city:
 
 ### Workflow
 ```bash
-git pull                          # sekojpat pred pocnuvanje
-git checkout -b feat/irina-xxx    # nova branch
-# ... raboti ...
+git pull                              # always pull before starting
+git checkout -b feat/irina-xxx        # new branch
+# ... work ...
 git add .
-git commit -m "opis"
+git commit -m "description"
 git push origin feat/irina-xxx
-# Pa napravi Pull Request na GitHub
+# Then create a Pull Request on GitHub
 ```
 
 ---
 
-## 7. SKRIPTI
+## 7. SCRIPTS
 
 ### fix_airbyte.py
-- Lokacija: `airflow/scripts/fix_airbyte.py`
-- Sto pravi: gi izvrsуva chmod komandite za Airbyte po restart + ceka 3 min
-- Kako se pokreнуva (vo WSL):
+- Location: `airflow/scripts/fix_airbyte.py`
+- Purpose: runs chmod commands for Airbyte after restart + waits 3 min
+- How to run (in WSL):
 ```bash
 python3 /mnt/d/IWConnect/smart-city-iw/airflow/scripts/fix_airbyte.py
 ```
 
-### start-airflow.sh
-- Lokacija: `~/start-airflow.sh` (vo WSL home, NE vo repo)
-- Sto pravi: aktivira venv, setira env variables, startуva webserver + scheduler
-- Kako se pokreнуva (vo WSL):
-```bash
-~/start-airflow.sh
-```
-
 ---
 
-## 8. INGESTION SKRIPTA — Python (zamena za Airbyte)
+## 8. INGESTION SCRIPT — Python (replaces Airbyte)
 
-### Lokacija
-- `D:\IWConnect\smart-city-iw\ingestion\config.py` — gradovi, API klucevi, DB config
-- `D:\IWConnect\smart-city-iw\ingestion\ingest.py`  — glavna skripta
+### Location
+- `D:\IWConnect\smart-city-iw\ingestion\config.py` — cities, API keys, DB config
+- `D:\IWConnect\smart-city-iw\ingestion\ingest.py`  — main ingestion script
 
-### Zosto skripta namesto Airbyte
-- Airbyte bara racno dodavanje na sekoj grad vo UI
-- Skriptata zema lista na gradovi od config.py — lесно se dodava nov grad
+### Why script instead of Airbyte
+- Airbyte requires manually adding each city in the UI
+- The script reads a city list from `config.py` — easy to add new cities
 
-### Kako da dodades nov grad
-Vo `config.py` dodaj red vo `CITIES`:
+### How to add a new city
+In `config.py` add a line to `CITIES`:
 ```python
-{"name": "Paris", "lat": 48.8566, "lon": 2.3522, "bbox": "2.22,48.81,2.47,48.90"}
+{"name": "Paris", "lat": 48.8566, "lon": 2.3522, "bbox": "2.22,48.81,2.47,48.90"},
 ```
-bbox vrednosti: **bboxfinder.com** → nacrtaj pravoagolnik → kopiraj
+Get bbox coordinates at: **bboxfinder.com** → draw rectangle → copy
 
-### Sto zema skriptata
-| Izvor | Podatok | Tabela |
-|-------|---------|--------|
-| OpenWeather | Momentalna sostojba | `airbyte_raw.current_weather` |
-| OpenWeather | Zagaduvanje na vozduh | `airbyte_raw.air_pollution` |
-| OpenWeather | Prognoza 5 dena | `airbyte_raw.weather_forecast` |
-| TomTom | Soobrakаen protok | `airbyte_raw.traffic_flow` |
-| TomTom | Incidenti | `airbyte_raw.traffic_incidents` |
+### Current cities (config.py)
+| City | Lat | Lon | Bbox |
+|------|-----|-----|------|
+| London | 51.5074 | -0.1278 | -0.25,51.43,-0.01,51.58 |
+| Amsterdam | 52.3676 | 4.9041 | 4.78,52.30,5.03,52.43 |
+| Berlin | 52.52 | 13.405 | 13.28,52.46,13.54,52.58 |
+| Madrid | 40.4168 | -3.7038 | -3.83,40.33,-3.57,40.50 |
 
-### Potrebni paketi (ednas)
+### What the script collects
+| Source | Data | Table |
+|--------|------|-------|
+| OpenWeather | Current weather | `airbyte_raw.current_weather` |
+| OpenWeather | Air pollution / AQI | `airbyte_raw.air_pollution` |
+| OpenWeather | 5-day forecast | `airbyte_raw.weather_forecast` |
+| TomTom | Traffic flow | `airbyte_raw.traffic_flow` |
+| TomTom | Traffic incidents | `airbyte_raw.traffic_incidents` |
+
+### Required packages (once)
 ```powershell
 & "D:\IWConnect\smart-city-iw\venv\Scripts\Activate.ps1"
 pip install requests psycopg2-binary python-dotenv
 ```
 
-### Racno pustanje (za test)
+### Manual run (for testing)
 ```powershell
 & "D:\IWConnect\smart-city-iw\venv\Scripts\Activate.ps1"
 cd D:\IWConnect\smart-city-iw\ingestion
 python ingest.py
 ```
 
-### Vazni detalji
-- `_airbyte_meta` i `_airbyte_generation_id` se dodavaat avtomatski (Airbyte gi bara)
-- `@version` od TomTom se preskokuva (nevalidna SQL kolona)
-- `traffic_flow` — se zemaat samo: frc, currentSpeed, freeFlowSpeed, currentTravelTime, freeFlowTravelTime, confidence, roadClosure
-- `air_pollution` — API vraka `{"list": [...]}`, skriptata go unwrap-nuva `list[0]`
+### Important details
+- `_airbyte_meta` and `_airbyte_generation_id` are added automatically (required by Airbyte tables)
+- `@version` from TomTom is skipped (invalid SQL column name)
+- `traffic_flow` — only these fields are stored: frc, currentSpeed, freeFlowSpeed, currentTravelTime, freeFlowTravelTime, confidence, roadClosure
+- `air_pollution` — API returns `{"list": [...]}`, script unwraps `list[0]`
+- `traffic_incidents` — uses `fields` parameter to request full detail from TomTom v5 API
+- City name is forced from `config.py` (prevents API returning district names like "Mitte" or "Sol")
 
 ---
 
-## CESTA KOMANDA SEKVENCA (start na den)
+## DAILY STARTUP SEQUENCE
 
 ```powershell
-# 1. Startuvaj Airflow (od D:\IWConnect\airflow)
+# 1. Open Docker Desktop (from Start menu), wait ~30 seconds
+
+# 2. Start Airflow
 cd D:\IWConnect\airflow
 docker compose up -d
 # UI: http://localhost:8080 (airflow/airflow)
-# Cekaj ~3 min za pip install pri startup
+# Wait ~3 min for pip install on startup
 ```
 
 ```powershell
-# 2. Racno test na ingestion (opciono)
+# 3. Manual ingestion test (optional)
 & "D:\IWConnect\smart-city-iw\venv\Scripts\Activate.ps1"
 cd D:\IWConnect\smart-city-iw\ingestion
 python ingest.py
 ```
 
 ```powershell
-# 3. Racno dbt run (opciono)
+# 4. Manual dbt run (optional)
 & "D:\IWConnect\smart-city-iw\venv\Scripts\Activate.ps1"
 cd D:\IWConnect\smart-city-iw\dbt\smart_city
 dbt run
@@ -366,20 +344,20 @@ dbt run
 
 ---
 
-## STO E NAPRAVENO (summary)
+## WHAT IS DONE (summary)
 
-| Komponenta | Status |
-|------------|--------|
-| Airbyte — ingestion od OpenWeather + TomTom | ✅ RABOTI (backup, ne se koristi aktivno) |
-| PostgreSQL — smart_city + airflow bazi | ✅ RABOTI |
-| dbt — 5 staging modeli | ✅ RABOTI |
-| Python ingestion skripta (zamena za Airbyte) | ✅ RABOTI |
-| Airflow — DAG: ingest_run → dbt_run (@hourly) | ✅ RABOTI (potvrden Success) |
-| GitHub — feat/irina-airflow-setup PR | ✅ PUSHANO |
-| fix_airbyte.py skripta | ✅ NAPRAVENA |
+| Component | Status |
+|-----------|--------|
+| Airbyte — ingestion from OpenWeather + TomTom | ✅ WORKS (backup, not actively used) |
+| PostgreSQL — smart_city + airflow databases | ✅ WORKS |
+| dbt — 5 staging models | ✅ WORKS |
+| Python ingestion script (replaces Airbyte) | ✅ WORKS |
+| Airflow — DAG: ingest_run → dbt_run (@hourly) | ✅ WORKS (confirmed Success) |
+| GitHub — feat/irina-airflow-setup PR | ✅ PUSHED |
 
-## STO OSTANA
+## WHAT REMAINS
 
-- [ ] Intermediate dbt modeli
-- [ ] Marts dbt modeli
-- [ ] Cleanup na `__dbt_backup` tabeli vo PostgreSQL
+- [ ] Intermediate dbt models
+- [ ] Marts dbt models
+- [ ] Cleanup of `__dbt_backup` tables in PostgreSQL
+- [ ] Dashboard (Power BI / Metabase)
