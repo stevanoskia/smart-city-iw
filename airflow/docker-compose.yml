@@ -24,7 +24,6 @@ x-airflow-common: &airflow-common
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ../dbt:/opt/airflow/dbt
-    - ../warehouse:/opt/airflow/warehouse
     - ../ingestion/config:/opt/airflow/ingestion_config
   depends_on:
     airflow-postgres:

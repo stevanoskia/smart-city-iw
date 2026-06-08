@@ -1,14 +1,14 @@
 # dbt — Smart City Analytics
 
-dbt project for the Smart City Analytics Pipeline. Transforms raw API data from
-PostgreSQL into an analytical DuckDB warehouse.
+dbt project for the Smart City Analytics Pipeline. Cleans raw Airbyte data into PostgreSQL
+**staging** views, then dedupes + aggregates it into **intermediate** tables. All in one
+PostgreSQL database, one target (`staging`).
 
-## Two-target setup
+## Target
 
-| Target | Database | Models | Command |
+| Target | Database | Schemas | Models |
 |---|---|---|---|
-| `staging` | PostgreSQL (localhost:5432) | 5 staging views | `dbt run --select staging --target staging` |
-| `warehouse` | DuckDB (warehouse/smart_city.duckdb) | 4 intermediate views + 5 mart tables | `dbt run --select intermediate marts --target warehouse` |
+| `staging` | PostgreSQL (localhost:5432, db `smart_city`) | `staging`, `intermediate` | 5 views + 3 tables |
 
 ## Running dbt
 
@@ -19,42 +19,40 @@ Always activate `venv313` first and run from this directory:
 source venv313/Scripts/activate
 cd dbt/smart_city
 
-# Full pipeline
-dbt run --select staging --target staging && dbt run --select intermediate marts --target warehouse
+# Build staging views
+dbt run   --select staging --target staging
 
-# Tests
-dbt test --select staging --target staging
-dbt test --select intermediate marts --target warehouse
+# Build + test intermediate tables (deduped daily aggregates)
+dbt build --select intermediate --target staging
+
+# Everything in dependency order
+dbt build --select staging intermediate --target staging
 
 # Docs
-dbt docs generate --target warehouse
+dbt docs generate --target staging
 dbt docs serve
 ```
 
+`dbt build` = run models **and** their tests; `dbt run` builds without testing.
+
 ## Model layers
 
-### Staging → PostgreSQL (`--target staging`)
-Light cleanup of raw Airbyte data. One view per source table.
+### Staging → `staging` schema (views)
+Light cleanup of raw Airbyte data. One view per source table, 1:1 with raw (no dedup/aggregation).
 - `stg_current_weather` — typed weather fields from OpenWeather
 - `stg_air_pollution` — typed AQI + pollutants from OpenWeather
 - `stg_weather_forecast` — 5-day forecast records from OpenWeather
 - `stg_traffic_flow` — road segment speeds from TomTom
 - `stg_traffic_incidents` — active incidents from TomTom
 
-### Intermediate → DuckDB (`--target warehouse`)
-Daily aggregations per city. Read from PostgreSQL staging via postgres ATTACH.
-- `int_city_daily_weather` — avg/min/max temp, rain, dominant condition
-- `int_city_daily_pollution` — avg/max AQI, pollutant averages, hours of poor air
-- `int_city_daily_traffic` — congestion score, speed, incidents
-- `int_composite_city_score` — joins all three + computes comfort index (0–1)
-
-### Marts → DuckDB (`--target warehouse`)
-Final analytics tables. Power BI reads from here.
-- `mart_temperature_trends` — rolling 7d/30d averages, anomaly flags
-- `mart_aqi_monitoring` — AQI labels, alert flags, 7d trend
-- `mart_traffic_density` — congestion labels, speed ratio, 7d rolling avg
-- `mart_city_comparison` — all cities ranked per day by comfort/AQI/temp/congestion
-- `mart_smart_city_kpis` — headline KPI cards: comfort index, livability score, alerts
+### Intermediate → `intermediate` schema (tables)
+Deduped on each stream's business key (keeping latest `extracted_at`), then aggregated to one
+row per `(city, date_utc)`. Keyed on `city_date_key = md5(city|date_utc)` with `unique` +
+`not_null` tests. Dedup is required because Airbyte runs `full_refresh_append` (appends a full
+snapshot every hour).
+- `int_city_daily_weather` — daily temp/wind/precip + dominant condition
+- `int_city_daily_pollution` — daily AQI + pollutant averages, `hours_poor_air`
+- `int_city_daily_traffic` — daily congestion/speed + incident counts
 
 ## Profiles (`~/.dbt/profiles.yml`)
 

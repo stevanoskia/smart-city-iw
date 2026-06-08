@@ -22,5 +22,4 @@ RUN pip install --no-cache-dir \
 RUN python -m venv /home/airflow/dbt_venv && \
     /home/airflow/dbt_venv/bin/pip install --no-cache-dir \
         "dbt-core==1.8.2" \
-        "dbt-postgres==1.8.2" \
-        "dbt-duckdb==1.8.4"
+        "dbt-postgres==1.8.2"

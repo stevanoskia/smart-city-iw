@@ -224,9 +224,6 @@ CLAUDE.md
 
 # Project specific
 
-# DuckDB warehouse files (binary, environment-specific)
-warehouse/*.duckdb
-warehouse/*.duckdb.wal
 # Airbyte — auto-generated, environment-specific
 ingestion/config/connection_ids.yml
 

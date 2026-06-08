@@ -4,8 +4,8 @@ Smart City Analytics Pipeline DAG
 Hourly pipeline:
   1. Trigger all 6 Airbyte syncs in parallel
   2. Wait for all syncs to complete (XCom job IDs passed via context)
-  3. Run dbt staging (PostgreSQL)
-  4. Run dbt warehouse (DuckDB intermediate + marts)
+  3. Run dbt staging (PostgreSQL views)
+  4. Build + test dbt intermediate (PostgreSQL tables, deduped daily aggregates)
   5. Cleanup old airbyte_raw rows (runs daily at midnight only)
 
 Connection IDs loaded from /opt/airflow/ingestion_config/connection_ids.yml
@@ -43,9 +43,9 @@ DBT_PROFILES_DIR = "/opt/airflow/dbt/smart_city"
 # Python env — keeps dbt's protobuf/typing_extensions off Airflow's pins.
 DBT_BIN = "/home/airflow/dbt_venv/bin/dbt"
 
-def dbt_cmd(select: str, target: str) -> str:
+def dbt_cmd(select: str, target: str, command: str = "run") -> str:
     return (
-        f"{DBT_BIN} run --select {select} --target {target} "
+        f"{DBT_BIN} {command} --select {select} --target {target} "
         f"--project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} "
         f"--no-partial-parse"
     )
@@ -60,12 +60,15 @@ def wait_for_sync_xcom(trigger_task_id: str, **context) -> None:
 
 # ── Data retention ────────────────────────────────────────────────────────────
 
+# Raw is now a short buffer, not the archive: deduped hourly history is preserved
+# downstream in the incremental int_city_hourly_* tables (which are never pruned).
+# Raw only needs to outlive a sync gap so the hourly models never miss an hour.
 RETENTION_DAYS = {
-    "current_weather":   90,
-    "air_pollution":     90,
+    "current_weather":   14,
+    "air_pollution":     14,
     "weather_forecast":   7,
-    "traffic_flow":      30,
-    "traffic_incidents": 30,
+    "traffic_flow":      14,
+    "traffic_incidents": 14,
 }
 
 def is_midnight(**context) -> bool:
@@ -123,7 +126,7 @@ default_args = {
 
 with DAG(
     dag_id="smart_city_pipeline",
-    description="Hourly ELT: Airbyte syncs → dbt staging → dbt warehouse + daily cleanup",
+    description="Hourly ELT: Airbyte syncs → dbt staging → dbt intermediate + daily cleanup",
     schedule_interval="@hourly",
     start_date=datetime(2026, 6, 1),
     catchup=False,
@@ -161,11 +164,13 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
-    # ── Step 4: dbt warehouse (DuckDB) ───────────────────────────────────────
+    # ── Step 4: dbt intermediate (PostgreSQL) — build + test ─────────────────
+    # `dbt build` runs the models AND their uniqueness/not_null tests, so a
+    # duplicate (city, date_utc) fails the pipeline instead of landing silently.
 
-    dbt_warehouse = BashOperator(
-        task_id="dbt_warehouse",
-        bash_command=dbt_cmd("intermediate marts", "warehouse"),
+    dbt_intermediate = BashOperator(
+        task_id="dbt_intermediate",
+        bash_command=dbt_cmd("intermediate", "staging", command="build"),
         execution_timeout=timedelta(minutes=15),
     )
 
@@ -185,4 +190,4 @@ with DAG(
 
     # ── Pipeline order ────────────────────────────────────────────────────────
 
-    trigger_group >> wait_group >> dbt_staging >> dbt_warehouse >> midnight_check >> cleanup
+    trigger_group >> wait_group >> dbt_staging >> dbt_intermediate >> midnight_check >> cleanup

@@ -1,63 +1,118 @@
 version: 2
 
 models:
-  - name: int_city_daily_weather
-    description: Daily weather aggregations per city — avg/min/max temperature, wind, precipitation, dominant condition.
+  # ── Hourly facts (incremental, append-only — the durable history) ──────────
+  - name: int_city_hourly_weather
+    description: >
+      Durable hourly per-city weather facts. One row per real observation
+      (city, observed_at), deduped from staging and accumulated incrementally so
+      hourly history survives airbyte_raw pruning. Source for the daily rollup.
     columns:
+      - name: city_hour_key
+        description: Surrogate key — md5(city|observed_at). Primary key of this table.
+        tests:
+          - unique
+          - not_null
       - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+
+  - name: int_city_hourly_pollution
+    description: >
+      Durable hourly per-city air-quality facts. One row per real observation
+      (city, observed_at), deduped and accumulated incrementally. Source for the
+      daily rollup.
+    columns:
+      - name: city_hour_key
+        description: Surrogate key — md5(city|observed_at). Primary key of this table.
         tests:
+          - unique
           - not_null
+      - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+      - name: aqi
+        tests: [not_null]
+
+  - name: int_city_hourly_traffic_flow
+    description: >
+      Durable hourly per-city traffic-flow facts. One row per sync snapshot
+      (city, observed_at) — observed_at is Airbyte sync time (TomTom flow has no
+      event timestamp). Deduped and accumulated incrementally.
+    columns:
+      - name: city_hour_key
+        description: Surrogate key — md5(city|observed_at). Primary key of this table.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+
+  - name: int_city_hourly_traffic_incidents
+    description: >
+      Durable hourly per-city traffic-incident facts. One row per incident per
+      sync (city, incident_id, observed_at) — observed_at is Airbyte sync time.
+      Deduped and accumulated incrementally.
+    columns:
+      - name: city_incident_key
+        description: Surrogate key — md5(city|incident_id|observed_at). Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+
+  # ── Daily rollups (table, rebuilt from the hourly facts) ───────────────────
+  - name: int_city_daily_weather
+    description: >
+      Daily per-city weather aggregates. Deduped from hourly staging snapshots on
+      (city, observed_at), then rolled up to one row per (city, date_utc).
+    columns:
+      - name: city_date_key
+        description: Surrogate key — md5(city|date_utc). Primary key of this table.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
       - name: date_utc
-        tests:
-          - not_null
-    tests:
-      - unique:
-          column_name: "city || '|' || date_utc::text"
+        tests: [not_null]
 
   - name: int_city_daily_pollution
-    description: Daily air quality aggregations per city — avg/max AQI, pollutant averages, hours of poor air.
+    description: >
+      Daily per-city air-quality aggregates. Deduped from hourly staging snapshots on
+      (city, observed_at), then rolled up to one row per (city, date_utc).
     columns:
+      - name: city_date_key
+        description: Surrogate key — md5(city|date_utc). Primary key of this table.
+        tests:
+          - unique
+          - not_null
       - name: city
-        tests:
-          - not_null
+        tests: [not_null]
       - name: date_utc
-        tests:
-          - not_null
+        tests: [not_null]
       - name: avg_aqi
-        tests:
-          - not_null
-    tests:
-      - unique:
-          column_name: "city || '|' || date_utc::text"
+        tests: [not_null]
 
   - name: int_city_daily_traffic
-    description: Daily traffic aggregations per city — congestion score, speed, incident counts.
-    columns:
-      - name: city
-        tests:
-          - not_null
-      - name: date_utc
-        tests:
-          - not_null
-    tests:
-      - unique:
-          column_name: "city || '|' || date_utc::text"
-
-  - name: int_composite_city_score
     description: >
-      Joins daily weather, pollution, and traffic into a single per-city per-day row.
-      Computes normalized scores and a composite comfort_index (0=worst, 1=best).
-      Formula: 0.4 * norm_temp + 0.4 * (1 - norm_aqi) + 0.2 * norm_traffic.
+      Daily per-city traffic flow + incident aggregates. Flow deduped on
+      (city, observed_at); incidents on (city, incident_id, observed_at). One row
+      per (city, date_utc). observed_at is sync time (no real event timestamp).
     columns:
+      - name: city_date_key
+        description: Surrogate key — md5(city|date_utc). Primary key of this table.
+        tests:
+          - unique
+          - not_null
       - name: city
-        tests:
-          - not_null
+        tests: [not_null]
       - name: date_utc
-        tests:
-          - not_null
-      - name: comfort_index
-        tests:
-          - not_null
-    tests:
-      - unique:
-          column_name: "city || '|' || date_utc::text"
+        tests: [not_null]
