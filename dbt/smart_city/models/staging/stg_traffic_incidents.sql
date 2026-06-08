@@ -7,6 +7,9 @@ renamed as (
         _airbyte_raw_id                                                     as raw_id,
         _airbyte_extracted_at                                               as extracted_at,
 
+        -- Location (injected by Airbyte AddFields from source config)
+        city                                                                as city,
+
         -- Incident identity
         (properties->>'id')::text                                           as incident_id,
         type                                                                as feature_type,

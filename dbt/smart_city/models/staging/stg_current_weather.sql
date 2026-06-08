@@ -7,8 +7,10 @@ renamed as (
         _airbyte_raw_id                                         as raw_id,
         _airbyte_extracted_at                                   as extracted_at,
 
-        -- Location
-        name                                                    as city,
+        -- Location (city injected by Airbyte AddFields from source config;
+        -- name is the API's locality/district, kept for reference)
+        city                                                    as city,
+        name                                                    as api_locality,
         (coord->>'lat')::numeric                               as latitude,
         (coord->>'lon')::numeric                               as longitude,
         (sys->>'country')::text                                as country,

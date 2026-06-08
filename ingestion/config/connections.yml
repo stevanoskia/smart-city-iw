@@ -1,0 +1,11 @@
+destination:
+  name: smart_city_postgres
+  schema: airbyte_raw
+  ssl: false
+  # Host must be the machine's LAN IP (e.g. 10.2.x.x) — NOT localhost.
+  # Airbyte sync pods run inside the Kind/Kubernetes cluster and cannot reach
+  # the host via localhost. Set AIRBYTE_PG_HOST in your .env file.
+
+sync:
+  schedule: "0 * * * *"   # every hour (cron expression)
+  sync_mode: full_refresh_append
