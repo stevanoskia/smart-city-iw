@@ -8,7 +8,7 @@ up into **daily** tables. All in one PostgreSQL database, one target (`staging`)
 
 | Target | Database | Schemas | Models |
 |---|---|---|---|
-| `staging` | PostgreSQL (localhost:5432, db `smart_city`) | `staging`, `intermediate` | 5 views + 7 tables (4 hourly facts + 3 daily rollups) |
+| `staging` | PostgreSQL (localhost:5432, db `smart_city`) | `staging`, `intermediate` | 5 views + 10 tables (4 hourly facts + 3 daily rollups + 3 forecast) |
 
 ## Running dbt
 
@@ -64,6 +64,19 @@ Aggregated *from* the hourly facts (no re-dedup) to one row per `(city, date_utc
 - `int_city_daily_weather` — daily temp/wind/precip + dominant condition
 - `int_city_daily_pollution` — daily AQI + pollutant averages, `hours_poor_air`
 - `int_city_daily_traffic` — daily congestion/speed + incident counts
+
+### Intermediate forecast → `intermediate` schema
+Models the 5-day / 3-hour forecast. A forecast row has two timestamps: `forecast_at` (the
+future time predicted) and `issued_at` (when it was predicted); `lead_time = forecast_at − issued_at`.
+- `int_city_weather_forecast` — **incremental, append-only issue history**: one row per
+  prediction issuance `(city, forecast_at, issued_at)`, keyed `md5(city|forecast_at|issued_at)`.
+  Persists predictions as issued so they survive raw pruning and can be scored later.
+- `int_city_forecast_latest` — table; latest issuance per `(city, forecast_at)`, future slots
+  only = the current 5-day forecast.
+- `int_city_forecast_accuracy` — table; past predictions scored against observed
+  `int_city_hourly_weather` on `(city, hour)`: temp error/bias, rain hit/miss, condition match,
+  by lead time. Includes 1/0 helper columns (`rain_correct_int`, `condition_correct_int`,
+  `temp_within_2c`) so BI tools get a hit-rate via a plain `AVG()`.
 
 ## Profiles (`~/.dbt/profiles.yml`)
 

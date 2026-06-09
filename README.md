@@ -98,6 +98,7 @@ docker compose up -d
 - **5 dbt staging models** (PostgreSQL views), one per Airbyte source stream
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per observation; preserve time-of-day + history independent of raw pruning
 - **3 dbt intermediate daily rollups** (tables) — aggregated *from* the hourly facts to one row per `(city, date_utc)`, with uniqueness/not_null tests
+- **3 dbt forecast models** — issue history (incremental), current forecast, and a prediction-vs-actual accuracy model
 - **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 6 Airbyte syncs in parallel, then runs dbt staging → dbt intermediate (build + test)
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `airbyte_raw` rows per retention policy
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` adds new cities from config without UI
@@ -133,6 +134,15 @@ clean hourly history forever, independent of raw pruning. Carry `date_utc` + `ho
 
 Aggregated *from* the hourly facts (no re-dedup), keyed on `city_date_key = md5(city|date_utc)`
 with `unique` + `not_null` tests.
+
+### Intermediate — forecast (PostgreSQL `intermediate` schema)
+Models the 5-day / 3-hour forecast (two timestamps: `forecast_at` = predicted time,
+`issued_at` = when predicted; `lead_time` = the difference).
+| Table | Description |
+|---|---|
+| `int_city_weather_forecast` | Incremental, append-only **issue history** — one row per prediction issuance; persists forecasts as issued for later scoring |
+| `int_city_forecast_latest` | Latest prediction per future slot = the current 5-day forecast |
+| `int_city_forecast_accuracy` | Past predictions scored vs observed weather — temp error, rain hit/miss, condition match, by lead time (with 1/0 helper cols for BI hit-rates) |
 
 ---
 
@@ -182,7 +192,7 @@ smart-city-iw/
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
 │   └── models/
 │       ├── staging/      -> PostgreSQL (5 views)
-│       └── intermediate/ -> PostgreSQL (4 incremental hourly facts + 3 daily rollups)
+│       └── intermediate/ -> PostgreSQL (4 hourly facts + 3 daily rollups + 3 forecast)
 ├── venv313/             <- Python 3.13 venv (always use this)
 └── .env                 <- secrets (not committed)
 ```
