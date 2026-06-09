@@ -116,3 +116,52 @@ models:
         tests: [not_null]
       - name: date_utc
         tests: [not_null]
+
+  # ── Forecast (issue history + latest + accuracy) ───────────────────────────
+  - name: int_city_weather_forecast
+    description: >
+      Durable forecast issue-history. One row per prediction issuance
+      (city, forecast_at, issued_at) — append-only (incremental), so predictions
+      persist past raw pruning and can be scored for accuracy. issued_at is the
+      sync time; lead_time_hours = forecast_at - issued_at.
+    columns:
+      - name: forecast_key
+        description: Surrogate key — md5(city|forecast_at|issued_at). Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: forecast_at
+        tests: [not_null]
+      - name: issued_at
+        tests: [not_null]
+
+  - name: int_city_forecast_latest
+    description: >
+      Current forecast — latest-issued prediction per (city, forecast_at), future
+      slots only. Forward-looking "what's the 5-day forecast" view.
+    columns:
+      - name: forecast_slot_key
+        description: Surrogate key — md5(city|forecast_at). Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: forecast_at
+        tests: [not_null]
+
+  - name: int_city_forecast_accuracy
+    description: >
+      Past predictions scored against observed weather (int_city_hourly_weather),
+      joined on (city, hour). One row per scoreable prediction with temp error,
+      rain hit/miss, and condition match, sliced by lead time.
+    columns:
+      - name: forecast_key
+        description: Surrogate key from the issue history — md5(city|forecast_at|issued_at).
+        tests: [not_null]
+      - name: city
+        tests: [not_null]
+      - name: forecast_at
+        tests: [not_null]

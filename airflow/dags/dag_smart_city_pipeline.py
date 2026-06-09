@@ -1,12 +1,14 @@
 """
 Smart City Analytics Pipeline DAG
 
-Hourly pipeline:
+Hourly ELT pipeline:
   1. Trigger all 6 Airbyte syncs in parallel
   2. Wait for all syncs to complete (XCom job IDs passed via context)
   3. Run dbt staging (PostgreSQL views)
-  4. Build + test dbt intermediate (PostgreSQL tables, deduped daily aggregates)
-  5. Cleanup old airbyte_raw rows (runs daily at midnight only)
+  4. Build + test dbt intermediate (PostgreSQL tables, hourly facts + daily rollups)
+
+Raw-data retention cleanup lives in the separate smart_city_maintenance DAG
+(@daily), decoupled so it runs regardless of any individual ELT run.
 
 Connection IDs loaded from /opt/airflow/ingestion_config/connection_ids.yml
 (mounted from ingestion/config/ in docker-compose.yml).
@@ -14,15 +16,13 @@ Connection IDs loaded from /opt/airflow/ingestion_config/connection_ids.yml
 
 from __future__ import annotations
 
-import os
 import yaml
-import psycopg2
 from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
-from airflow.operators.python import PythonOperator, ShortCircuitOperator
+from airflow.operators.python import PythonOperator
 from airflow.utils.task_group import TaskGroup
 
 from airbyte_utils import trigger_sync, wait_for_sync
@@ -57,49 +57,6 @@ def wait_for_sync_xcom(trigger_task_id: str, **context) -> None:
     if not job_id:
         raise ValueError(f"No job_id found in XCom from {trigger_task_id}")
     wait_for_sync(str(job_id))
-
-# ── Data retention ────────────────────────────────────────────────────────────
-
-# Raw is now a short buffer, not the archive: deduped hourly history is preserved
-# downstream in the incremental int_city_hourly_* tables (which are never pruned).
-# Raw only needs to outlive a sync gap so the hourly models never miss an hour.
-RETENTION_DAYS = {
-    "current_weather":   14,
-    "air_pollution":     14,
-    "weather_forecast":   7,
-    "traffic_flow":      14,
-    "traffic_incidents": 14,
-}
-
-def is_midnight(**context) -> bool:
-    """ShortCircuit: only run cleanup at midnight (hour 0)."""
-    return context["logical_date"].hour == 0
-
-
-def cleanup_old_data(**context) -> None:
-    """Delete rows from airbyte_raw tables older than their retention window."""
-    conn = psycopg2.connect(
-        host=os.environ["SMART_CITY_PG_HOST"],
-        port=int(os.environ.get("SMART_CITY_PG_PORT", "5432")),
-        dbname=os.environ["SMART_CITY_PG_DB"],
-        user=os.environ["SMART_CITY_PG_USER"],
-        password=os.environ["SMART_CITY_PG_PASSWORD"],
-    )
-    try:
-        with conn.cursor() as cur:
-            for table, days in RETENTION_DAYS.items():
-                cur.execute(
-                    f"""
-                    DELETE FROM airbyte_raw.{table}
-                    WHERE _airbyte_extracted_at < NOW() - INTERVAL '{days} days'
-                    """,
-                )
-                deleted = cur.rowcount
-                print(f"  {table}: deleted {deleted} rows older than {days} days")
-        conn.commit()
-        print("Cleanup complete.")
-    finally:
-        conn.close()
 
 # ── Failure callback ──────────────────────────────────────────────────────────
 
@@ -174,20 +131,6 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
-    # ── Step 5: Daily cleanup (midnight only) ────────────────────────────────
-
-    midnight_check = ShortCircuitOperator(
-        task_id="is_midnight",
-        python_callable=is_midnight,
-        execution_timeout=timedelta(minutes=1),
-    )
-
-    cleanup = PythonOperator(
-        task_id="cleanup_old_data",
-        python_callable=cleanup_old_data,
-        execution_timeout=timedelta(minutes=10),
-    )
-
     # ── Pipeline order ────────────────────────────────────────────────────────
 
-    trigger_group >> wait_group >> dbt_staging >> dbt_intermediate >> midnight_check >> cleanup
+    trigger_group >> wait_group >> dbt_staging >> dbt_intermediate

@@ -1,9 +1,10 @@
 # Smart City Analytics Pipeline
 
 End-to-end ELT platform that automatically ingests weather, air pollution, and transportation
-data from public APIs, cleans it into PostgreSQL **staging** views and deduped **intermediate**
-tables with dbt, and orchestrates the flow with Airflow. Everything runs in one PostgreSQL
-database: Airbyte → `airbyte_raw` → dbt `staging` (views) → dbt `intermediate` (tables).
+data from public APIs, cleans it into PostgreSQL **staging** views and **intermediate** tables
+(incremental hourly facts + daily rollups) with dbt, and orchestrates the flow with Airflow.
+Everything runs in one PostgreSQL database: Airbyte → `airbyte_raw` → dbt `staging` (views) →
+dbt `intermediate` (hourly facts + daily rollups).
 
 ---
 
@@ -12,9 +13,10 @@ database: Airbyte → `airbyte_raw` → dbt `staging` (views) → dbt `intermedi
 ```
 OpenWeather API  --+
 TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermediate
-                   |                airbyte_raw     (views)         (deduped daily tables)
+                   |                airbyte_raw     (views)         (hourly facts + daily rollups)
                    +-----------------------------------------------------------
-                               Airflow (smart_city_pipeline DAG, @hourly)
+                       Airflow: smart_city_pipeline (@hourly ELT)
+                                smart_city_maintenance (@daily raw cleanup)
 ```
 
 | Layer | Tool |
@@ -75,7 +77,7 @@ python ingestion/scripts/setup_airbyte.py
 ```bash
 cd dbt/smart_city
 dbt run   --select staging      --target staging   # cleaned views
-dbt build --select intermediate --target staging   # deduped daily tables + tests
+dbt build --select intermediate --target staging   # hourly facts + daily rollups + tests
 ```
 
 ### 6. Start Airflow
@@ -85,7 +87,7 @@ cd airflow
 docker compose run --rm airflow-init
 docker compose up -d
 # UI: localhost:8080  (admin / admin)
-# Enable DAG: smart_city_pipeline
+# Enable DAGs: smart_city_pipeline, smart_city_maintenance
 ```
 
 ---
@@ -94,8 +96,11 @@ docker compose up -d
 
 ### Pipeline
 - **5 dbt staging models** (PostgreSQL views), one per Airbyte source stream
-- **3 dbt intermediate models** (PostgreSQL tables) — deduped, aggregated to one row per `(city, date_utc)`, with uniqueness/not_null tests
-- **Airflow DAG** `smart_city_pipeline` — triggers 6 Airbyte syncs in parallel, then runs dbt staging → dbt intermediate (build + test)
+- **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per observation; preserve time-of-day + history independent of raw pruning
+- **3 dbt intermediate daily rollups** (tables) — aggregated *from* the hourly facts to one row per `(city, date_utc)`, with uniqueness/not_null tests
+- **3 dbt forecast models** — issue history (incremental), current forecast, and a prediction-vs-actual accuracy model
+- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 6 Airbyte syncs in parallel, then runs dbt staging → dbt intermediate (build + test)
+- **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `airbyte_raw` rows per retention policy
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` adds new cities from config without UI
 
 ### Staging (PostgreSQL `staging` schema — views)
@@ -107,16 +112,37 @@ docker compose up -d
 | `stg_traffic_flow` | Road-segment speeds and congestion from TomTom |
 | `stg_traffic_incidents` | Active traffic incidents from TomTom |
 
-### Intermediate (PostgreSQL `intermediate` schema — tables, one row per city/day)
+### Intermediate — hourly facts (PostgreSQL `intermediate` schema — incremental tables, one row per observation)
 | Table | Description |
 |---|---|
-| `int_city_daily_weather` | Deduped daily temp/wind/precip/dominant-condition per city |
-| `int_city_daily_pollution` | Deduped daily AQI + pollutant averages, `hours_poor_air` |
-| `int_city_daily_traffic` | Deduped daily congestion/speed + incident counts per city |
+| `int_city_hourly_weather` | Hourly temp/wind/humidity/precip/condition per city |
+| `int_city_hourly_pollution` | Hourly AQI + pollutant concentrations per city |
+| `int_city_hourly_traffic_flow` | Per-sync congestion/speed snapshots per city |
+| `int_city_hourly_traffic_incidents` | Per-sync incident detail (id, delay, magnitude, from/to) per city |
 
-Each is keyed on `city_date_key = md5(city|date_utc)` and dedupes its source on the stream's
-business key (keeping the latest `extracted_at`) before aggregating — required because the
-Airbyte sync mode is `full_refresh_append` (it appends a fresh full snapshot every hour).
+Each dedupes its staging source on the stream's business key (keeping the latest `extracted_at`)
+and is **incremental** (`delete+insert`, 6h lookback) — required because Airbyte runs
+`full_refresh_append` (appends a fresh full snapshot every hour). Append-only, so they accumulate
+clean hourly history forever, independent of raw pruning. Carry `date_utc` + `hour_utc`.
+
+### Intermediate — daily rollups (PostgreSQL `intermediate` schema — tables, one row per city/day)
+| Table | Description |
+|---|---|
+| `int_city_daily_weather` | Daily temp/wind/precip/dominant-condition per city |
+| `int_city_daily_pollution` | Daily AQI + pollutant averages, `hours_poor_air` |
+| `int_city_daily_traffic` | Daily congestion/speed + incident counts per city |
+
+Aggregated *from* the hourly facts (no re-dedup), keyed on `city_date_key = md5(city|date_utc)`
+with `unique` + `not_null` tests.
+
+### Intermediate — forecast (PostgreSQL `intermediate` schema)
+Models the 5-day / 3-hour forecast (two timestamps: `forecast_at` = predicted time,
+`issued_at` = when predicted; `lead_time` = the difference).
+| Table | Description |
+|---|---|
+| `int_city_weather_forecast` | Incremental, append-only **issue history** — one row per prediction issuance; persists forecasts as issued for later scoring |
+| `int_city_forecast_latest` | Latest prediction per future slot = the current 5-day forecast |
+| `int_city_forecast_accuracy` | Past predictions scored vs observed weather — temp error, rain hit/miss, condition match, by lead time (with 1/0 helper cols for BI hit-rates) |
 
 ---
 
@@ -160,12 +186,13 @@ smart-city-iw/
 │   ├── Dockerfile       <- extends apache/airflow:2.9.3 with dbt
 │   ├── docker-compose.yml
 │   └── dags/
-│       ├── airbyte_utils.py            <- OAuth trigger/wait helpers
-│       └── dag_smart_city_pipeline.py  <- main hourly DAG
+│       ├── airbyte_utils.py                 <- OAuth trigger/wait helpers
+│       ├── dag_smart_city_pipeline.py       <- hourly ELT DAG
+│       └── dag_smart_city_maintenance.py    <- daily raw-cleanup DAG
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
 │   └── models/
 │       ├── staging/      -> PostgreSQL (5 views)
-│       └── intermediate/ -> PostgreSQL (3 tables, deduped daily aggregates)
+│       └── intermediate/ -> PostgreSQL (4 hourly facts + 3 daily rollups + 3 forecast)
 ├── venv313/             <- Python 3.13 venv (always use this)
 └── .env                 <- secrets (not committed)
 ```
