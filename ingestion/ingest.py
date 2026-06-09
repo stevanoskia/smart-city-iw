@@ -23,6 +23,30 @@ from config import CITIES, OPENWEATHER_API_KEY, TOMTOM_API_KEY, DB_CONFIG
 
 
 # -------------------------------------------------------------
+# HELPER FUNCTION — Add missing columns to a raw table automatically
+# -------------------------------------------------------------
+def ensure_columns(cursor, table: str, data: dict):
+    """
+    Checks each key in data and adds the column to the table if it does not exist.
+    This allows ingest.py to add new columns (e.g. city, country) without manual ALTER TABLE.
+    """
+    for col, val in data.items():
+        if not col.isidentifier():
+            continue
+        if isinstance(val, bool):
+            col_type = "BOOLEAN"
+        elif isinstance(val, int):
+            col_type = "BIGINT"
+        elif isinstance(val, float):
+            col_type = "NUMERIC"
+        else:
+            col_type = "TEXT"
+        cursor.execute(
+            f'ALTER TABLE airbyte_raw.{table} ADD COLUMN IF NOT EXISTS "{col}" {col_type}'
+        )
+
+
+# -------------------------------------------------------------
 # HELPER FUNCTION — INSERT into airbyte_raw table
 # -------------------------------------------------------------
 def insert_raw(cursor, table: str, data: dict):
@@ -49,6 +73,9 @@ def insert_raw(cursor, table: str, data: dict):
             serialized[key] = json.dumps(value)
         else:
             serialized[key] = value
+
+    # Automatically add any missing columns to the table before inserting
+    ensure_columns(cursor, table, serialized)
 
     # Required Airbyte system columns
     columns = ["_airbyte_raw_id", "_airbyte_extracted_at", "_airbyte_meta", "_airbyte_generation_id"] + list(serialized.keys())
@@ -230,6 +257,9 @@ def run_ingestion():
         try:
             cursor.execute("SAVEPOINT sp")
             data = fetch_air_pollution(city)
+            # Add city metadata — API response does not include city name
+            data["city"]    = city["name"]
+            data["country"] = city.get("country")
             insert_raw(cursor, "air_pollution", data)
             print(f"     ✓ air_pollution")
         except Exception as e:
@@ -241,6 +271,9 @@ def run_ingestion():
             cursor.execute("SAVEPOINT sp")
             forecasts = fetch_weather_forecast(city)
             for forecast in forecasts:
+                # Add city metadata — API response does not include city name
+                forecast["city"]    = city["name"]
+                forecast["country"] = city.get("country")
                 insert_raw(cursor, "weather_forecast", forecast)
             print(f"     ✓ weather_forecast ({len(forecasts)} forecasts)")
         except Exception as e:
@@ -251,6 +284,9 @@ def run_ingestion():
         try:
             cursor.execute("SAVEPOINT sp")
             data = fetch_traffic_flow(city)
+            # Add city metadata — API response does not include city name
+            data["city"]    = city["name"]
+            data["country"] = city.get("country")
             insert_raw(cursor, "traffic_flow", data)
             print(f"     ✓ traffic_flow")
         except Exception as e:
@@ -262,6 +298,9 @@ def run_ingestion():
             cursor.execute("SAVEPOINT sp")
             incidents = fetch_traffic_incidents(city)
             for incident in incidents:
+                # Add city metadata so incidents can be analyzed by city later
+                incident["city"]    = city["name"]
+                incident["country"] = city.get("country")
                 insert_raw(cursor, "traffic_incidents", incident)
             print(f"     ✓ traffic_incidents ({len(incidents)} incidents)")
         except Exception as e:

@@ -45,7 +45,11 @@ renamed as (
         (snow->>'3h')::numeric                                 as snow_3h_mm,
 
         -- Day/night indicator
-        (sys->>'pod')::text                                    as day_or_night  -- 'd' or 'n'
+        (sys->>'pod')::text                                    as day_or_night,  -- 'd' or 'n'
+
+        -- City metadata (added by ingest.py)
+        city                                                   as city,
+        country                                                as country
 
     from source
 )

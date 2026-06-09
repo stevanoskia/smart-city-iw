@@ -201,10 +201,18 @@ smart_city:
 ```
 
 ### DAG
+### Main pipeline DAG — dbt_smart_city
 - File: `D:\IWConnect\airflow\dags\dbt_smart_city.py`
-- Schedule: `@hourly` (parameter `schedule=`, NOT `schedule_interval=` — Airflow 3.x)
-- Tasks: `ingest_run → dbt_run`
-- dbt project path in container: `/opt/smart-city/dbt/smart_city`
+- Schedule: `@hourly`
+- Tasks: `ingest_run → dbt_staging → dbt_test → dbt_intermediate`
+- retries=2, execution_timeout=45min
+
+### Maintenance DAG — cleanup_smart_city
+- File: `D:\IWConnect\airflow\dags\cleanup_smart_city.py`
+- Schedule: `@daily` (runs at midnight)
+- Tasks: `cleanup_old_data` — deletes airbyte_raw rows older than 14 days
+- retries=1, execution_timeout=15min
+- **Note:** DAG starts paused — enable it manually in Airflow UI when ready
 
 ### IMPORTANT: LOAD_EXAMPLES = false
 docker-compose has `AIRFLOW__CORE__LOAD_EXAMPLES: 'false'` — only your DAG is visible.
@@ -344,6 +352,13 @@ dbt run
 
 ---
 
+## NOTE — Duplicate Records Fix (2026-06-09)
+- Airbyte connections **disabled** (toggle OFF) — `ingest.py` is the only active ingestion source
+- Root cause: both Airbyte and `ingest.py` were writing to the same `airbyte_raw` tables simultaneously
+- Full details: `docs/duplicate_records_fix.md`
+
+---
+
 ## WHAT IS DONE (summary)
 
 | Component | Status |
@@ -352,12 +367,32 @@ dbt run
 | PostgreSQL — smart_city + airflow databases | ✅ WORKS |
 | dbt — 5 staging models | ✅ WORKS |
 | Python ingestion script (replaces Airbyte) | ✅ WORKS |
-| Airflow — DAG: ingest_run → dbt_run (@hourly) | ✅ WORKS (confirmed Success) |
+| Airflow — dbt_smart_city: ingest_run → dbt_staging → dbt_test → dbt_intermediate (@hourly) | ✅ WORKS (confirmed Success) |
+| Airflow — cleanup_smart_city: cleanup_old_data (@daily, deletes >14 days) | ✅ WORKS (2026-06-09) |
 | GitHub — feat/irina-airflow-setup PR | ✅ PUSHED |
+| Duplicate records fix — Airbyte disabled | ✅ FIXED (2026-06-09) |
+| city/country added to ingest.py (air_pollution, traffic_flow, traffic_incidents, weather_forecast) | ✅ DONE (2026-06-09) |
+| ensure_columns() in ingest.py — auto-adds missing columns to raw tables | ✅ DONE (2026-06-09) |
+| country added to config.py for all 4 cities (DE, ES, GB, NL) | ✅ DONE (2026-06-09) |
+| city/country added to all 5 staging models | ✅ DONE (2026-06-09) |
+| dbt intermediate models — 5 models, all PASS (10/10) | ✅ DONE (2026-06-09) |
+| Airbyte YAML connectors updated — city field added (OpenWeather + TomTom) | ✅ DONE (2026-06-09) |
+| Docker WSL memory increased to 12GB (.wslconfig) | ✅ DONE (2026-06-09) |
+
+## INTERMEDIATE MODELS
+
+| Model | Groups by | Key metrics |
+|-------|-----------|-------------|
+| `int_current_weather_hourly` | city + country + hour | avg/min/max temp, humidity, wind, weather label |
+| `int_air_quality_hourly` | city + country + hour | avg AQI, pollutants (CO, NO2, PM2.5...) |
+| `int_traffic_flow_hourly` | city + country + hour | avg speed, congestion score, congestion level |
+| `int_traffic_incidents_hourly` | city + country + hour | total incidents, by category |
+| `int_weather_forecast_daily` | city + country + day | min/max/avg temp, dominant weather, rain/snow |
 
 ## WHAT REMAINS
 
-- [ ] Intermediate dbt models
 - [ ] Marts dbt models
+- [x] DAG split into 2 separate DAGs: dbt_smart_city (@hourly) + cleanup_smart_city (@daily) ✅ DONE (2026-06-09)
 - [ ] Cleanup of `__dbt_backup` tables in PostgreSQL
 - [ ] Dashboard (Power BI / Metabase)
+- [ ] Push current changes to GitHub

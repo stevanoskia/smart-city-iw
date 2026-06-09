@@ -41,6 +41,10 @@ renamed as (
         -- Geometry (coordinates as JSONB for mapping)
         geometry                                                            as geometry,
 
+        -- City metadata (added by ingest.py)
+        city                                                                as city,
+        country                                                             as country,
+
         -- Sync timestamp
         _airbyte_extracted_at                                               as observed_at
 

@@ -28,6 +28,10 @@ renamed as (
         -- Data quality
         confidence                                                  as confidence,
 
+        -- City metadata (added by ingest.py)
+        city                                                        as city,
+        country                                                     as country,
+
         -- Sync timestamp used as observed_at (TomTom flow has no dt field)
         _airbyte_extracted_at                                       as observed_at
 
