@@ -32,6 +32,7 @@ def get_token() -> str:
             "client_secret": AIRBYTE_CLIENT_SECRET,
             "grant_type": "client_credentials",
         },
+        headers={"Connection": "close"},
         timeout=30,
     )
     resp.raise_for_status()
@@ -40,7 +41,10 @@ def get_token() -> str:
 
 
 def _headers() -> dict:
-    return {"Authorization": f"Bearer {get_token()}"}
+    # Connection: close → open a fresh connection per request. Avoids the keep-alive
+    # race where the abctl/Kind ingress reaps an idle pooled connection between polls,
+    # which surfaces as ConnectionError/RemoteDisconnected on the next request.
+    return {"Authorization": f"Bearer {get_token()}", "Connection": "close"}
 
 
 def trigger_sync(connection_id: str) -> str:
@@ -89,14 +93,22 @@ def wait_for_sync(job_id: str, timeout: int = 3600, poll_interval: int = 30) -> 
     deadline = time.time() + timeout
     while time.time() < deadline:
         # /api/v1/jobs/get is a Config-API endpoint — POST with a JSON body.
-        resp = requests.post(
-            f"{AIRBYTE_URL}/api/v1/jobs/get",
-            headers=_headers(),
-            json={"id": int(job_id)},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        status = resp.json()["job"]["status"]
+        try:
+            resp = requests.post(
+                f"{AIRBYTE_URL}/api/v1/jobs/get",
+                headers=_headers(),
+                json={"id": int(job_id)},
+                timeout=30,
+            )
+            resp.raise_for_status()
+            status = resp.json()["job"]["status"]
+        except requests.exceptions.RequestException as e:
+            # Transient network blip (e.g. the abctl ingress dropping a connection)
+            # must NOT fail the task — a single bad poll is not a sync failure.
+            # Log and poll again; only a real job failure or the timeout ends the wait.
+            print(f"  Poll error for job {job_id}: {e} — retrying in {poll_interval}s")
+            time.sleep(poll_interval)
+            continue
         print(f"  Job {job_id} status: {status}")
         if status == "succeeded":
             return
