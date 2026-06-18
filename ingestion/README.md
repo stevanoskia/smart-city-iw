@@ -17,8 +17,8 @@ sources.yml + connections.yml  ──►  setup_airbyte.py  ──►  Airbyte (
                                                           connection_ids.yml ──► Airflow DAG
 ```
 
-- **`config/sources.yml`** — per provider: connector name, streams, and the **list of cities**
-  (coordinates; TomTom cities also have a bounding box).
+- **`config/sources.yml`** — per provider: connector name, streams, and the **`locations` list**
+  (one object per city: coordinates; TomTom cities also have a bounding box).
 - **`config/connections.yml`** — the PostgreSQL destination + sync settings (`full_refresh_append`).
 - **`scripts/setup_airbyte.py`** — reads both, creates any missing sources / destination /
   connections via the Airbyte API (idempotent — safe to re-run), and writes
@@ -26,9 +26,11 @@ sources.yml + connections.yml  ──►  setup_airbyte.py  ──►  Airbyte (
 - **`connections/*.yaml`** — the custom connector definitions:
   `open_weather_free_2_5.yaml`, `tomtom_traffic.yaml`.
 
-One Airbyte **source + connection per city, per provider** (e.g. `openweather_berlin`,
-`tomtom_london`). All write to the same `airbyte_raw` tables, distinguished by an injected
-`city` column.
+**One Airbyte source + connection per provider** — `openweather_all`, `tomtom_all`. Each connector
+is **partition-routed** (`ListPartitionRouter`) over its `locations` list, so a single connection
+makes one API request per city per stream within one sync. The request params and the injected
+`city` column read the current partition (`stream_partition` / `stream_slice`). All rows write to
+the same `airbyte_raw` tables, tagged with the `city` column.
 
 ---
 
@@ -48,8 +50,8 @@ One Airbyte **source + connection per city, per provider** (e.g. `openweather_be
 # from project root, in venv313
 python ingestion/scripts/setup_airbyte.py
 ```
-Creates the destination, one source + connection per city, and writes
-`ingestion/config/connection_ids.yml`.
+Creates the destination, one source + connection per provider (`openweather_all`, `tomtom_all`),
+each partition-routed over all cities, and writes `ingestion/config/connection_ids.yml`.
 
 ### 3. Trigger syncs
 Airflow's `smart_city_pipeline` DAG triggers all connections hourly, or use **Sync now** in the
@@ -64,15 +66,17 @@ SELECT city, COUNT(*) FROM airbyte_raw.traffic_incidents GROUP BY city;
 
 ## Adding a new city
 
-1. Add a city block under `openweather` and/or `tomtom` in `config/sources.yml`
+1. Add a `locations` entry under `openweather` and/or `tomtom` in `config/sources.yml`
    (include the bounding box for TomTom).
-2. Re-run `python ingestion/scripts/setup_airbyte.py` (creates the new source + connection,
-   updates `connection_ids.yml`).
-3. Re-parse the Airflow DAG so it picks up the new connection
-   (`docker compose restart airflow-scheduler`, or wait a parse cycle).
+2. Re-run `python ingestion/scripts/setup_airbyte.py` — it updates the existing
+   `openweather_all` / `tomtom_all` source config with the new location.
 
-No connector code or dbt changes needed — `city` is source config, injected via `AddFields`, and
-dbt models aggregate by `city` automatically.
+No new connection, **no Airflow DAG re-parse** (the connection count is unchanged), and no connector
+or dbt changes — the connector partition-routes over the `locations` list, injects `city` via
+`AddFields`, and dbt models aggregate by `city` automatically.
+
+> Only republish the connector in the Builder UI if you change the connector *definition* itself
+> (streams, request shape, spec) — not for adding cities to the list.
 
 ---
 

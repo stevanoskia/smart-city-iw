@@ -14,17 +14,21 @@ streams:
       - type: AddFields
         fields:
           - path: ["city"]
-            value: "{{ config['city'] }}"
+            value: "{{ stream_slice['location']['city'] }}"
             value_type: string
     retriever:
       type: SimpleRetriever
+      partition_router:
+        type: ListPartitionRouter
+        cursor_field: location
+        values: "{{ config['locations'] }}"
       requester:
         type: HttpRequester
         http_method: GET
         url: https://api.openweathermap.org/data/2.5/weather
         request_parameters:
-          lat: "{{ config['lat'] }}"
-          lon: "{{ config['lon'] }}"
+          lat: "{{ stream_partition['location']['lat'] }}"
+          lon: "{{ stream_partition['location']['lon'] }}"
           appid: "{{ config['appid'] }}"
           units: metric
       record_selector:
@@ -133,17 +137,21 @@ streams:
       - type: AddFields
         fields:
           - path: ["city"]
-            value: "{{ config['city'] }}"
+            value: "{{ stream_slice['location']['city'] }}"
             value_type: string
     retriever:
       type: SimpleRetriever
+      partition_router:
+        type: ListPartitionRouter
+        cursor_field: location
+        values: "{{ config['locations'] }}"
       requester:
         type: HttpRequester
         http_method: GET
         url: https://api.openweathermap.org/data/2.5/air_pollution
         request_parameters:
-          lat: "{{ config['lat'] }}"
-          lon: "{{ config['lon'] }}"
+          lat: "{{ stream_partition['location']['lat'] }}"
+          lon: "{{ stream_partition['location']['lon'] }}"
           appid: "{{ config['appid'] }}"
       record_selector:
         type: RecordSelector
@@ -192,17 +200,21 @@ streams:
       - type: AddFields
         fields:
           - path: ["city"]
-            value: "{{ config['city'] }}"
+            value: "{{ stream_slice['location']['city'] }}"
             value_type: string
     retriever:
       type: SimpleRetriever
+      partition_router:
+        type: ListPartitionRouter
+        cursor_field: location
+        values: "{{ config['locations'] }}"
       requester:
         type: HttpRequester
         http_method: GET
         url: https://api.openweathermap.org/data/2.5/forecast
         request_parameters:
-          lat: "{{ config['lat'] }}"
-          lon: "{{ config['lon'] }}"
+          lat: "{{ stream_partition['location']['lat'] }}"
+          lon: "{{ stream_partition['location']['lon'] }}"
           appid: "{{ config['appid'] }}"
           units: metric
       record_selector:
@@ -296,20 +308,29 @@ spec:
     $schema: http://json-schema.org/draft-07/schema#
     required:
       - appid
-      - lat
-      - lon
-      - city
+      - locations
     properties:
-      city:
-        type: string
-        title: City Name
-      lat:
-        type: number
-        title: Latitude
-      lon:
-        type: number
-        title: Longitude
       appid:
         type: string
         title: API Key
         airbyte_secret: true
+      locations:
+        type: array
+        title: Cities
+        description: One object per city; the stream is partition-routed over this list.
+        items:
+          type: object
+          required:
+            - city
+            - lat
+            - lon
+          properties:
+            city:
+              type: string
+              title: City Name
+            lat:
+              type: number
+              title: Latitude
+            lon:
+              type: number
+              title: Longitude

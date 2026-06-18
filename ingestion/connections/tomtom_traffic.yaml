@@ -14,10 +14,14 @@ streams:
       - type: AddFields
         fields:
           - path: ["city"]
-            value: "{{ config['city'] }}"
+            value: "{{ stream_slice['location']['city'] }}"
             value_type: string
     retriever:
       type: SimpleRetriever
+      partition_router:
+        type: ListPartitionRouter
+        cursor_field: location
+        values: "{{ config['locations'] }}"
       requester:
         type: HttpRequester
         url: >-
@@ -26,7 +30,7 @@ streams:
         request_parameters:
           key: "{{ config['api_key'] }}"
           unit: kmph
-          point: "{{ config['lat'] }},{{ config['lon'] }}"
+          point: "{{ stream_partition['location']['lat'] }},{{ stream_partition['location']['lon'] }}"
       record_selector:
         type: RecordSelector
         extractor:
@@ -62,10 +66,14 @@ streams:
       - type: AddFields
         fields:
           - path: ["city"]
-            value: "{{ config['city'] }}"
+            value: "{{ stream_slice['location']['city'] }}"
             value_type: string
     retriever:
       type: SimpleRetriever
+      partition_router:
+        type: ListPartitionRouter
+        cursor_field: location
+        values: "{{ config['locations'] }}"
       requester:
         type: HttpRequester
         url: https://api.tomtom.com/traffic/services/5/incidentDetails
@@ -73,8 +81,10 @@ streams:
         request_parameters:
           key: "{{ config['api_key'] }}"
           bbox: >-
-            {{ config['min_lon'] }},{{ config['min_lat'] }},{{ config['max_lon']
-            }},{{ config['max_lat'] }}
+            {{ stream_partition['location']['min_lon'] }},{{
+            stream_partition['location']['min_lat'] }},{{
+            stream_partition['location']['max_lon'] }},{{
+            stream_partition['location']['max_lat'] }}
           # Without `fields`, TomTom v5 returns only type+geometry+iconCategory.
           # Explicitly request the full detail set the inline schema declares.
           fields: "{incidents{type,geometry{type,coordinates},properties{id,iconCategory,magnitudeOfDelay,startTime,endTime,from,to,length,delay,timeValidity,probabilityOfOccurrence,numberOfReports}}}"
@@ -139,36 +149,45 @@ spec:
     $schema: http://json-schema.org/draft-07/schema#
     required:
       - api_key
-      - lat
-      - lon
-      - min_lat
-      - min_lon
-      - max_lat
-      - max_lon
-      - city
+      - locations
     properties:
-      city:
-        type: string
-        title: City Name
-      lat:
-        type: number
-        title: Latitude
-      lon:
-        type: number
-        title: Longitude
       api_key:
         type: string
         title: API Key
         airbyte_secret: true
-      max_lat:
-        type: number
-        title: Max Latitude (bbox)
-      max_lon:
-        type: number
-        title: Max Longitude (bbox)
-      min_lat:
-        type: number
-        title: Min Latitude (bbox)
-      min_lon:
-        type: number
-        title: Min Longitude (bbox)
+      locations:
+        type: array
+        title: Cities
+        description: One object per city; both streams are partition-routed over this list.
+        items:
+          type: object
+          required:
+            - city
+            - lat
+            - lon
+            - min_lat
+            - min_lon
+            - max_lat
+            - max_lon
+          properties:
+            city:
+              type: string
+              title: City Name
+            lat:
+              type: number
+              title: Latitude
+            lon:
+              type: number
+              title: Longitude
+            max_lat:
+              type: number
+              title: Max Latitude (bbox)
+            max_lon:
+              type: number
+              title: Max Longitude (bbox)
+            min_lat:
+              type: number
+              title: Min Latitude (bbox)
+            min_lon:
+              type: number
+              title: Min Longitude (bbox)
