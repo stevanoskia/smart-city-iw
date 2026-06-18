@@ -14,6 +14,12 @@ openweather:
     - city: London
       lat: 51.5074
       lon: -0.1278
+    - city: Amsterdam
+      lat: 52.3676
+      lon: 4.9041
+    - city: Prilep            # Macedonia — weather only (no TomTom traffic coverage)
+      lat: 41.3442
+      lon: 21.5544
 
 tomtom:
   connector_name: "TomTom Traffic"

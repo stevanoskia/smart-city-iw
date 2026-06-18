@@ -155,6 +155,7 @@ activemq-data/
 .venv
 env/
 venv/
+venv313/
 ENV/
 env.bak/
 venv.bak/
@@ -219,10 +220,12 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Claude Code
-CLAUDE.md
 
 # Project specific
+
+# Marts learning-exercise docs (design + reference solutions — kept local)
+docs/marts_build_guide.md
+docs/marts_implementation_plan.md
 
 # Airbyte — auto-generated, environment-specific
 ingestion/config/connection_ids.yml

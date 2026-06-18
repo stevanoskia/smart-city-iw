@@ -56,7 +56,6 @@ def trigger_sync(connection_id: str) -> str:
         # Sync already running — find the active job and return it
         print(f"  Sync already running for {connection_id}, finding active job...")
         # /api/v1/jobs/list is a Config-API endpoint — POST with a JSON body.
-        # (A GET returns 403 Forbidden.)
         jobs = requests.post(
             f"{AIRBYTE_URL}/api/v1/jobs/list",
             headers=_headers(),
@@ -90,7 +89,6 @@ def wait_for_sync(job_id: str, timeout: int = 3600, poll_interval: int = 30) -> 
     deadline = time.time() + timeout
     while time.time() < deadline:
         # /api/v1/jobs/get is a Config-API endpoint — POST with a JSON body.
-        # (A GET returns 403 Forbidden, which previously failed every wait task.)
         resp = requests.post(
             f"{AIRBYTE_URL}/api/v1/jobs/get",
             headers=_headers(),
