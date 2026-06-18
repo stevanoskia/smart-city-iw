@@ -1,50 +1,27 @@
+# One Airbyte source per connector. The connector is partition-routed over the
+# `locations` list below (ListPartitionRouter), so a single connection ingests
+# every city — one API request per city per stream, inside one sync.
+# Add a city = add a list entry here, then re-run ingestion/scripts/setup_airbyte.py.
+
 openweather:
   connector_name: "OpenWeather Free 2.5"
   streams:
     - current_weather
     - air_pollution
     - weather_forecast
-  cities:
-    - city: Skopje
-      lat: 41.9981
-      lon: 21.4321
-    - city: Berlin
-      lat: 52.5200
-      lon: 13.4050
-    - city: London
-      lat: 51.5074
-      lon: -0.1278
-    - city: Amsterdam
-      lat: 52.3676
-      lon: 4.9041
-    - city: Prilep            # Macedonia — weather only (no TomTom traffic coverage)
-      lat: 41.3442
-      lon: 21.5544
+  locations:
+    - { city: Skopje,    lat: 41.9981, lon: 21.4321 }
+    - { city: Berlin,    lat: 52.5200, lon: 13.4050 }
+    - { city: London,    lat: 51.5074, lon: -0.1278 }
+    - { city: Amsterdam, lat: 52.3676, lon:  4.9041 }
+    - { city: Prilep,    lat: 41.3442, lon: 21.5544 }   # Macedonia — weather only (no TomTom traffic coverage)
 
 tomtom:
   connector_name: "TomTom Traffic"
   streams:
     - traffic_flow
     - traffic_incidents
-  cities:
-    - city: London
-      lat: 51.5074
-      lon: -0.1278
-      min_lat: 51.40
-      min_lon: -0.25
-      max_lat: 51.60
-      max_lon:  0.00
-    - city: Berlin
-      lat: 52.5200
-      lon: 13.4050
-      min_lat: 52.40
-      min_lon: 13.20
-      max_lat: 52.65
-      max_lon: 13.65
-    - city: Amsterdam
-      lat: 52.3676
-      lon:  4.9041
-      min_lat: 52.28
-      min_lon:  4.75
-      max_lat: 52.45
-      max_lon:  5.05
+  locations:
+    - { city: London,    lat: 51.5074, lon: -0.1278, min_lat: 51.40, min_lon: -0.25, max_lat: 51.60, max_lon:  0.00 }
+    - { city: Berlin,    lat: 52.5200, lon: 13.4050, min_lat: 52.40, min_lon: 13.20, max_lat: 52.65, max_lon: 13.65 }
+    - { city: Amsterdam, lat: 52.3676, lon:  4.9041, min_lat: 52.28, min_lon:  4.75, max_lat: 52.45, max_lon:  5.05 }

@@ -286,49 +286,41 @@ def main():
 
     connection_ids = {}
 
-    # OpenWeather sources
-    print("\n── OpenWeather sources ──────────────────────")
-    ow_cfg    = sources_cfg["openweather"]
+    # OpenWeather — one source/connection for all cities. The connector is
+    # partition-routed over `locations` (see ingestion/connections/*.yaml), so a
+    # single connection ingests every city instead of one connection per city.
+    print("\n── OpenWeather source ───────────────────────")
+    ow_cfg     = sources_cfg["openweather"]
     ow_defn_id = find_custom_source_definition(workspace_id, ow_cfg["connector_name"])
 
-    for city in ow_cfg["cities"]:
-        name = f"openweather_{city['city'].lower()}"
-        source_cfg = {
-            "city":  city["city"],
-            "lat":   city["lat"],
-            "lon":   city["lon"],
-            "appid": OPENWEATHER_API_KEY,
-        }
-        source_id = ensure_source(workspace_id, ow_defn_id, name, source_cfg, existing_sources)
-        conn_id   = ensure_connection(
-            workspace_id, source_id, destination_id,
-            name, ow_cfg["streams"], sync, existing_connections,
-        )
-        connection_ids[name] = conn_id
+    ow_source_cfg = {
+        "appid":     OPENWEATHER_API_KEY,
+        "locations": ow_cfg["locations"],
+    }
+    ow_source_id = ensure_source(
+        workspace_id, ow_defn_id, "openweather_all", ow_source_cfg, existing_sources
+    )
+    connection_ids["openweather_all"] = ensure_connection(
+        workspace_id, ow_source_id, destination_id,
+        "openweather_all", ow_cfg["streams"], sync, existing_connections,
+    )
 
-    # TomTom sources
-    print("\n── TomTom sources ───────────────────────────")
-    tt_cfg    = sources_cfg["tomtom"]
+    # TomTom — one source/connection for all cities (partition-routed).
+    print("\n── TomTom source ────────────────────────────")
+    tt_cfg     = sources_cfg["tomtom"]
     tt_defn_id = find_custom_source_definition(workspace_id, tt_cfg["connector_name"])
 
-    for city in tt_cfg["cities"]:
-        name = f"tomtom_{city['city'].lower()}"
-        source_cfg = {
-            "city":    city["city"],
-            "lat":     city["lat"],
-            "lon":     city["lon"],
-            "min_lat": city["min_lat"],
-            "min_lon": city["min_lon"],
-            "max_lat": city["max_lat"],
-            "max_lon": city["max_lon"],
-            "api_key": TOMTOM_API_KEY,
-        }
-        source_id = ensure_source(workspace_id, tt_defn_id, name, source_cfg, existing_sources)
-        conn_id   = ensure_connection(
-            workspace_id, source_id, destination_id,
-            name, tt_cfg["streams"], sync, existing_connections,
-        )
-        connection_ids[name] = conn_id
+    tt_source_cfg = {
+        "api_key":   TOMTOM_API_KEY,
+        "locations": tt_cfg["locations"],
+    }
+    tt_source_id = ensure_source(
+        workspace_id, tt_defn_id, "tomtom_all", tt_source_cfg, existing_sources
+    )
+    connection_ids["tomtom_all"] = ensure_connection(
+        workspace_id, tt_source_id, destination_id,
+        "tomtom_all", tt_cfg["streams"], sync, existing_connections,
+    )
 
     # Write connection IDs for Airflow
     print("\n── Connection IDs (written to connection_ids.yml) ──")
