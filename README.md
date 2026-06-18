@@ -2,18 +2,21 @@
 
 End-to-end ELT platform that automatically ingests weather, air pollution, and transportation
 data from public APIs, cleans it into PostgreSQL **staging** views and **intermediate** tables
-(incremental hourly facts + daily rollups) with dbt, and orchestrates the flow with Airflow.
+(incremental hourly facts + forecast issue history) with dbt, and orchestrates the flow with Airflow.
 Everything runs in one PostgreSQL database: Airbyte → `airbyte_raw` → dbt `staging` (views) →
-dbt `intermediate` (hourly facts + daily rollups).
+dbt `intermediate` (hourly facts + forecast history). The **marts** layer is intentionally left as
+a hands-on learning exercise (design + build guide in `docs/`).
 
 ---
 
 ## Architecture
 
 ```
-OpenWeather API  --+
+OpenWeather API  --+                                               (marts: not built — exercise)
 TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermediate
-                   |                airbyte_raw     (views)         (hourly facts + daily rollups)
+                   |   (1 partition-  airbyte_raw   (views)        (hourly facts + forecast history)
+                   |    routed conn
+                   |    per API)
                    +-----------------------------------------------------------
                        Airflow: smart_city_pipeline (@hourly ELT)
                                 smart_city_maintenance (@daily raw cleanup)
@@ -32,8 +35,11 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermedi
 
 | Source | Streams | Cities |
 |---|---|---|
-| OpenWeather Free 2.5 | current weather, air pollution, 5-day forecast | Skopje, Berlin, London |
+| OpenWeather Free 2.5 | current weather, air pollution, 5-day forecast | Skopje, Berlin, London, Amsterdam, Prilep |
 | TomTom Traffic | traffic flow, traffic incidents | London, Berlin, Amsterdam |
+
+Each provider is one Airbyte connection, partition-routed over its city list — add cities in
+`ingestion/config/sources.yml`, no new connections.
 
 ---
 
@@ -77,7 +83,7 @@ python ingestion/scripts/setup_airbyte.py
 ```bash
 cd dbt/smart_city
 dbt run   --select staging      --target staging   # cleaned views
-dbt build --select intermediate --target staging   # hourly facts + daily rollups + tests
+dbt build --select intermediate --target staging   # hourly facts + forecast history + tests
 ```
 
 ### 6. Start Airflow
@@ -97,11 +103,11 @@ docker compose up -d
 ### Pipeline
 - **5 dbt staging models** (PostgreSQL views), one per Airbyte source stream
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per observation; preserve time-of-day + history independent of raw pruning
-- **3 dbt intermediate daily rollups** (tables) — aggregated *from* the hourly facts to one row per `(city, date_utc)`, with uniqueness/not_null tests
-- **3 dbt forecast models** — issue history (incremental), current forecast, and a prediction-vs-actual accuracy model
-- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 6 Airbyte syncs in parallel, then runs dbt staging → dbt intermediate (build + test)
+- **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
+- **Marts layer** — intentionally not built (hands-on learning exercise; design + build guide in `docs/`)
+- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate (build + test)
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `airbyte_raw` rows per retention policy
-- **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` adds new cities from config without UI
+- **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API; add cities via config, no UI
 
 ### Staging (PostgreSQL `staging` schema — views)
 | View | Description |
@@ -125,24 +131,17 @@ and is **incremental** (`delete+insert`, 6h lookback) — required because Airby
 `full_refresh_append` (appends a fresh full snapshot every hour). Append-only, so they accumulate
 clean hourly history forever, independent of raw pruning. Carry `date_utc` + `hour_utc`.
 
-### Intermediate — daily rollups (PostgreSQL `intermediate` schema — tables, one row per city/day)
-| Table | Description |
-|---|---|
-| `int_city_daily_weather` | Daily temp/wind/precip/dominant-condition per city |
-| `int_city_daily_pollution` | Daily AQI + pollutant averages, `hours_poor_air` |
-| `int_city_daily_traffic` | Daily congestion/speed + incident counts per city |
-
-Aggregated *from* the hourly facts (no re-dedup), keyed on `city_date_key = md5(city|date_utc)`
-with `unique` + `not_null` tests.
-
 ### Intermediate — forecast (PostgreSQL `intermediate` schema)
 Models the 5-day / 3-hour forecast (two timestamps: `forecast_at` = predicted time,
 `issued_at` = when predicted; `lead_time` = the difference).
 | Table | Description |
 |---|---|
-| `int_city_weather_forecast` | Incremental, append-only **issue history** — one row per prediction issuance; persists forecasts as issued for later scoring |
-| `int_city_forecast_latest` | Latest prediction per future slot = the current 5-day forecast |
-| `int_city_forecast_accuracy` | Past predictions scored vs observed weather — temp error, rain hit/miss, condition match, by lead time (with 1/0 helper cols for BI hit-rates) |
+| `int_city_weather_forecast` | Incremental, append-only **issue history** — one row per prediction issuance; persists forecasts as issued for later accuracy scoring |
+
+### Marts — not built (learning exercise)
+The marts layer (dimensions, daily facts, the `mart_city_daily` OBT, forecast latest + accuracy)
+is intentionally left to build by hand. Design + step-by-step guide live in
+`docs/marts_implementation_plan.md` and `docs/marts_build_guide.md`.
 
 ---
 
@@ -151,9 +150,9 @@ Models the 5-day / 3-hour forecast (two timestamps: `forecast_at` = predicted ti
 PostgreSQL starts automatically with Windows. For everything else:
 
 ```powershell
-# 1. Airbyte — Kind container exits on reboot, restart it then reinstall pods
+# 1. Airbyte — Kind container exits on reboot; starting it brings the pods back
 docker start airbyte-abctl-control-plane
-abctl local install
+# (give pods ~1-2 min; only if the UI still won't come up: abctl local install)
 # Check: abctl local status
 
 # 2. Airflow
@@ -192,7 +191,8 @@ smart-city-iw/
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
 │   └── models/
 │       ├── staging/      -> PostgreSQL (5 views)
-│       └── intermediate/ -> PostgreSQL (4 hourly facts + 3 daily rollups + 3 forecast)
+│       └── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
+│       # marts/          -> TO BUILD (learning exercise — see docs/)
 ├── venv313/             <- Python 3.13 venv (always use this)
 └── .env                 <- secrets (not committed)
 ```

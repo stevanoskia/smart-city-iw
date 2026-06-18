@@ -37,8 +37,9 @@ DAG pruning old raw rows.
 | AI-generated city summaries | Claude API reads `mart_city_daily` → daily narrative summaries (needs marts first) |
 
 ### Recently Completed
+- ✅ **One Airbyte connection per API** — connectors are partition-routed (`ListPartitionRouter`) over a `locations` list, so a single connection (`openweather_all`, `tomtom_all`) ingests every city instead of one connection per city. Scales to many cities; Airflow + dbt unchanged.
 - ✅ Added **Amsterdam + Prilep** to OpenWeather (5 weather cities; Macedonia has no TomTom traffic)
-- ✅ **Forecast** intermediate layer — issue history (`int_city_weather_forecast`), current forecast (`int_city_forecast_latest`), prediction-vs-actual accuracy (`int_city_forecast_accuracy`)
+- ✅ **Forecast** intermediate layer — incremental issue history (`int_city_weather_forecast`); the forward-looking *latest* + prediction-vs-actual *accuracy* models were moved to the (unbuilt) marts layer
 - ✅ Incremental **hourly** intermediate layer (`int_city_hourly_*`) — preserves time-of-day + history; daily models roll up from it
 - ✅ TomTom incidents `fields` fix — full incident detail now ingests (id, delay, magnitudeOfDelay, …)
 - ✅ Split raw cleanup into a separate `@daily` `smart_city_maintenance` DAG
@@ -242,6 +243,13 @@ python ingestion/scripts/setup_airbyte.py
 
 Outputs `ingestion/config/connection_ids.yml` with connection UUIDs for Airflow.
 
+**One source + connection per API**, not per city: `openweather_all` and `tomtom_all`.
+Each connector is partition-routed (`ListPartitionRouter`) over the `locations` array in
+`sources.yml` — one API request per city per stream, all inside one sync. The request params
+and the injected `city` column read the current partition (`stream_partition` / `stream_slice`)
+instead of flat single-city config. **Add a city** = add a `locations` entry in `sources.yml`
+and re-run the setup script (it updates the source config); no new connection, no DAG re-parse.
+
 Config files: `ingestion/config/sources.yml`, `ingestion/config/connections.yml`
 Connector YAMLs: `ingestion/connections/open_weather_free_2_5.yaml`, `ingestion/connections/tomtom_traffic.yaml`
 
@@ -275,7 +283,7 @@ UI: `localhost:8080` — login: `admin / admin`
 
 ### DAG: `smart_city_pipeline`
 - Schedule: `@hourly`
-- Triggers all Airbyte syncs in parallel (one task per connection in `connection_ids.yml`)
+- Triggers all Airbyte syncs in parallel (one task per connection in `connection_ids.yml` — now 2: `openweather_all`, `tomtom_all`)
 - Waits for all syncs to complete
 - Runs `dbt run --select staging --target staging`
 - Runs `dbt build --select intermediate --target staging` (hourly facts + forecast history)
