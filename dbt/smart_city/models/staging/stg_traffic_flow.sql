@@ -31,8 +31,9 @@ renamed as (
         -- Data quality
         confidence                                                  as confidence,
 
-        -- Sync timestamp used as observed_at (TomTom flow has no dt field)
-        _airbyte_extracted_at                                       as observed_at
+        -- Sync timestamp used as observed_at (TomTom flow has no dt field).
+        -- Cast to naive UTC so downstream date_utc/hour_utc are true UTC, not session-local.
+        (_airbyte_extracted_at at time zone 'UTC')                  as observed_at
 
     from source
 )

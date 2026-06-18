@@ -44,8 +44,9 @@ renamed as (
         -- Geometry (coordinates as JSONB for mapping)
         geometry                                                            as geometry,
 
-        -- Sync timestamp
-        _airbyte_extracted_at                                               as observed_at
+        -- Sync timestamp used as observed_at (TomTom incidents have no event time).
+        -- Cast to naive UTC so downstream date_utc/hour_utc are true UTC, not session-local.
+        (_airbyte_extracted_at at time zone 'UTC')                          as observed_at
 
     from source
 )
