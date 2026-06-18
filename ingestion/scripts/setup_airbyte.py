@@ -26,6 +26,9 @@ import requests
 from pathlib import Path
 from dotenv import load_dotenv
 
+# Windows consoles default to cp1252; force UTF-8 so status glyphs (✓ ~ +) don't crash.
+sys.stdout.reconfigure(encoding="utf-8")
+
 # ── Paths ────────────────────────────────────────────────────────────────────
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -187,8 +190,19 @@ def ensure_destination(workspace_id: str, cfg: dict, existing: dict) -> str:
 def ensure_source(workspace_id: str, defn_id: str, source_name: str,
                   source_cfg: dict, existing: dict) -> str:
     if source_name in existing:
-        print(f"  ✓ Source '{source_name}' already exists — skipping")
-        return existing[source_name]["sourceId"]
+        source_id = existing[source_name]["sourceId"]
+        # Push the latest config so edits to sources.yml (e.g. new cities in the
+        # `locations` list) update the existing source instead of being skipped.
+        api(
+            "POST", "sources/update",
+            json={
+                "sourceId": source_id,
+                "name": source_name,
+                "connectionConfiguration": source_cfg,
+            },
+        )
+        print(f"  ~ Source '{source_name}' already exists — config updated")
+        return source_id
 
     result = api(
         "POST", "sources/create",

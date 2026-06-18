@@ -14,7 +14,12 @@ openweather:
     - { city: Berlin,    lat: 52.5200, lon: 13.4050 }
     - { city: London,    lat: 51.5074, lon: -0.1278 }
     - { city: Amsterdam, lat: 52.3676, lon:  4.9041 }
+    - { city: Belgrade,  lat: 44.7866, lon: 20.4489 }
+    - { city: Brussels,  lat: 50.8503, lon:  4.3517 }
+    - { city: Barcelona, lat: 41.3874, lon:  2.1686 }
     - { city: Prilep,    lat: 41.3442, lon: 21.5544 }   # Macedonia — weather only (no TomTom traffic coverage)
+    - { city: Bitola,    lat: 41.0314, lon: 21.3347 }   # Macedonia — weather only (verified: no TomTom segment/incidents)
+    - { city: Ohrid,     lat: 41.1231, lon: 20.8016 }   # Macedonia — weather only (verified: no TomTom segment/incidents)
 
 tomtom:
   connector_name: "TomTom Traffic"
@@ -25,3 +30,6 @@ tomtom:
     - { city: London,    lat: 51.5074, lon: -0.1278, min_lat: 51.40, min_lon: -0.25, max_lat: 51.60, max_lon:  0.00 }
     - { city: Berlin,    lat: 52.5200, lon: 13.4050, min_lat: 52.40, min_lon: 13.20, max_lat: 52.65, max_lon: 13.65 }
     - { city: Amsterdam, lat: 52.3676, lon:  4.9041, min_lat: 52.28, min_lon:  4.75, max_lat: 52.45, max_lon:  5.05 }
+    - { city: Belgrade,  lat: 44.7866, lon: 20.4489, min_lat: 44.70, min_lon: 20.35, max_lat: 44.87, max_lon: 20.55 }
+    - { city: Brussels,  lat: 50.8503, lon:  4.3517, min_lat: 50.78, min_lon:  4.25, max_lat: 50.92, max_lon:  4.45 }
+    - { city: Barcelona, lat: 41.3874, lon:  2.1686, min_lat: 41.32, min_lon:  2.08, max_lat: 41.46, max_lon:  2.25 }
