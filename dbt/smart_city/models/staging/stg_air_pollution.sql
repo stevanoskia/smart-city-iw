@@ -7,6 +7,9 @@ renamed as (
         _airbyte_raw_id                         as raw_id,
         _airbyte_extracted_at                   as extracted_at,
 
+        -- Location (injected by Airbyte AddFields from source config)
+        city                                    as city,
+
         -- AQI (OpenWeather scale 1=Good, 2=Fair, 3=Moderate, 4=Poor, 5=Very Poor)
         (main->>'aqi')::integer                 as aqi,
         case (main->>'aqi')::integer

@@ -1,0 +1,92 @@
+version: 2
+
+models:
+  # ── Hourly facts (incremental, append-only — the durable history) ──────────
+  - name: int_city_hourly_weather
+    description: >
+      Durable hourly per-city weather facts. One row per real observation
+      (city, observed_at), deduped from staging and accumulated incrementally so
+      hourly history survives airbyte_raw pruning. Source for fct_weather_daily.
+    columns:
+      - name: city_hour_key
+        description: Surrogate key — md5(city|observed_at). Primary key of this table.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+
+  - name: int_city_hourly_pollution
+    description: >
+      Durable hourly per-city air-quality facts. One row per real observation
+      (city, observed_at), deduped and accumulated incrementally. Source for
+      fct_pollution_daily.
+    columns:
+      - name: city_hour_key
+        description: Surrogate key — md5(city|observed_at). Primary key of this table.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+      - name: aqi
+        tests: [not_null]
+
+  - name: int_city_hourly_traffic_flow
+    description: >
+      Durable hourly per-city traffic-flow facts. One row per sync snapshot
+      (city, observed_at) — observed_at is Airbyte sync time (TomTom flow has no
+      event timestamp). Deduped and accumulated incrementally.
+    columns:
+      - name: city_hour_key
+        description: Surrogate key — md5(city|observed_at). Primary key of this table.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+
+  - name: int_city_hourly_traffic_incidents
+    description: >
+      Durable hourly per-city traffic-incident facts. One row per incident per
+      sync (city, incident_id, observed_at) — observed_at is Airbyte sync time.
+      Deduped and accumulated incrementally.
+    columns:
+      - name: city_incident_key
+        description: Surrogate key — md5(city|incident_id|observed_at). Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
+
+  # ── Forecast issue history (incremental building block) ────────────────────
+  # The forward-looking "latest forecast" and prediction-vs-actual "accuracy"
+  # models were promoted to the marts layer; this issue-history feeds them.
+  - name: int_city_weather_forecast
+    description: >
+      Durable forecast issue-history. One row per prediction issuance
+      (city, forecast_at, issued_at) — append-only (incremental), so predictions
+      persist past raw pruning and can be scored for accuracy. issued_at is the
+      sync time; lead_time_hours = forecast_at - issued_at. Feeds the marts
+      mart_forecast_latest and fct_forecast_accuracy.
+    columns:
+      - name: forecast_key
+        description: Surrogate key — md5(city|forecast_at|issued_at). Primary key.
+        tests:
+          - unique
+          - not_null
+      - name: city
+        tests: [not_null]
+      - name: forecast_at
+        tests: [not_null]
+      - name: issued_at
+        tests: [not_null]

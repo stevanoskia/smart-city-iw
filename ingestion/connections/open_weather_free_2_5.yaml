@@ -1,0 +1,336 @@
+version: 7.10.0
+
+type: DeclarativeSource
+
+check:
+  type: CheckStream
+  stream_names:
+    - current_weather
+
+streams:
+  - type: DeclarativeStream
+    name: current_weather
+    transformations:
+      - type: AddFields
+        fields:
+          - path: ["city"]
+            value: "{{ stream_slice['location']['city'] }}"
+            value_type: string
+    retriever:
+      type: SimpleRetriever
+      partition_router:
+        type: ListPartitionRouter
+        cursor_field: location
+        values: "{{ config['locations'] }}"
+      requester:
+        type: HttpRequester
+        http_method: GET
+        url: https://api.openweathermap.org/data/2.5/weather
+        request_parameters:
+          lat: "{{ stream_partition['location']['lat'] }}"
+          lon: "{{ stream_partition['location']['lon'] }}"
+          appid: "{{ config['appid'] }}"
+          units: metric
+      record_selector:
+        type: RecordSelector
+        extractor:
+          type: DpathExtractor
+          field_path: []
+    schema_loader:
+      type: InlineSchemaLoader
+      schema:
+        $schema: http://json-schema.org/draft-07/schema#
+        type: object
+        properties:
+          city:
+            type: string
+          id:
+            type: integer
+          name:
+            type: string
+          dt:
+            type: integer
+          timezone:
+            type: integer
+          visibility:
+            type: integer
+          base:
+            type: string
+          cod:
+            type: integer
+          coord:
+            type: object
+            properties:
+              lat:
+                type: number
+              lon:
+                type: number
+          weather:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: integer
+                main:
+                  type: string
+                description:
+                  type: string
+                icon:
+                  type: string
+          main:
+            type: object
+            properties:
+              temp:
+                type: number
+              feels_like:
+                type: number
+              temp_min:
+                type: number
+              temp_max:
+                type: number
+              pressure:
+                type: integer
+              humidity:
+                type: integer
+              sea_level:
+                type: integer
+              grnd_level:
+                type: integer
+          wind:
+            type: object
+            properties:
+              speed:
+                type: number
+              deg:
+                type: integer
+              gust:
+                type: number
+          clouds:
+            type: object
+            properties:
+              all:
+                type: integer
+          rain:
+            type: object
+            properties:
+              "1h":
+                type: number
+          snow:
+            type: object
+            properties:
+              "1h":
+                type: number
+          sys:
+            type: object
+            properties:
+              country:
+                type: string
+              sunrise:
+                type: integer
+              sunset:
+                type: integer
+
+  - type: DeclarativeStream
+    name: air_pollution
+    transformations:
+      - type: AddFields
+        fields:
+          - path: ["city"]
+            value: "{{ stream_slice['location']['city'] }}"
+            value_type: string
+    retriever:
+      type: SimpleRetriever
+      partition_router:
+        type: ListPartitionRouter
+        cursor_field: location
+        values: "{{ config['locations'] }}"
+      requester:
+        type: HttpRequester
+        http_method: GET
+        url: https://api.openweathermap.org/data/2.5/air_pollution
+        request_parameters:
+          lat: "{{ stream_partition['location']['lat'] }}"
+          lon: "{{ stream_partition['location']['lon'] }}"
+          appid: "{{ config['appid'] }}"
+      record_selector:
+        type: RecordSelector
+        extractor:
+          type: DpathExtractor
+          field_path:
+            - list
+    schema_loader:
+      type: InlineSchemaLoader
+      schema:
+        $schema: http://json-schema.org/draft-07/schema#
+        type: object
+        properties:
+          city:
+            type: string
+          dt:
+            type: integer
+          main:
+            type: object
+            properties:
+              aqi:
+                type: integer
+          components:
+            type: object
+            properties:
+              co:
+                type: number
+              no:
+                type: number
+              no2:
+                type: number
+              o3:
+                type: number
+              so2:
+                type: number
+              pm2_5:
+                type: number
+              pm10:
+                type: number
+              nh3:
+                type: number
+
+  - type: DeclarativeStream
+    name: weather_forecast
+    transformations:
+      - type: AddFields
+        fields:
+          - path: ["city"]
+            value: "{{ stream_slice['location']['city'] }}"
+            value_type: string
+    retriever:
+      type: SimpleRetriever
+      partition_router:
+        type: ListPartitionRouter
+        cursor_field: location
+        values: "{{ config['locations'] }}"
+      requester:
+        type: HttpRequester
+        http_method: GET
+        url: https://api.openweathermap.org/data/2.5/forecast
+        request_parameters:
+          lat: "{{ stream_partition['location']['lat'] }}"
+          lon: "{{ stream_partition['location']['lon'] }}"
+          appid: "{{ config['appid'] }}"
+          units: metric
+      record_selector:
+        type: RecordSelector
+        extractor:
+          type: DpathExtractor
+          field_path:
+            - list
+    schema_loader:
+      type: InlineSchemaLoader
+      schema:
+        $schema: http://json-schema.org/draft-07/schema#
+        type: object
+        properties:
+          city:
+            type: string
+          dt:
+            type: integer
+          dt_txt:
+            type: string
+          pop:
+            type: number
+          visibility:
+            type: integer
+          main:
+            type: object
+            properties:
+              temp:
+                type: number
+              feels_like:
+                type: number
+              temp_min:
+                type: number
+              temp_max:
+                type: number
+              pressure:
+                type: integer
+              humidity:
+                type: integer
+              sea_level:
+                type: integer
+              grnd_level:
+                type: integer
+          weather:
+            type: array
+            items:
+              type: object
+              properties:
+                id:
+                  type: integer
+                main:
+                  type: string
+                description:
+                  type: string
+                icon:
+                  type: string
+          wind:
+            type: object
+            properties:
+              speed:
+                type: number
+              deg:
+                type: integer
+              gust:
+                type: number
+          clouds:
+            type: object
+            properties:
+              all:
+                type: integer
+          rain:
+            type: object
+            properties:
+              "3h":
+                type: number
+          snow:
+            type: object
+            properties:
+              "3h":
+                type: number
+          sys:
+            type: object
+            properties:
+              pod:
+                type: string
+
+spec:
+  type: Spec
+  connection_specification:
+    type: object
+    $schema: http://json-schema.org/draft-07/schema#
+    required:
+      - appid
+      - locations
+    properties:
+      appid:
+        type: string
+        title: API Key
+        airbyte_secret: true
+      locations:
+        type: array
+        title: Cities
+        description: One object per city; the stream is partition-routed over this list.
+        items:
+          type: object
+          required:
+            - city
+            - lat
+            - lon
+          properties:
+            city:
+              type: string
+              title: City Name
+            lat:
+              type: number
+              title: Latitude
+            lon:
+              type: number
+              title: Longitude
