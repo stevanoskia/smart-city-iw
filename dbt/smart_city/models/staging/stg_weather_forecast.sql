@@ -7,7 +7,7 @@ renamed as (
         _airbyte_raw_id                                         as raw_id,
         _airbyte_extracted_at                                   as extracted_at,
 
-        -- Location (injected by Airbyte AddFields from source config)
+        -- Location
         city                                                    as city,
 
         -- Forecast timestamp
@@ -51,7 +51,6 @@ renamed as (
         (sys->>'pod')::text                                    as day_or_night,  -- 'd' or 'n'
 
         -- City metadata (added by ingest.py)
-        city                                                   as city,
         country                                                as country
 
     from source
