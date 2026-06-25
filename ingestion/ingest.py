@@ -247,6 +247,8 @@ def run_ingestion():
         try:
             cursor.execute("SAVEPOINT sp")
             data = fetch_current_weather(city)
+            data["city_timezone"]    = city["timezone"]
+            data["has_traffic_data"] = city["has_traffic_data"]
             insert_raw(cursor, "current_weather", data)
             print(f"     ✓ current_weather")
         except Exception as e:
@@ -258,8 +260,10 @@ def run_ingestion():
             cursor.execute("SAVEPOINT sp")
             data = fetch_air_pollution(city)
             # Add city metadata — API response does not include city name
-            data["city"]    = city["name"]
-            data["country"] = city.get("country")
+            data["city"]             = city["name"]
+            data["country"]          = city.get("country")
+            data["city_timezone"]    = city["timezone"]
+            data["has_traffic_data"] = city["has_traffic_data"]
             insert_raw(cursor, "air_pollution", data)
             print(f"     ✓ air_pollution")
         except Exception as e:
@@ -272,8 +276,10 @@ def run_ingestion():
             forecasts = fetch_weather_forecast(city)
             for forecast in forecasts:
                 # Add city metadata — API response does not include city name
-                forecast["city"]    = city["name"]
-                forecast["country"] = city.get("country")
+                forecast["city"]             = city["name"]
+                forecast["country"]          = city.get("country")
+                forecast["city_timezone"]    = city["timezone"]
+                forecast["has_traffic_data"] = city["has_traffic_data"]
                 insert_raw(cursor, "weather_forecast", forecast)
             print(f"     ✓ weather_forecast ({len(forecasts)} forecasts)")
         except Exception as e:
@@ -285,8 +291,10 @@ def run_ingestion():
             cursor.execute("SAVEPOINT sp")
             data = fetch_traffic_flow(city)
             # Add city metadata — API response does not include city name
-            data["city"]    = city["name"]
-            data["country"] = city.get("country")
+            data["city"]             = city["name"]
+            data["country"]          = city.get("country")
+            data["city_timezone"]    = city["timezone"]
+            data["has_traffic_data"] = city["has_traffic_data"]
             insert_raw(cursor, "traffic_flow", data)
             print(f"     ✓ traffic_flow")
         except Exception as e:
@@ -299,8 +307,10 @@ def run_ingestion():
             incidents = fetch_traffic_incidents(city)
             for incident in incidents:
                 # Add city metadata so incidents can be analyzed by city later
-                incident["city"]    = city["name"]
-                incident["country"] = city.get("country")
+                incident["city"]             = city["name"]
+                incident["country"]          = city.get("country")
+                incident["city_timezone"]    = city["timezone"]
+                incident["has_traffic_data"] = city["has_traffic_data"]
                 insert_raw(cursor, "traffic_incidents", incident)
             print(f"     ✓ traffic_incidents ({len(incidents)} incidents)")
         except Exception as e:

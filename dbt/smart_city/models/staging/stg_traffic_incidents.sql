@@ -45,8 +45,9 @@ renamed as (
         city                                                                as city,
         country                                                             as country,
 
-        -- Sync timestamp
-        _airbyte_extracted_at                                               as observed_at
+        -- Sync timestamp used as observed_at (TomTom incidents have no dt field).
+        -- Cast to naive UTC so downstream DATE_TRUNC is always true UTC, not session-local.
+        (_airbyte_extracted_at at time zone 'UTC')                          as observed_at
 
     from source
 )

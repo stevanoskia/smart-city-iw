@@ -1,8 +1,13 @@
-{{ config(materialized='view') }}
+{{
+    config(
+        materialized='incremental',
+        unique_key=['city', 'country', 'observed_hour'],
+        incremental_strategy='delete+insert'
+    )
+}}
 
--- Purpose:
--- This intermediate model prepares traffic incident data for analytics per city.
--- city and country are now available in staging after the ingest.py fix.
+-- Incremental hourly traffic incident facts per city.
+-- Re-processes last 6 hours to handle incidents that arrive late or get updated.
 
 WITH incidents_base AS (
 
@@ -26,6 +31,13 @@ WITH incidents_base AS (
         extracted_at
 
     FROM {{ ref('stg_traffic_incidents') }}
+
+    {% if is_incremental() %}
+    WHERE observed_at >= (
+        SELECT COALESCE(MAX(observed_hour), NOW() - INTERVAL '7 days') - INTERVAL '24 hours'
+        FROM {{ this }}
+    )
+    {% endif %}
 
 ),
 

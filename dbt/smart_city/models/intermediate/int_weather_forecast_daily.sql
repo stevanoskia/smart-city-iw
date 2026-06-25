@@ -1,9 +1,14 @@
-{{ config(materialized='view') }}
+{{
+    config(
+        materialized='incremental',
+        unique_key=['city', 'country', 'forecast_day'],
+        incremental_strategy='delete+insert'
+    )
+}}
 
--- This intermediate model aggregates the 5-day weather forecast data by city and day.
--- The staging layer contains one forecast record every 3 hours (40 records per city).
--- This model summarizes each day into min/max/avg temperature, precipitation probability,
--- dominant weather condition, and wind info — one row per city per day.
+-- Incremental daily weather forecast facts per city.
+-- Re-processes last 2 days on each run — forecasts are updated hourly by OpenWeather,
+-- so recent days need to be refreshed to capture the latest predictions.
 
 WITH forecast_base AS (
 
@@ -32,6 +37,13 @@ WITH forecast_base AS (
         extracted_at
 
     FROM {{ ref('stg_weather_forecast') }}
+
+    {% if is_incremental() %}
+    WHERE forecast_at >= (
+        SELECT COALESCE(MAX(forecast_day), NOW() - INTERVAL '7 days') - INTERVAL '2 days'
+        FROM {{ this }}
+    )
+    {% endif %}
 
 ),
 

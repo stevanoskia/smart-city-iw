@@ -1,11 +1,13 @@
-{{ config(materialized='view') }}
+{{
+    config(
+        materialized='incremental',
+        unique_key=['city', 'country', 'observed_hour'],
+        incremental_strategy='delete+insert'
+    )
+}}
 
--- Purpose:
--- This intermediate model prepares traffic flow data for analytics.
--- The staging model can contain multiple traffic measurements within the same hour.
--- For dashboards and KPIs, we need one clean hourly traffic record.
--- This model groups traffic data by hour and calculates average speed,
--- average travel time, average congestion score, and congestion level.
+-- Incremental hourly traffic flow facts per city.
+-- Re-processes last 6 hours to deduplicate and handle late-arriving records.
 
 WITH traffic_flow_base AS (
 
@@ -28,6 +30,13 @@ WITH traffic_flow_base AS (
         extracted_at
 
     FROM {{ ref('stg_traffic_flow') }}
+
+    {% if is_incremental() %}
+    WHERE observed_at >= (
+        SELECT COALESCE(MAX(observed_hour), NOW() - INTERVAL '7 days') - INTERVAL '24 hours'
+        FROM {{ this }}
+    )
+    {% endif %}
 
 ),
 

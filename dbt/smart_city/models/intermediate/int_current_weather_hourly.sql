@@ -1,13 +1,17 @@
-{{ config(materialized='view') }}
+{{
+    config(
+        materialized='incremental',
+        unique_key=['city', 'country', 'observed_hour'],
+        incremental_strategy='delete+insert'
+    )
+}}
 
--- This intermediate model creates one hourly weather record per city.
--- The staging layer may contain multiple observations for the same city within the same hour.
--- Instead of deleting those records, we aggregate them into hourly metrics.
+-- Incremental hourly weather facts per city.
+-- On each run, re-processes the last 6 hours to handle late-arriving or duplicate raw records.
+-- delete+insert on (city, country, observed_hour) ensures one clean row per city per hour.
 
 WITH weather_base AS (
 
-    -- Select cleaned weather data from the staging model.
-    -- The observed_at column represents the actual observation time from the API.
     SELECT
         city,
         country,
@@ -32,6 +36,13 @@ WITH weather_base AS (
         extracted_at
 
     FROM {{ ref('stg_current_weather') }}
+
+{% if is_incremental() %}
+WHERE observed_at >= (
+    SELECT COALESCE(MAX(observed_hour), NOW() - INTERVAL '7 days') - INTERVAL '24 hours'
+    FROM {{ this }}
+)
+{% endif %}
 
 ),
 

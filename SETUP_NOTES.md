@@ -1,5 +1,5 @@
 # Smart City Analytics Pipeline - Setup Notes
-## Last Updated: 2026-06-08
+## Last Updated: 2026-06-25
 
 ---
 
@@ -119,8 +119,22 @@ Restart-Service postgresql-x64-18
 
 ### Virtual Environment (Windows)
 ```powershell
-& "D:\IWConnect\smart-city-iw\venv\Scripts\Activate.ps1"
+# IMPORTANT: use Python 3.12 — Python 3.14 is NOT compatible with dbt
+# One-time setup:
+py -3.12 -m venv C:\Users\Iwi\dbt-env
+C:\Users\Iwi\dbt-env\Scripts\activate
+pip install dbt-postgres
+
+# Activate every session:
+C:\Users\Iwi\dbt-env\Scripts\activate
 cd "D:\IWConnect\smart-city-iw\dbt\smart_city"
+```
+
+### Virtual Environment (WSL — for running dbt manually in WSL)
+```bash
+source ~/airflow-venv/bin/activate
+cd /mnt/d/IWConnect/smart-city-iw/dbt/smart_city
+dbt debug
 ```
 
 ### profiles.yml
@@ -154,6 +168,24 @@ dbt test    # run tests
 - `staging.stg_traffic_incidents`
 - `staging.stg_weather_forecast`
 
+### Intermediate models (CREATED - all 5 PASS as incremental)
+- `intermediate.int_current_weather_hourly`
+- `intermediate.int_air_quality_hourly`
+- `intermediate.int_traffic_flow_hourly`
+- `intermediate.int_traffic_incidents_hourly`
+- `intermediate.int_weather_forecast_daily`
+
+**Incremental strategy:** `delete+insert` on `(city, country, observed_hour)`
+**Lookback:** 24h with COALESCE fallback (safe on empty table / first run)
+
+### Seeds (CREATED)
+- `marts.dim_city` — 4 cities with lat/lon/country/has_traffic_data/city_timezone
+- File: `seeds/dim_city.csv`
+- Run with: `dbt seed`
+
+### Marts (NOT YET BUILT — next priority)
+See WHAT REMAINS section.
+
 ---
 
 ## 5. AIRFLOW — DOCKER (ACTIVE VERSION)
@@ -181,7 +213,7 @@ docker compose up -d
 - Docker mounts `D:/IWConnect/smart-city-iw` to `/opt/smart-city` in the container
 - dbt profiles.yml is in `D:\IWConnect\airflow\config\profiles.yml` (mounted to `/opt/airflow/config`)
 - dbt connects to PostgreSQL via `host.docker.internal:5434`
-- dbt is installed automatically at startup (`_PIP_ADDITIONAL_REQUIREMENTS: dbt-core==1.8.2 dbt-postgres==1.8.2`)
+- dbt + ingestion packages installed at startup via `_PIP_ADDITIONAL_REQUIREMENTS: dbt-core==1.8.2 dbt-postgres==1.8.2 requests psycopg2-binary python-dotenv`
 - IMPORTANT: must pin `dbt-core==1.8.2` — dbt-core 2.0+ (Fusion) does not support the postgres adapter
 
 ### dbt profiles.yml (Docker)
@@ -206,13 +238,16 @@ smart_city:
 - Schedule: `@hourly`
 - Tasks: `ingest_run → dbt_staging → dbt_test → dbt_intermediate`
 - retries=2, execution_timeout=45min
+- **max_active_runs=1** — prevents concurrent runs from corrupting data
+- ingest_run runs: `python /opt/smart-city/ingestion/ingest.py` (no pip install — packages in docker-compose)
 
 ### Maintenance DAG — cleanup_smart_city
 - File: `D:\IWConnect\airflow\dags\cleanup_smart_city.py`
 - Schedule: `@daily` (runs at midnight)
 - Tasks: `cleanup_old_data` — deletes airbyte_raw rows older than 14 days
 - retries=1, execution_timeout=15min
-- **Note:** DAG starts paused — enable it manually in Airflow UI when ready
+- Deletes by `_airbyte_extracted_at` column (confirmed exists + has index)
+- **Tested manually 2026-06-22** — confirmed working
 
 ### IMPORTANT: LOAD_EXAMPLES = false
 docker-compose has `AIRFLOW__CORE__LOAD_EXAMPLES: 'false'` — only your DAG is visible.
@@ -280,17 +315,20 @@ python3 /mnt/d/IWConnect/smart-city-iw/airflow/scripts/fix_airbyte.py
 ### How to add a new city
 In `config.py` add a line to `CITIES`:
 ```python
-{"name": "Paris", "lat": 48.8566, "lon": 2.3522, "bbox": "2.22,48.81,2.47,48.90"},
+{"name": "Paris", "country": "FR", "lat": 48.8566, "lon": 2.3522, "bbox": "2.22,48.81,2.47,48.90", "timezone": "Europe/Paris", "has_traffic_data": True},
 ```
 Get bbox coordinates at: **bboxfinder.com** → draw rectangle → copy
 
 ### Current cities (config.py)
-| City | Lat | Lon | Bbox |
-|------|-----|-----|------|
-| London | 51.5074 | -0.1278 | -0.25,51.43,-0.01,51.58 |
-| Amsterdam | 52.3676 | 4.9041 | 4.78,52.30,5.03,52.43 |
-| Berlin | 52.52 | 13.405 | 13.28,52.46,13.54,52.58 |
-| Madrid | 40.4168 | -3.7038 | -3.83,40.33,-3.57,40.50 |
+| City | Country | Lat | Lon | Timezone | Has Traffic |
+|------|---------|-----|-----|----------|-------------|
+| Berlin | DE | 52.52 | 13.405 | Europe/Berlin | true |
+| Madrid | ES | 40.4168 | -3.7038 | Europe/Madrid | true |
+| London | GB | 51.5074 | -0.1278 | Europe/London | true |
+| Amsterdam | NL | 52.3676 | 4.9041 | Europe/Amsterdam | true |
+
+**Note:** `city_timezone` and `has_traffic_data` are now written to all raw tables on every ingest run.
+This allows `dim_city` to be a SQL model (reads from staging) instead of a static seed.
 
 ### What the script collects
 | Source | Data | Table |
@@ -367,17 +405,30 @@ dbt run
 | PostgreSQL — smart_city + airflow databases | ✅ WORKS |
 | dbt — 5 staging models | ✅ WORKS |
 | Python ingestion script (replaces Airbyte) | ✅ WORKS |
-| Airflow — dbt_smart_city: ingest_run → dbt_staging → dbt_test → dbt_intermediate (@hourly) | ✅ WORKS (confirmed Success) |
-| Airflow — cleanup_smart_city: cleanup_old_data (@daily, deletes >14 days) | ✅ WORKS (2026-06-09) |
+| Airflow — dbt_smart_city: ingest_run → dbt_staging → dbt_test → dbt_intermediate (@hourly) | ✅ WORKS |
+| Airflow — cleanup_smart_city: cleanup_old_data (@daily, deletes >14 days) | ✅ WORKS (tested 2026-06-22) |
 | GitHub — feat/irina-airflow-setup PR | ✅ PUSHED |
 | Duplicate records fix — Airbyte disabled | ✅ FIXED (2026-06-09) |
-| city/country added to ingest.py (air_pollution, traffic_flow, traffic_incidents, weather_forecast) | ✅ DONE (2026-06-09) |
-| ensure_columns() in ingest.py — auto-adds missing columns to raw tables | ✅ DONE (2026-06-09) |
-| country added to config.py for all 4 cities (DE, ES, GB, NL) | ✅ DONE (2026-06-09) |
+| city/country added to ingest.py | ✅ DONE (2026-06-09) |
+| ensure_columns() in ingest.py | ✅ DONE (2026-06-09) |
+| country added to config.py for all 4 cities | ✅ DONE (2026-06-09) |
 | city/country added to all 5 staging models | ✅ DONE (2026-06-09) |
-| dbt intermediate models — 5 models, all PASS (10/10) | ✅ DONE (2026-06-09) |
-| Airbyte YAML connectors updated — city field added (OpenWeather + TomTom) | ✅ DONE (2026-06-09) |
-| Docker WSL memory increased to 12GB (.wslconfig) | ✅ DONE (2026-06-09) |
+| dbt intermediate models — 5 incremental, all PASS | ✅ DONE (2026-06-09) |
+| Airbyte YAML connectors updated | ✅ DONE (2026-06-09) |
+| Docker WSL memory increased to 12GB | ✅ DONE (2026-06-09) |
+| dbt_project.yml — intermediate: materialized=incremental (fix) | ✅ DONE (2026-06-22) |
+| All 5 intermediate models — 24h lookback + COALESCE empty-table fix | ✅ DONE (2026-06-22) |
+| seeds/dim_city.csv — 4 cities with timezone + has_traffic_data | ✅ DONE (2026-06-22) — REMOVED 2026-06-25 |
+| dim_city seed removed — replaced by SQL model (reads from staging) | ✅ DONE (2026-06-25) |
+| config.py — added timezone + has_traffic_data to all cities | ✅ DONE (2026-06-25) |
+| ingest.py — writes city_timezone + has_traffic_data to all raw tables | ✅ DONE (2026-06-25) |
+| dim_date + dim_hour — created in marts.dimensions | ✅ DONE (2026-06-25) |
+| docker-compose volume fixed: /mnt/d/ → D:/ (Windows path) | ✅ DONE (2026-06-25) |
+| dim_city.csv seed deleted — dim_city.sql to be created | ✅ DONE (2026-06-25) |
+| DAG — max_active_runs=1 (prevents concurrent run corruption) | ✅ DONE (2026-06-22) |
+| DAG — removed pip install from ingest_run task | ✅ DONE (2026-06-22) |
+| docker-compose — requests/psycopg2-binary/python-dotenv in _PIP_ADDITIONAL_REQUIREMENTS | ✅ DONE (2026-06-22) |
+| dbt venv on Windows with Python 3.12 (C:\Users\Iwi\dbt-env) | ✅ DONE (2026-06-22) |
 
 ## INTERMEDIATE MODELS
 
@@ -391,8 +442,48 @@ dbt run
 
 ## WHAT REMAINS
 
-- [ ] Marts dbt models
-- [x] DAG split into 2 separate DAGs: dbt_smart_city (@hourly) + cleanup_smart_city (@daily) ✅ DONE (2026-06-09)
+### Priority 1 — Bug fixes ✅ COMPLETED (2026-06-22)
+All done. See WHAT IS DONE above.
+
+### Priority 2 — Mart models (IN PROGRESS)
+Star schema to build in `smart_city_marts`:
+
+**Dimensions:**
+- [ ] `dim_city` — SQL model (reads DISTINCT from stg_current_weather, includes city_timezone + has_traffic_data)
+- [x] `dim_date` — generate_series CURRENT_DATE ±365, includes is_weekend, day_of_week_iso
+- [x] `dim_hour` — 24 static rows with hour_label + part_of_day
+
+**Facts:**
+- [ ] `fct_weather_daily` — city × date from int_current_weather_hourly
+- [ ] `fct_pollution_daily` — city × date from int_air_quality_hourly
+- [ ] `fct_traffic_daily` — city × date (Berlin/London/Amsterdam only)
+- [ ] `fct_traffic_hourly` — city × date × hour (peak-hour analysis)
+
+**Marts (wide tables for dashboard):**
+- [ ] `mart_city_daily` — OBT, LEFT JOIN so Madrid gets NULLs for traffic
+  - comfort_index: bell curve (peak at 20°C), Madrid renormalized weights
+  - local_date column (timezone conversion here only)
+- [ ] `mart_forecast_latest` — ROW_NUMBER dedup, only future forecasts
+- [ ] `mart_temperature_trends` — rolling 7d/30d avg, anomaly label
+- [ ] `mart_weather_alerts` — severe weather from forecast thresholds
+
+**After marts:**
+- [ ] Add `dbt_build_marts` task to Airflow DAG
+- [ ] dbt tests (schema.yml) for all layers
+- [ ] dbt docs generate + exposures.yml
+- [ ] dbt source freshness in sources.yml
+
+### Priority 3 — Database cleanup
 - [ ] Cleanup of `__dbt_backup` tables in PostgreSQL
-- [ ] Dashboard (Power BI / Metabase)
+
+### Priority 4 — Dashboard
+- [ ] Dashboard (Metabase recommended — free, runs in Docker)
+
+### Future (nice to have)
+- [ ] **HERE Maps API** — add as second traffic source for cross-API comparison
+  - Free tier: 250,000 req/month (much better than TomTom's 2,500/day)
+  - Covers all 4 cities including Madrid → Madrid finally gets real traffic data
+  - Would allow: TomTom vs HERE speed/congestion comparison per city
+  - Implementation: add HERE fetch in ingest.py, new raw tables, new staging/intermediate models
+- [ ] fct_forecast_accuracy — compare forecast vs actual (needs more history first)
 - [ ] Push current changes to GitHub
