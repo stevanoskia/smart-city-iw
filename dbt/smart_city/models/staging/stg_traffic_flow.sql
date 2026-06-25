@@ -31,8 +31,11 @@ renamed as (
         -- Data quality
         confidence                                                  as confidence,
 
+        -- City metadata (added by ingest.py)
+        country                                                     as country,
+
         -- Sync timestamp used as observed_at (TomTom flow has no dt field).
-        -- Cast to naive UTC so downstream date_utc/hour_utc are true UTC, not session-local.
+        -- Cast to naive UTC so downstream DATE_TRUNC is always true UTC, not session-local.
         (_airbyte_extracted_at at time zone 'UTC')                  as observed_at
 
     from source

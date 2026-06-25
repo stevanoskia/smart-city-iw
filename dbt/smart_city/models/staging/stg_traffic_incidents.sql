@@ -44,8 +44,11 @@ renamed as (
         -- Geometry (coordinates as JSONB for mapping)
         geometry                                                            as geometry,
 
-        -- Sync timestamp used as observed_at (TomTom incidents have no event time).
-        -- Cast to naive UTC so downstream date_utc/hour_utc are true UTC, not session-local.
+        -- City metadata (added by ingest.py)
+        country                                                             as country,
+
+        -- Sync timestamp used as observed_at (TomTom incidents have no dt field).
+        -- Cast to naive UTC so downstream DATE_TRUNC is always true UTC, not session-local.
         (_airbyte_extracted_at at time zone 'UTC')                          as observed_at
 
     from source
