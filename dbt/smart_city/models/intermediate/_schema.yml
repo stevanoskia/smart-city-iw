@@ -4,12 +4,13 @@ models:
   # ── Hourly facts (incremental, append-only — the durable history) ──────────
   - name: int_city_hourly_weather
     description: >
-      Durable hourly per-city weather facts. One row per real observation
-      (city, observed_at), deduped from staging and accumulated incrementally so
-      hourly history survives airbyte_raw pruning. Source for fct_weather_daily.
+      Durable hourly per-city weather facts. One row per clock hour
+      (city, date_trunc('hour', observed_at)) — the freshest reading in each hour;
+      deduped from staging and accumulated incrementally so hourly history survives
+      airbyte_raw pruning. Source for fct_weather_daily.
     columns:
       - name: city_hour_key
-        description: Surrogate key — md5(city|observed_at). Primary key of this table.
+        description: Surrogate key — md5(city|hour). Primary key of this table.
         tests:
           - unique
           - not_null
@@ -20,12 +21,12 @@ models:
 
   - name: int_city_hourly_pollution
     description: >
-      Durable hourly per-city air-quality facts. One row per real observation
-      (city, observed_at), deduped and accumulated incrementally. Source for
-      fct_pollution_daily.
+      Durable hourly per-city air-quality facts. One row per clock hour
+      (city, date_trunc('hour', observed_at)) — the freshest reading in each hour;
+      deduped and accumulated incrementally. Source for fct_pollution_daily.
     columns:
       - name: city_hour_key
-        description: Surrogate key — md5(city|observed_at). Primary key of this table.
+        description: Surrogate key — md5(city|hour). Primary key of this table.
         tests:
           - unique
           - not_null
@@ -38,12 +39,13 @@ models:
 
   - name: int_city_hourly_traffic_flow
     description: >
-      Durable hourly per-city traffic-flow facts. One row per sync snapshot
-      (city, observed_at) — observed_at is Airbyte sync time (TomTom flow has no
-      event timestamp). Deduped and accumulated incrementally.
+      Durable hourly per-city traffic-flow facts. One snapshot per clock hour
+      (city, date_trunc('hour', observed_at)) — the latest sync snapshot in each hour;
+      observed_at is Airbyte sync time (TomTom flow has no event timestamp). Deduped
+      and accumulated incrementally.
     columns:
       - name: city_hour_key
-        description: Surrogate key — md5(city|observed_at). Primary key of this table.
+        description: Surrogate key — md5(city|hour). Primary key of this table.
         tests:
           - unique
           - not_null

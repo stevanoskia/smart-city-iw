@@ -1,8 +1,8 @@
--- Durable hourly per-city traffic-flow facts (one row per sync snapshot).
+-- Durable hourly per-city traffic-flow facts (one snapshot per clock hour).
 -- Incremental + append-only: accumulates clean, deduped history forever,
 -- independent of airbyte_raw retention. The daily rollup is built from this.
 -- NOTE: TomTom flow has no event timestamp — observed_at is the Airbyte sync
--- time, so "hourly" here means one snapshot per sync.
+-- time, so a clock hour = the latest sync snapshot in that hour.
 
 {{ config(
     materialized='incremental',
@@ -24,14 +24,14 @@ with new_rows as (
 deduped as (
     select *,
            row_number() over (
-               partition by city, observed_at      -- one row per sync snapshot
-               order by extracted_at desc
+               partition by city, date_trunc('hour', observed_at)   -- one snapshot per clock hour
+               order by observed_at desc, extracted_at desc          -- latest snapshot in the hour wins
            ) as _rn
     from new_rows
 )
 
 select
-    md5(city || '|' || observed_at::text)           as city_hour_key,
+    md5(city || '|' || date_trunc('hour', observed_at)::text) as city_hour_key,
     city,
     observed_at,
     date_trunc('day', observed_at)::date            as date_utc,   -- for daily rollups

@@ -10,7 +10,7 @@ macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
 clean-targets:
-  - "target"
+  - "target"  
   - "dbt_packages"
 
 models:
@@ -21,4 +21,7 @@ models:
     intermediate:
       +materialized: table
       +schema: intermediate
+    marts:
+      +materialized: table
+      +schema: marts
 

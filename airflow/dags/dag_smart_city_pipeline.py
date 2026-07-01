@@ -6,6 +6,7 @@ Hourly ELT pipeline:
   2. Wait for all syncs to complete (XCom job IDs passed via context)
   3. Run dbt staging (PostgreSQL views)
   4. Build + test dbt intermediate (PostgreSQL tables, hourly facts + forecast history)
+  5. Build + test dbt marts (star schema: dims + facts + OBT + analytics marts)
 
 Raw-data retention cleanup lives in the separate smart_city_maintenance DAG
 (@daily), decoupled so it runs regardless of any individual ELT run.
@@ -131,6 +132,18 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
+    # ── Step 5: dbt marts (PostgreSQL) — build + test ────────────────────────
+    # Star schema (dims + facts), the derived OBT (mart_city_daily), and the
+    # analytics marts. `dbt build` runs the relationships/unique/accepted_values
+    # tests too, so a broken FK→dimension fails the pipeline. dim_city is derived
+    # from the data (no seed), so no `dbt seed` step is needed.
+
+    dbt_marts = BashOperator(
+        task_id="dbt_marts",
+        bash_command=dbt_cmd("marts", "staging", command="build"),
+        execution_timeout=timedelta(minutes=15),
+    )
+
     # ── Pipeline order ────────────────────────────────────────────────────────
 
-    trigger_group >> wait_group >> dbt_staging >> dbt_intermediate
+    trigger_group >> wait_group >> dbt_staging >> dbt_intermediate >> dbt_marts
