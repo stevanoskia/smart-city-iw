@@ -10,7 +10,7 @@ macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
 clean-targets:
-  - "target"
+  - "target"  
   - "dbt_packages"
 
 models:
@@ -19,10 +19,9 @@ models:
       +materialized: view
       +schema: staging
     intermediate:
-      +materialized: incremental
-      +incremental_strategy: delete+insert
-      +on_schema_change: fail
+      +materialized: table
       +schema: intermediate
     marts:
       +materialized: table
       +schema: marts
+

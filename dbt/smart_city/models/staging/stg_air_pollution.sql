@@ -30,10 +30,6 @@ renamed as (
         (components->>'pm10')::numeric          as pm10_ug_m3,
         (components->>'nh3')::numeric           as nh3_ug_m3,
 
-        -- City metadata (added by ingest.py)
-        city                                    as city,
-        country                                 as country,
-
         -- Timestamp
         to_timestamp(dt) at time zone 'UTC'     as observed_at
 

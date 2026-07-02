@@ -1,4 +1,4 @@
--- Durable hourly per-city weather facts (one row per real observation).
+-- Durable hourly per-city weather facts (one row per clock hour).
 -- Incremental + append-only: accumulates clean, deduped hourly history forever,
 -- independent of airbyte_raw retention. The daily rollup is built from this.
 
@@ -22,14 +22,14 @@ with new_rows as (
 deduped as (
     select *,
            row_number() over (
-               partition by city, observed_at      -- one row per real hourly observation
-               order by extracted_at desc            -- keep the most recently synced copy
+               partition by city, date_trunc('hour', observed_at)   -- one row per clock hour
+               order by observed_at desc, extracted_at desc          -- freshest reading in the hour wins
            ) as _rn
     from new_rows
 )
 
 select
-    md5(city || '|' || observed_at::text)           as city_hour_key,
+    md5(city || '|' || date_trunc('hour', observed_at)::text) as city_hour_key,
     city,
     country,
     observed_at,

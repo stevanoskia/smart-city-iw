@@ -1,59 +1,194 @@
 # Smart City Analytics Pipeline
 
-Real-time data pipeline for weather, air quality and traffic analytics across European cities.
+End-to-end ELT platform that automatically ingests weather, air pollution, and transportation
+data from public APIs, cleans it into PostgreSQL **staging** views and **intermediate** tables
+(incremental hourly facts + forecast issue history) with dbt, and orchestrates the flow with Airflow.
+Everything runs in one PostgreSQL database: Airbyte → `airbyte_raw` → dbt `staging` (views) →
+dbt `intermediate` (hourly facts + forecast history) → dbt `marts` (star schema + OBT + analytics).
 
 ---
 
 ## Architecture
 
 ```
-OpenWeather API  ──┐
-                   ├──► ingest.py ──► PostgreSQL (airbyte_raw)
-TomTom API       ──┘         │
-                             │
-                        Airflow DAG (@hourly)
-                             │
-                        dbt staging models
-                             │
-                        dbt intermediate models
-                             │
-                        dbt marts (reporting)
+OpenWeather API  --+
+TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermediate --> dbt marts
+                   |   (1 partition-  airbyte_raw   (views)        (hourly facts +      (star schema
+                   |    routed conn                                 forecast history)    + OBT + analytics)
+                   |    per API)
+                   +-----------------------------------------------------------
+                       Airflow: smart_city_pipeline (@hourly ELT)
+                                smart_city_maintenance (@daily raw cleanup)
+```
+
+| Layer | Tool |
+|---|---|
+| Ingestion | Airbyte (abctl / Kubernetes)
+| Landing DB | PostgreSQL 18 (local, port 5432)
+| Transformation | dbt-postgres (staging views + intermediate tables + marts tables)
+| Orchestration | Apache Airflow (Docker, port 8080)
+
+---
+
+## Data Sources
+
+| Source | Streams | Cities |
+|---|---|---|
+| OpenWeather Free 2.5 | current weather, air pollution, 5-day forecast | Skopje, Berlin, London, Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid (10) |
+| TomTom Traffic | traffic flow, traffic incidents | London, Berlin, Amsterdam, Belgrade, Brussels, Barcelona (6) |
+
+Each provider is one Airbyte connection, partition-routed over its city list — add cities in
+`ingestion/config/sources.yml`, no new connections.
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Python 3.13, PostgreSQL 18, Docker Desktop, abctl
+
+### 1. Clone and set up Python environment
+```bash
+git clone https://github.com/stevanoskia/smart-city-iw.git
+cd smart-city-iw
+py -3.13 -m venv venv313
+source venv313/Scripts/activate
+pip install dbt-postgres==1.8.2 psycopg2-binary \
+            python-dotenv requests pyyaml
+cp .env.example .env   # fill in credentials
+```
+
+### 2. Configure dbt profiles
+See `~/.dbt/profiles.yml` — one target: `staging` (PostgreSQL).
+Full config in CLAUDE.md.
+
+### 3. Install and start Airbyte
+```powershell
+# First-time install (takes ~5 min, downloads Kind cluster + Airbyte pods)
+abctl local install
+# UI: localhost:8000  — get credentials with:
+abctl local credentials
+```
+
+### 4. Configure Airbyte connections
+```bash
+# Add AIRBYTE_CLIENT_ID, AIRBYTE_CLIENT_SECRET, AIRBYTE_WORKSPACE_ID to .env
+# (get client_id / client_secret from Airbyte UI → User → Applications)
+python ingestion/scripts/setup_airbyte.py
+# Creates ingestion/config/connection_ids.yml
+```
+
+### 5. Run dbt manually
+```bash
+cd dbt/smart_city
+dbt run   --select staging      --target staging   # cleaned views
+dbt build --select intermediate --target staging   # hourly facts + forecast history + tests
+```
+
+### 6. Start Airflow
+```bash
+cd airflow
+# First time only — initialises the Airflow DB and creates the admin user
+docker compose run --rm airflow-init
+docker compose up -d
+# UI: localhost:8080  (admin / admin)
+# Enable DAGs: smart_city_pipeline, smart_city_maintenance
 ```
 
 ---
 
-## Tech Stack
+## What's Built
 
-| Tool | Purpose |
-|------|---------|
-| Python (`ingest.py`) | Fetches data from APIs |
-| Apache Airflow (Docker) | Orchestration — runs pipeline every hour |
-| dbt | Data transformation (staging → intermediate → marts) |
-| PostgreSQL | Data warehouse |
-| DBeaver | Database client |
+### Pipeline
+- **5 dbt staging models** (PostgreSQL views), one per Airbyte source stream
+- **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
+- **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
+- **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
+- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test)
+- **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `airbyte_raw` rows per retention policy
+- **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API; add cities via config, no UI
+
+### Staging (PostgreSQL `staging` schema — views)
+| View | Description |
+|---|---|
+| `stg_current_weather` | Typed current weather fields per city from OpenWeather |
+| `stg_air_pollution` | Typed AQI + pollutant fields per city from OpenWeather |
+| `stg_weather_forecast` | 5-day / 3-hour forecast records from OpenWeather |
+| `stg_traffic_flow` | Road-segment speeds and congestion from TomTom |
+| `stg_traffic_incidents` | Active traffic incidents from TomTom |
+
+### Intermediate — hourly facts (PostgreSQL `intermediate` schema — incremental tables, one row per clock hour)
+| Table | Description |
+|---|---|
+| `int_city_hourly_weather` | Hourly temp/wind/humidity/precip/condition per city |
+| `int_city_hourly_pollution` | Hourly AQI + pollutant concentrations per city |
+| `int_city_hourly_traffic_flow` | Per-sync congestion/speed snapshots per city |
+| `int_city_hourly_traffic_incidents` | Per-sync incident detail (id, delay, magnitude, from/to) per city |
+
+Each dedupes to **one row per clock hour** — it partitions on `(city, date_trunc('hour', observed_at))`
+and keeps the freshest reading in the hour (`order by observed_at desc, extracted_at desc`); the
+surrogate `city_hour_key` is hour-truncated too, so two syncs in the same clock hour collapse to a
+single row (idempotent across runs). Incidents key on `(city, incident_id, observed_at)` instead.
+Each is **incremental** (`delete+insert`, 6h lookback) — required because Airbyte runs
+`full_refresh_append` (appends a fresh full snapshot every hour). Append-only, so they accumulate
+clean hourly history forever, independent of raw pruning. Carry `date_utc` + `hour_utc`.
+
+### Intermediate — forecast (PostgreSQL `intermediate` schema)
+Models the 5-day / 3-hour forecast (two timestamps: `forecast_at` = predicted time,
+`issued_at` = when predicted; `lead_time` = the difference).
+| Table | Description |
+|---|---|
+| `int_city_weather_forecast` | Incremental, append-only **issue history** — one row per prediction issuance; persists forecasts as issued for later accuracy scoring |
+
+### Marts (PostgreSQL `marts` schema — tables)
+Star schema + derived OBT + analytics marts. Daily facts and the OBT share the grain
+`(city, date_utc)`; star keys are `city_key = md5(city)` and `date_key = YYYYMMDD::int`,
+with `relationships` tests enforcing FK→dimension integrity.
+| Model | Kind | Description |
+|---|---|---|
+| `dim_city` | dimension | One row per city, **derived** from data (no seed): city/country + coords + weather/traffic coverage flags |
+| `dim_date` | dimension | **Independent** calendar spine (fixed 2026-01-01 anchor → `current_date + 365d`) with year/quarter/month/weekday/is_weekend attributes |
+| `dim_hour` | dimension | 24 static rows (0–23) with `hour_label` (`'06:00'`) + `day_part` (Night/Morning/Afternoon/Evening) |
+| `fct_weather_daily` | fact | Daily weather rollup per city |
+| `fct_pollution_daily` | fact | Daily AQI + pollutant rollup per city |
+| `fct_traffic_daily` | fact | Daily flow + incident rollup per city |
+| `fct_traffic_hourly` | fact | Per-hour-of-day flow + incidents for peak-hour analysis |
+| `fct_forecast_accuracy` | fact | Prediction-vs-actual scoring from the forecast issue history |
+| `mart_city_daily` | OBT | One wide row per `(city, date_utc)` — weather + pollution + traffic LEFT-joined (weather-only cities get NULL traffic) |
+| `mart_forecast_latest` | analytics | Latest issued forecast per city / future slot |
+| `mart_temperature_trends` | analytics | Temperature trend + anomaly detection |
+| `mart_weather_alerts` | analytics | Severe-weather flags |
+
+Design + step-by-step build guide live in `docs/marts_implementation_plan.md` and
+`docs/marts_build_guide.md`.
 
 ---
 
-## Cities Monitored
+## Restarting after a reboot
 
-| City | Lat | Lon |
-|------|-----|-----|
-| London | 51.5074 | -0.1278 |
-| Amsterdam | 52.3676 | 4.9041 |
-| Berlin | 52.52 | 13.405 |
-| Madrid | 40.4168 | -3.7038 |
+PostgreSQL starts automatically with Windows. For everything else:
+
+```powershell
+# 1. Airbyte — Kind container exits on reboot; starting it brings the pods back
+docker start airbyte-abctl-control-plane
+# (give pods ~1-2 min; only if the UI still won't come up: abctl local install)
+# Check: abctl local status
+
+# 2. Airflow
+cd airflow
+docker compose up -d
+# UI: localhost:8080
+```
 
 ---
 
-## Data Collected (per city, every hour)
+## Services
 
-| Source | Data | Table |
-|--------|------|-------|
-| OpenWeather | Current weather | `airbyte_raw.current_weather` |
-| OpenWeather | Air pollution / AQI | `airbyte_raw.air_pollution` |
-| OpenWeather | 5-day forecast | `airbyte_raw.weather_forecast` |
-| TomTom | Traffic flow | `airbyte_raw.traffic_flow` |
-| TomTom | Traffic incidents | `airbyte_raw.traffic_incidents` |
+| Service | URL | Credentials |
+|---|---|---|
+| Airbyte | http://localhost:8000 | email + password |
+| Airflow | http://localhost:8080 | admin / admin |
+| PostgreSQL | localhost:5432 | postgres / (from .env) |
 
 ---
 
@@ -62,67 +197,21 @@ TomTom API       ──┘         │
 ```
 smart-city-iw/
 ├── ingestion/
-│   ├── config.py        # Cities list + API keys + DB config
-│   └── ingest.py        # Main ingestion script
-├── dbt/smart_city/
-│   └── models/
-│       ├── staging/     # 5 staging models (done)
-│       ├── intermediate/ # (in progress)
-│       └── marts/       # (in progress)
+│   ├── config/          <- city configs + connection IDs for Airflow
+│   ├── connections/     <- Airbyte connector YAMLs
+│   └── scripts/         <- setup_airbyte.py (config-driven Airbyte setup)
 ├── airflow/
+│   ├── Dockerfile       <- extends apache/airflow:2.9.3 with dbt
+│   ├── docker-compose.yml
 │   └── dags/
-│       └── dbt_smart_city.py  # Airflow DAG
-├── .env                 # API keys + DB credentials (gitignored)
-└── SETUP_NOTES.md       # Detailed setup documentation
+│       ├── airbyte_utils.py                 <- OAuth trigger/wait helpers
+│       ├── dag_smart_city_pipeline.py       <- hourly ELT DAG
+│       └── dag_smart_city_maintenance.py    <- daily raw-cleanup DAG
+├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
+│   └── models/
+│       ├── staging/      -> PostgreSQL (5 views)
+│       ├── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
+│       └── marts/         -> PostgreSQL (12 tables: dims + facts + OBT + analytics)
+├── venv313/             <- Python 3.13 venv (always use this)
+└── .env                 <- secrets (not committed)
 ```
-
----
-
-## Quick Start
-
-**1. Start Docker Desktop**
-
-**2. Start Airflow**
-```powershell
-cd D:\IWConnect\airflow
-docker compose up -d
-```
-UI: http://localhost:8080 (airflow / airflow)
-
-**3. Manual ingestion test (optional)**
-```powershell
-& "D:\IWConnect\smart-city-iw\venv\Scripts\Activate.ps1"
-cd D:\IWConnect\smart-city-iw\ingestion
-python ingest.py
-```
-
----
-
-## Adding a New City
-
-In `ingestion/config.py`, add a line to `CITIES`:
-```python
-{"name": "Paris", "lat": 48.8566, "lon": 2.3522, "bbox": "2.22,48.81,2.47,48.90"},
-```
-Get bbox coordinates at: https://bboxfinder.com
-
----
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and fill in:
-```
-OPENWEATHER_API_KEY=...
-TOMTOM_API_KEY=...
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5434
-POSTGRES_DB=smart_city
-POSTGRES_USER=postgres
-POSTGRES_PASSWORD=...
-```
-
----
-
-## Setup Details
-
-See [SETUP_NOTES.md](SETUP_NOTES.md) for full setup documentation including troubleshooting.

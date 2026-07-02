@@ -44,10 +44,6 @@ renamed as (
         (rain->>'1h')::numeric                                 as rain_1h_mm,
         (snow->>'1h')::numeric                                 as snow_1h_mm,
 
-        -- City metadata (injected by ingest.py from config.py)
-        city_timezone                                           as city_timezone,
-        has_traffic_data                                        as has_traffic_data,
-
         -- Timestamps
         to_timestamp(dt) at time zone 'UTC'                    as observed_at,
         to_timestamp((sys->>'sunrise')::integer) at time zone 'UTC' as sunrise_at,

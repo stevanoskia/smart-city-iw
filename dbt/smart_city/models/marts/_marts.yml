@@ -1,0 +1,163 @@
+version: 2
+
+models:
+  # ── Dimensions ─────────────────────────────────────────────────────────────
+  - name: dim_city
+    description: >
+      City dimension (one row per city), DERIVED from observed data (no seed):
+      city + country from int_city_hourly_weather, coords from stg_current_weather,
+      coverage flags from presence in the weather / traffic facts. city_key = md5(city)
+      is the foreign key every fact joins on. Note: cities/flags reflect whatever the
+      pipeline actually collected (see docs/marts_implementation_plan.md §6.2).
+    columns:
+      - name: city_key
+        description: Surrogate key — md5(city). Primary key; FK target for all facts.
+        tests: [unique, not_null]
+      - name: city
+        tests: [not_null]
+
+  - name: dim_hour
+    description: >
+      Hour-of-day dimension (24 static rows, 0–23). Join target for hourly facts
+      via hour_utc; day_part buckets the day into Night/Morning/Afternoon/Evening.
+    columns:
+      - name: hour_utc
+        description: Hour of day in UTC (0–23). Primary key.
+        tests: [unique, not_null]
+      - name: hour_label
+        description: Zero-padded display label, e.g. '06:00', '14:00'.
+        tests: [not_null]
+      - name: day_part
+        tests: [not_null]
+
+  - name: dim_date
+    description: >
+      Date dimension — an independent daily calendar spine (fixed 2026-01-01 anchor
+      through current_date + 365d), built without depending on the facts so the dims
+      resolve first. date_key = YYYYMMDD::int is the FK target for all daily facts.
+    columns:
+      - name: date_key
+        description: Surrogate key — YYYYMMDD as int. Primary key.
+        tests: [unique, not_null]
+      - name: date_utc
+        tests: [not_null]
+
+  # ── Facts ──────────────────────────────────────────────────────────────────
+  - name: fct_weather_daily
+    description: Daily weather rollup, one row per (city, date_utc).
+    columns:
+      - name: city_date_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+
+  - name: fct_pollution_daily
+    description: Daily air-quality rollup, one row per (city, date_utc).
+    columns:
+      - name: city_date_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+
+  - name: fct_traffic_daily
+    description: Daily traffic rollup (flow + incidents), one row per (city, date_utc).
+    columns:
+      - name: city_date_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+
+  - name: fct_traffic_hourly
+    description: >
+      Hourly traffic fact (city × date × hour) for peak-hour analysis. hour_utc is
+      sync-time approximate (TomTom has no event timestamp).
+    columns:
+      - name: city_hour_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+      - name: hour_utc
+        tests:
+          - relationships: { to: ref('dim_hour'), field: hour_utc }
+
+  - name: fct_forecast_accuracy
+    description: Prediction-vs-actual scoring, one row per matured forecast issuance.
+    columns:
+      - name: forecast_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+
+  # ── Marts / analytics ──────────────────────────────────────────────────────
+  - name: mart_city_daily
+    description: >
+      Headline OBT — one wide row per (city, date) joining weather + pollution +
+      traffic, with comfort_index, labels, and rolling trend columns.
+    columns:
+      - name: city_date_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+      - name: comfort_index_label
+        tests:
+          - accepted_values:
+              values: ['Excellent', 'Good', 'Fair', 'Poor', 'No data']
+      - name: congestion_label
+        tests:
+          - accepted_values:
+              values: ['Low', 'Moderate', 'High', 'Severe', 'No data']
+      - name: comfort_trend
+        tests:
+          - accepted_values:
+              values: ['Improving', 'Stable', 'Worsening', 'Insufficient data']
+
+  - name: mart_forecast_latest
+    description: Latest forward forecast per (city, future slot).
+    columns:
+      - name: forecast_slot_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+
+  - name: mart_temperature_trends
+    description: Per-city temperature rolling baselines, anomalies, and deltas.
+    columns:
+      - name: city_date_key
+        tests: [unique, not_null]
+      - name: temp_anomaly_label
+        tests:
+          - accepted_values:
+              values: ['Hot anomaly', 'Cold anomaly', 'Normal']
+
+  - name: mart_weather_alerts
+    description: Forward-looking severe-weather alerts, one row per fired (city, slot, type).
+    columns:
+      - name: alert_key
+        tests: [not_null]
+      - name: alert_type
+        tests:
+          - accepted_values:
+              values: ['High wind', 'Heavy rain', 'Extreme heat', 'Extreme cold', 'Severe condition']
+      - name: city
+        tests: [not_null]
+      - name: forecast_at
+        tests: [not_null]
