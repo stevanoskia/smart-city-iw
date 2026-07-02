@@ -7,6 +7,7 @@ with hours as (
 
 select
     hour_utc,
+    lpad(hour_utc::text, 2, '0') || ':00'  as hour_label,   -- e.g. '06:00', '14:00'
     case
         when hour_utc between 0  and 5  then 'Night'
         when hour_utc between 6  and 11 then 'Morning'

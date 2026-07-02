@@ -1,21 +1,14 @@
--- Date dimension: a contiguous daily spine bounded by the dates actually observed
--- in the facts (weather ∪ traffic). Built after the facts so the bounds exist.
+-- Date dimension: an independent daily calendar spine (no dependency on the facts).
+-- Lower bound is a fixed project-inception anchor so every observed fact date is
+-- covered; upper bound extends past today for forward-looking (forecast) needs.
+-- Built independently of the facts so the dims resolve first in the star build order.
 
-with bounds as (
-    -- span EVERY daily fact's dates so no fact has a date_key missing from dim_date
-    select min(date_utc) as lo, max(date_utc) as hi
-    from (
-        select date_utc from {{ ref('fct_weather_daily') }}
-        union
-        select date_utc from {{ ref('fct_pollution_daily') }}
-        union
-        select date_utc from {{ ref('fct_traffic_daily') }}
-    ) d
-),
-
-spine as (
-    select generate_series(lo, hi, interval '1 day')::date as date_utc
-    from bounds
+with spine as (
+    select generate_series(
+        date '2026-01-01',                      -- anchor safely before first ingested data
+        current_date + interval '365 days',     -- forward horizon for forecast-facing use
+        interval '1 day'
+    )::date as date_utc
 )
 
 select

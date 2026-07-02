@@ -4,18 +4,17 @@ End-to-end ELT platform that automatically ingests weather, air pollution, and t
 data from public APIs, cleans it into PostgreSQL **staging** views and **intermediate** tables
 (incremental hourly facts + forecast issue history) with dbt, and orchestrates the flow with Airflow.
 Everything runs in one PostgreSQL database: Airbyte → `airbyte_raw` → dbt `staging` (views) →
-dbt `intermediate` (hourly facts + forecast history). The **marts** layer is intentionally left as
-a hands-on learning exercise (design + build guide in `docs/`).
+dbt `intermediate` (hourly facts + forecast history) → dbt `marts` (star schema + OBT + analytics).
 
 ---
 
 ## Architecture
 
 ```
-OpenWeather API  --+                                               (marts: not built — exercise)
-TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermediate
-                   |   (1 partition-  airbyte_raw   (views)        (hourly facts + forecast history)
-                   |    routed conn
+OpenWeather API  --+
+TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermediate --> dbt marts
+                   |   (1 partition-  airbyte_raw   (views)        (hourly facts +      (star schema
+                   |    routed conn                                 forecast history)    + OBT + analytics)
                    |    per API)
                    +-----------------------------------------------------------
                        Airflow: smart_city_pipeline (@hourly ELT)
@@ -26,7 +25,7 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermedi
 |---|---|
 | Ingestion | Airbyte (abctl / Kubernetes)
 | Landing DB | PostgreSQL 18 (local, port 5432)
-| Transformation | dbt-postgres (staging views + intermediate tables)
+| Transformation | dbt-postgres (staging views + intermediate tables + marts tables)
 | Orchestration | Apache Airflow (Docker, port 8080)
 
 ---
@@ -35,8 +34,8 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermedi
 
 | Source | Streams | Cities |
 |---|---|---|
-| OpenWeather Free 2.5 | current weather, air pollution, 5-day forecast | Skopje, Berlin, London, Amsterdam, Prilep |
-| TomTom Traffic | traffic flow, traffic incidents | London, Berlin, Amsterdam |
+| OpenWeather Free 2.5 | current weather, air pollution, 5-day forecast | Skopje, Berlin, London, Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid (10) |
+| TomTom Traffic | traffic flow, traffic incidents | London, Berlin, Amsterdam, Belgrade, Brussels, Barcelona (6) |
 
 Each provider is one Airbyte connection, partition-routed over its city list — add cities in
 `ingestion/config/sources.yml`, no new connections.
@@ -102,10 +101,10 @@ docker compose up -d
 
 ### Pipeline
 - **5 dbt staging models** (PostgreSQL views), one per Airbyte source stream
-- **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per observation; preserve time-of-day + history independent of raw pruning
+- **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
-- **Marts layer** — intentionally not built (hands-on learning exercise; design + build guide in `docs/`)
-- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate (build + test)
+- **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
+- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test)
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `airbyte_raw` rows per retention policy
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API; add cities via config, no UI
 
@@ -118,7 +117,7 @@ docker compose up -d
 | `stg_traffic_flow` | Road-segment speeds and congestion from TomTom |
 | `stg_traffic_incidents` | Active traffic incidents from TomTom |
 
-### Intermediate — hourly facts (PostgreSQL `intermediate` schema — incremental tables, one row per observation)
+### Intermediate — hourly facts (PostgreSQL `intermediate` schema — incremental tables, one row per clock hour)
 | Table | Description |
 |---|---|
 | `int_city_hourly_weather` | Hourly temp/wind/humidity/precip/condition per city |
@@ -126,8 +125,11 @@ docker compose up -d
 | `int_city_hourly_traffic_flow` | Per-sync congestion/speed snapshots per city |
 | `int_city_hourly_traffic_incidents` | Per-sync incident detail (id, delay, magnitude, from/to) per city |
 
-Each dedupes its staging source on the stream's business key (keeping the latest `extracted_at`)
-and is **incremental** (`delete+insert`, 6h lookback) — required because Airbyte runs
+Each dedupes to **one row per clock hour** — it partitions on `(city, date_trunc('hour', observed_at))`
+and keeps the freshest reading in the hour (`order by observed_at desc, extracted_at desc`); the
+surrogate `city_hour_key` is hour-truncated too, so two syncs in the same clock hour collapse to a
+single row (idempotent across runs). Incidents key on `(city, incident_id, observed_at)` instead.
+Each is **incremental** (`delete+insert`, 6h lookback) — required because Airbyte runs
 `full_refresh_append` (appends a fresh full snapshot every hour). Append-only, so they accumulate
 clean hourly history forever, independent of raw pruning. Carry `date_utc` + `hour_utc`.
 
@@ -138,10 +140,27 @@ Models the 5-day / 3-hour forecast (two timestamps: `forecast_at` = predicted ti
 |---|---|
 | `int_city_weather_forecast` | Incremental, append-only **issue history** — one row per prediction issuance; persists forecasts as issued for later accuracy scoring |
 
-### Marts — not built (learning exercise)
-The marts layer (dimensions, daily facts, the `mart_city_daily` OBT, forecast latest + accuracy)
-is intentionally left to build by hand. Design + step-by-step guide live in
-`docs/marts_implementation_plan.md` and `docs/marts_build_guide.md`.
+### Marts (PostgreSQL `marts` schema — tables)
+Star schema + derived OBT + analytics marts. Daily facts and the OBT share the grain
+`(city, date_utc)`; star keys are `city_key = md5(city)` and `date_key = YYYYMMDD::int`,
+with `relationships` tests enforcing FK→dimension integrity.
+| Model | Kind | Description |
+|---|---|---|
+| `dim_city` | dimension | One row per city, **derived** from data (no seed): city/country + coords + weather/traffic coverage flags |
+| `dim_date` | dimension | **Independent** calendar spine (fixed 2026-01-01 anchor → `current_date + 365d`) with year/quarter/month/weekday/is_weekend attributes |
+| `dim_hour` | dimension | 24 static rows (0–23) with `hour_label` (`'06:00'`) + `day_part` (Night/Morning/Afternoon/Evening) |
+| `fct_weather_daily` | fact | Daily weather rollup per city |
+| `fct_pollution_daily` | fact | Daily AQI + pollutant rollup per city |
+| `fct_traffic_daily` | fact | Daily flow + incident rollup per city |
+| `fct_traffic_hourly` | fact | Per-hour-of-day flow + incidents for peak-hour analysis |
+| `fct_forecast_accuracy` | fact | Prediction-vs-actual scoring from the forecast issue history |
+| `mart_city_daily` | OBT | One wide row per `(city, date_utc)` — weather + pollution + traffic LEFT-joined (weather-only cities get NULL traffic) |
+| `mart_forecast_latest` | analytics | Latest issued forecast per city / future slot |
+| `mart_temperature_trends` | analytics | Temperature trend + anomaly detection |
+| `mart_weather_alerts` | analytics | Severe-weather flags |
+
+Design + step-by-step build guide live in `docs/marts_implementation_plan.md` and
+`docs/marts_build_guide.md`.
 
 ---
 
@@ -191,8 +210,8 @@ smart-city-iw/
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
 │   └── models/
 │       ├── staging/      -> PostgreSQL (5 views)
-│       └── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
-│       # marts/          -> TO BUILD (learning exercise — see docs/)
+│       ├── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
+│       └── marts/         -> PostgreSQL (12 tables: dims + facts + OBT + analytics)
 ├── venv313/             <- Python 3.13 venv (always use this)
 └── .env                 <- secrets (not committed)
 ```

@@ -35,7 +35,7 @@ DAG pruning old raw rows.
 ### Recently Completed
 - ✅ **Marts layer (star schema + OBT + analytics)** — 12 models in `models/marts/`: dims (`dim_city` *derived, no seed*; `dim_hour`; `dim_date`), daily facts (`fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily`), `fct_traffic_hourly`, `fct_forecast_accuracy`, the derived OBT `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`). `dbt build --select marts` green (57 nodes incl. relationships/unique/accepted_values tests); wired as the `dbt_marts` DAG step.
 - ✅ **One Airbyte connection per API** — connectors are partition-routed (`ListPartitionRouter`) over a `locations` list, so a single connection (`openweather_all`, `tomtom_all`) ingests every city instead of one connection per city. Scales to many cities; Airflow + dbt unchanged.
-- ✅ Added **Amsterdam + Prilep** to OpenWeather (5 weather cities; Macedonia has no TomTom traffic)
+- ✅ Expanded city coverage to **10 weather cities** (added Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid) and **6 traffic cities** (added Belgrade, Brussels, Barcelona); the 4 Macedonian cities are weather-only (no TomTom coverage)
 - ✅ **Forecast** intermediate layer — incremental issue history (`int_city_weather_forecast`); the forward-looking *latest* (`mart_forecast_latest`) + prediction-vs-actual *accuracy* (`fct_forecast_accuracy`) models now live in the marts layer
 - ✅ Incremental **hourly** intermediate layer (`int_city_hourly_*`) — preserves time-of-day + history; daily models roll up from it
 - ✅ TomTom incidents `fields` fix — full incident detail now ingests (id, delay, magnitudeOfDelay, …)
@@ -57,14 +57,16 @@ DAG pruning old raw rows.
 ### Data Ingestion (APIs)
 | API / Stream | Status | Cities | Notes |
 |---|---|---|---|
-| OpenWeather current weather | ✅ Working | Skopje, Berlin, London, Amsterdam, Prilep | hourly sync |
-| OpenWeather air pollution | ✅ Working | Skopje, Berlin, London, Amsterdam, Prilep | hourly sync |
-| OpenWeather 5-day forecast | ✅ Working | Skopje, Berlin, London, Amsterdam, Prilep | hourly sync |
-| TomTom traffic flow | ✅ Working | London, Berlin, Amsterdam | hourly sync |
-| TomTom traffic incidents | ✅ Working | London, Berlin, Amsterdam | hourly sync; full detail via `fields` param |
+| OpenWeather current weather | ✅ Working | Skopje, Berlin, London, Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid (10) | hourly sync |
+| OpenWeather air pollution | ✅ Working | Skopje, Berlin, London, Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid (10) | hourly sync |
+| OpenWeather 5-day forecast | ✅ Working | Skopje, Berlin, London, Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid (10) | hourly sync |
+| TomTom traffic flow | ✅ Working | London, Berlin, Amsterdam, Belgrade, Brussels, Barcelona (6) | hourly sync |
+| TomTom traffic incidents | ✅ Working | London, Berlin, Amsterdam, Belgrade, Brussels, Barcelona (6) | hourly sync; full detail via `fields` param |
 
-> Amsterdam + Prilep weather were added 2026-06-10; their first hourly sync backfills them.
-> Macedonia (Skopje, Prilep) has no TomTom coverage → weather/pollution only.
+> **10 weather cities, 6 traffic cities.** Traffic covers London, Berlin, Amsterdam, Belgrade,
+> Brussels, Barcelona; the 4 Macedonian cities (Skopje, Prilep, Bitola, Ohrid) are weather/pollution
+> only — TomTom has no segment/incident coverage there. Add a city in `ingestion/config/sources.yml`
+> and re-run `setup_airbyte.py`.
 
 ### dbt Transformation
 | Layer | DB | Model | Status |
@@ -220,8 +222,11 @@ for time-of-day analysis. `unique`/`not_null` tests on the surrogate key.
 `city_date_key = md5(city|date_utc)`; star keys `city_key = md5(city)`,
 `date_key = YYYYMMDD::int`; `relationships` tests enforce FK→dimension integrity.
 `dim_city` is **derived** from data (weather facts + traffic presence), not a seed.
-`mart_city_daily` LEFT-joins weather+pollution+traffic so weather-only cities (Skopje, Prilep)
-appear with NULL traffic. Full spec + reference SQL in `docs/marts_build_guide.md`.
+`dim_date` is an **independent** calendar spine (fixed 2026-01-01 anchor → `current_date + 365d`,
+not bounded by the facts) so the dims resolve first; the fixed anchor still guarantees every
+fact `date_key` exists in the dimension. `dim_hour` carries `hour_label` (`'06:00'`) + `day_part`.
+`mart_city_daily` LEFT-joins weather+pollution+traffic so weather-only cities (Skopje, Prilep,
+Bitola, Ohrid) appear with NULL traffic. Full spec + reference SQL in `docs/marts_build_guide.md`.
 
 dbt project root: `dbt/smart_city/`
 Profiles: `~/.dbt/profiles.yml` (host) + `dbt/smart_city/profiles.yml` (Docker/Airflow)
@@ -383,7 +388,7 @@ smart-city-iw/
 │           ├── intermediate/    ← hourly facts (4) + forecast history (1) → tables
 │           └── marts/           ← 12 models: dims + facts + OBT + analytics → tables
 ├── docs/
-│   ├── marts_build_guide.md          ← step-by-step DIY build + reference solutions
+│   ├── marts_build_guide.md          ← marts build walkthrough + reference SQL
 │   └── marts_implementation_plan.md  ← marts star-schema design / rationale
 ├── venv313/                     ← Python 3.13 venv (use this one)
 ├── venv/                        ← Python 3.8 venv (legacy, do not use)

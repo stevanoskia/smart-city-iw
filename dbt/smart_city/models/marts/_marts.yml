@@ -24,13 +24,17 @@ models:
       - name: hour_utc
         description: Hour of day in UTC (0–23). Primary key.
         tests: [unique, not_null]
+      - name: hour_label
+        description: Zero-padded display label, e.g. '06:00', '14:00'.
+        tests: [not_null]
       - name: day_part
         tests: [not_null]
 
   - name: dim_date
     description: >
-      Date dimension — a contiguous daily spine bounded by the observed fact dates.
-      date_key = YYYYMMDD::int is the FK target for all daily facts.
+      Date dimension — an independent daily calendar spine (fixed 2026-01-01 anchor
+      through current_date + 365d), built without depending on the facts so the dims
+      resolve first. date_key = YYYYMMDD::int is the FK target for all daily facts.
     columns:
       - name: date_key
         description: Surrogate key — YYYYMMDD as int. Primary key.
