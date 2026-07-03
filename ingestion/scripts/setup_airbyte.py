@@ -272,7 +272,7 @@ def ensure_connection(workspace_id: str, source_id: str, destination_id: str,
             "scheduleType": "manual",   # Airflow triggers syncs — no internal schedule
             "syncCatalog": sync_catalog,
             "namespaceDefinition": "customformat",
-            "namespaceFormat": "airbyte_raw",
+            "namespaceFormat": "staging",
         },
     )
     print(f"  + Connection '{conn_name}' created")

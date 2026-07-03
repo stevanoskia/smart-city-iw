@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('airbyte_raw', 'air_pollution') }}
+    select * from {{ source('staging', 'air_pollution') }}
 ),
 
 renamed as (

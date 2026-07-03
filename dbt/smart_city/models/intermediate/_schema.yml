@@ -7,7 +7,7 @@ models:
       Durable hourly per-city weather facts. One row per clock hour
       (city, date_trunc('hour', observed_at)) — the freshest reading in each hour;
       deduped from staging and accumulated incrementally so hourly history survives
-      airbyte_raw pruning. Source for fct_weather_daily.
+      staging (raw) pruning. Source for fct_weather_daily.
     columns:
       - name: city_hour_key
         description: Surrogate key — md5(city|hour). Primary key of this table.

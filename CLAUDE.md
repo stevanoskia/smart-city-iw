@@ -7,9 +7,10 @@ and transportation data from public APIs and transforms it into analytical model
 Simulates a real-world smart city analytics solution.
 
 The live pipeline runs entirely on PostgreSQL:
-Airbyte → `airbyte_raw` → dbt `staging` (views) → dbt `intermediate` (incremental hourly
-facts + forecast history), orchestrated hourly by Airflow, with a separate `@daily` maintenance
-DAG pruning old raw rows.
+Airbyte → `staging` (raw JSON, Airbyte-written) → dbt `intermediate` (incremental hourly
+facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with a separate
+`@daily` maintenance DAG pruning old raw rows. The `stg_*` JSON-parsing models are **ephemeral**
+(compile inline into their consumers as CTEs — no DB object), so `staging` holds only raw JSON.
 
 > **Marts layer:** ✅ **built** (2026-07-01) — star schema (dims + facts) + derived OBT
 > + analytics marts, all green (`dbt build --select marts`, relationships/unique/
@@ -51,7 +52,7 @@ DAG pruning old raw rows.
 |---|---|---|
 | PostgreSQL 18 | ✅ Running | localhost:5432, DB: smart_city — ingestion/landing DB |
 | Airbyte (abctl) | ✅ Running | localhost:8000, Kind/Kubernetes |
-| Airbyte destination | ✅ Configured | smart_city_postgres → airbyte_raw schema |
+| Airbyte destination | ✅ Configured | smart_city_postgres → staging schema (raw JSON) |
 | Airflow | ✅ Running | localhost:8080, DAG smart_city_pipeline deployed |
 
 ### Data Ingestion (APIs)
@@ -90,7 +91,7 @@ DAG pruning old raw rows.
 | Component | Status | Notes |
 |---|---|---|
 | Airflow DAG `smart_city_pipeline` | ✅ Deployed | Triggers all syncs → dbt staging → dbt intermediate → **dbt marts** (all build+test). |
-| Airflow DAG `smart_city_maintenance` | ✅ Deployed | `@daily` — prunes old `airbyte_raw` rows per retention policy |
+| Airflow DAG `smart_city_maintenance` | ✅ Deployed | `@daily` — prunes old `staging` (raw JSON) rows per retention policy |
 | Hourly schedule | ✅ Configured | `@hourly` via Airflow scheduler |
 | Airbyte OAuth auth | ✅ Working | client_id/client_secret via Applications API |
 
@@ -107,16 +108,17 @@ DAG pruning old raw rows.
                                ▼               ▼
 ┌──────────────────┐    ┌───────────┐    ┌────────────────────────┐
 │ OpenWeather API  │    │           │    │  PostgreSQL 18         │
-│ TomTom API       │───►│  Airbyte  │───►│  airbyte_raw           │
-└──────────────────┘    │           │    │  staging       ◄── dbt │
-                        └───────────┘    │  intermediate  ◄── dbt │
-                             :8000       │  marts         ◄── dbt │
+│ TomTom API       │───►│  Airbyte  │───►│  staging (raw) ◄── dbt* │
+└──────────────────┘    │           │    │  intermediate  ◄── dbt │
+                        └───────────┘    │  marts         ◄── dbt │
+                             :8000       │  (*stg_* ephemeral)    │
                                          └────────────────────────┘
 ```
 
-**Single-database ELT (current):** everything lives in one PostgreSQL database across four schemas.
-- **`airbyte_raw`** — Airbyte writes raw, append-only API snapshots here (short 14-day buffer).
-- **`staging`** — dbt **views**: typed/cleaned, 1:1 with raw (no dedup, no aggregation).
+**Single-database ELT (current):** everything lives in one PostgreSQL database across three schemas.
+- **`staging`** — Airbyte writes raw, append-only API-snapshot JSON here (short buffer). The
+  `stg_*` dbt models parse this JSON but are **ephemeral** — they compile inline into `int_*`/
+  `dim_city` as CTEs and create no DB object, so `staging` contains only the raw Airbyte tables.
 - **`intermediate`** — durable dbt building blocks:
   - **Hourly facts** (`int_city_hourly_*`) — **incremental**, deduped to one row per observation
     `(city, observed_at)`. Append-only, so they accumulate clean hourly history forever,
@@ -131,8 +133,8 @@ DAG pruning old raw rows.
 | Layer | Tool | Location | Purpose |
 |---|---|---|---|
 | Ingestion | Airbyte (abctl) | localhost:8000 | API connectors, raw data load |
-| Landing DB | PostgreSQL 18 | localhost:5432 | airbyte_raw + staging + intermediate + marts schemas |
-| Transformation | dbt (Python venv313) | — | staging views + intermediate (hourly facts + forecast history) + marts (star + OBT), tests |
+| Landing DB | PostgreSQL 18 | localhost:5432 | staging (raw JSON) + intermediate + marts schemas |
+| Transformation | dbt (Python venv313) | — | staging ephemeral parsing (stg_*) + intermediate (hourly facts + forecast history) + marts (star + OBT), tests |
 | Orchestration | Airflow (Docker) | localhost:8080 | DAG scheduling, automated pipeline + daily maintenance |
 
 ---
@@ -159,7 +161,7 @@ Always run from `dbt/smart_city/`. One target: `staging` → PostgreSQL (holds a
 ```bash
 cd dbt/smart_city
 
-# Build staging views
+# Compile staging (stg_* are ephemeral — no DB object; builds nothing physical, just validates)
 dbt run --select staging --target staging
 
 # Build + test intermediate tables (hourly facts + forecast history)
@@ -203,8 +205,8 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 
 | Schema | Tables | Owner |
 |---|---|---|
-| `airbyte_raw` | current_weather, air_pollution, weather_forecast, traffic_flow, traffic_incidents | Airbyte |
-| `staging` | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (views) |
+| `staging` | current_weather, air_pollution, weather_forecast, traffic_flow, traffic_incidents (raw JSON) | Airbyte |
+| _(ephemeral, no DB object)_ | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (ephemeral CTEs — compile inline) |
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
 | `intermediate` (forecast) | int_city_weather_forecast | dbt (incremental issue history) |
 | `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts | dbt (tables) |
@@ -299,7 +301,7 @@ UI: `localhost:8080` — login: `admin / admin`
 
 ### DAG: `smart_city_maintenance`
 - Schedule: `@daily`
-- Cleans up old `airbyte_raw` rows per retention policy (`RETENTION_DAYS`)
+- Cleans up old `staging` (raw JSON) rows per retention policy (`RETENTION_DAYS`)
 - Decoupled from the ELT pipeline so pruning runs regardless of any individual
   ELT run. Safe because deduped history is preserved downstream in the
   incremental `int_city_hourly_*` tables (raw is a short 14-day buffer).
@@ -349,7 +351,7 @@ AIRBYTE_WORKSPACE_ID=<from Airbyte UI URL>
 - Airflow runs in Docker (not natively on Windows)
 - dbt runs in `venv313` on the host machine (manual) OR inside Airflow container (automated)
 - All timestamps stored as UTC
-- Never manually edit `airbyte_raw` tables — Airbyte owns that schema
+- Never manually edit the raw tables in `staging` (current_weather, air_pollution, …) — Airbyte owns them
 - `city` column injected by Airbyte `AddFields` — rows before this change have NULL city (filtered out)
 - `airflow/.env` must exist with POSTGRES_PASSWORD, AIRBYTE_CLIENT_ID, AIRBYTE_CLIENT_SECRET
 
@@ -384,10 +386,11 @@ smart-city-iw/
 │       ├── profiles.yml         ← Docker/Airflow profiles (container paths)
 │       ├── macros/
 │       └── models/
-│           ├── staging/         ← 5 models → PostgreSQL views
+│           ├── staging/         ← 5 stg_* JSON-parsing models → ephemeral (inline CTEs, no DB object)
 │           ├── intermediate/    ← hourly facts (4) + forecast history (1) → tables
 │           └── marts/           ← 12 models: dims + facts + OBT + analytics → tables
 ├── docs/
+│   ├── staging_as_raw_landing.md     ← airbyte_raw→staging collapse: ephemeral parsing, JSON→typed, migration
 │   ├── marts_build_guide.md          ← marts build walkthrough + reference SQL
 │   └── marts_implementation_plan.md  ← marts star-schema design / rationale
 ├── venv313/                     ← Python 3.13 venv (use this one)

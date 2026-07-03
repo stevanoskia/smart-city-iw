@@ -1,6 +1,6 @@
 destination:
   name: smart_city_postgres
-  schema: airbyte_raw
+  schema: staging
   ssl: false
   # Host must be the machine's LAN IP (e.g. 10.2.x.x) — NOT localhost.
   # Airbyte sync pods run inside the Kind/Kubernetes cluster and cannot reach

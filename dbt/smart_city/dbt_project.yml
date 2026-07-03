@@ -16,8 +16,9 @@ clean-targets:
 models:
   smart_city:
     staging:
-      +materialized: view
-      +schema: staging
+      # Ephemeral: stg_* parsing SQL compiles inline into int_*/dim_city as CTEs —
+      # no DB object. The `staging` schema itself holds only Airbyte's raw JSON tables.
+      +materialized: ephemeral
     intermediate:
       +materialized: table
       +schema: intermediate

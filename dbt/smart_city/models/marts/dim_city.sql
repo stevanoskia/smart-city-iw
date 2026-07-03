@@ -1,7 +1,7 @@
 -- City dimension: one row per city, with the surrogate key every fact joins on.
 -- DERIVED from observed data (no seed):
 --   • city list + country  → the durable hourly weather facts (survive raw pruning)
---   • latitude / longitude → the weather staging view (only place coords land)
+--   • latitude / longitude → the durable hourly weather facts (survive raw pruning)
 --   • coverage flags       → whether the city appears in the weather / traffic facts
 -- Trade-off: the dimension reflects whatever the pipeline actually collected. A city
 -- only exists here once it has weather data; has_traffic_data flips on the moment any
@@ -18,12 +18,12 @@ with weather_cities as (
 ),
 
 coords as (
-    -- lat/lon from staging 
+    -- lat/lon from the durable hourly facts (survive raw pruning), not from staging
     select
         city,
         round(avg(latitude)::numeric, 4)  as latitude,
         round(avg(longitude)::numeric, 4) as longitude
-    from {{ ref('stg_current_weather') }}
+    from {{ ref('int_city_hourly_weather') }}
     where city is not null
     group by city
 ),

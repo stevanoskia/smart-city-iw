@@ -1,9 +1,9 @@
 version: 2
 
 sources:
-  - name: airbyte_raw
-    schema: airbyte_raw
-    description: Raw data loaded by Airbyte from OpenWeather API
+  - name: staging
+    schema: staging
+    description: Raw JSON landing zone written by Airbyte (OpenWeather + TomTom APIs). The stg_* ephemeral models parse this into typed columns.
     tables:
       - name: current_weather
         description: Current weather observations per city from OpenWeather 2.5 API

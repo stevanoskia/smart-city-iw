@@ -1,7 +1,7 @@
 # Ingestion Layer — Airbyte (config-driven)
 
 Ingestion is handled by **Airbyte** using two **custom declarative connectors** (built in the
-Airbyte Connector Builder), loaded raw into PostgreSQL (`airbyte_raw` schema). Setup is
+Airbyte Connector Builder), loaded raw into PostgreSQL (`staging` schema — raw JSON). Setup is
 **config-driven**: edit YAML, run one script — no manual UI clicking to add cities.
 
 Airbyte UI: http://localhost:8000 (deployed via `abctl`, runs in Kind/Kubernetes)
@@ -30,7 +30,7 @@ sources.yml + connections.yml  ──►  setup_airbyte.py  ──►  Airbyte (
 is **partition-routed** (`ListPartitionRouter`) over its `locations` list, so a single connection
 makes one API request per city per stream within one sync. The request params and the injected
 `city` column read the current partition (`stream_partition` / `stream_slice`). All rows write to
-the same `airbyte_raw` tables, tagged with the `city` column.
+the same `staging` (raw JSON) tables, tagged with the `city` column.
 
 ---
 
@@ -58,8 +58,8 @@ Airflow's `smart_city_pipeline` DAG triggers all connections hourly, or use **Sy
 Airbyte UI. Verify in PostgreSQL:
 ```sql
 -- psql -U postgres -d smart_city
-SELECT city, COUNT(*) FROM airbyte_raw.current_weather GROUP BY city;
-SELECT city, COUNT(*) FROM airbyte_raw.traffic_incidents GROUP BY city;
+SELECT city, COUNT(*) FROM staging.current_weather GROUP BY city;
+SELECT city, COUNT(*) FROM staging.traffic_incidents GROUP BY city;
 ```
 
 ---

@@ -32,6 +32,8 @@ select
     md5(city || '|' || date_trunc('hour', observed_at)::text) as city_hour_key,
     city,
     country,
+    latitude,                                       -- carried from stg so coords survive raw pruning (dim_city reads them here, not from staging)
+    longitude,
     observed_at,
     date_trunc('day', observed_at)::date            as date_utc,   -- for daily rollups
     extract(hour from observed_at)::int             as hour_utc,   -- for time-of-day analysis

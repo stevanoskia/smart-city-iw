@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('airbyte_raw', 'current_weather') }}
+    select * from {{ source('staging', 'current_weather') }}
 ),
 
 renamed as (

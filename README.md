@@ -3,8 +3,9 @@
 End-to-end ELT platform that automatically ingests weather, air pollution, and transportation
 data from public APIs, cleans it into PostgreSQL **staging** views and **intermediate** tables
 (incremental hourly facts + forecast issue history) with dbt, and orchestrates the flow with Airflow.
-Everything runs in one PostgreSQL database: Airbyte → `airbyte_raw` → dbt `staging` (views) →
-dbt `intermediate` (hourly facts + forecast history) → dbt `marts` (star schema + OBT + analytics).
+Everything runs in one PostgreSQL database: Airbyte → `staging` (raw JSON) → dbt `intermediate`
+(hourly facts + forecast history) → dbt `marts` (star schema + OBT + analytics). The `stg_*`
+JSON-parsing models are ephemeral (compile inline as CTEs), so `staging` holds only raw Airbyte tables.
 
 ---
 
@@ -12,9 +13,9 @@ dbt `intermediate` (hourly facts + forecast history) → dbt `marts` (star schem
 
 ```
 OpenWeather API  --+
-TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermediate --> dbt marts
-                   |   (1 partition-  airbyte_raw   (views)        (hourly facts +      (star schema
-                   |    routed conn                                 forecast history)    + OBT + analytics)
+TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt intermediate --> dbt marts
+                   |   (1 partition-  staging (raw)  (hourly facts +      (star schema
+                   |    routed conn    stg_* ephemeral  forecast history)  + OBT + analytics)
                    |    per API)
                    +-----------------------------------------------------------
                        Airflow: smart_city_pipeline (@hourly ELT)
@@ -25,7 +26,7 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt staging --> dbt intermedi
 |---|---|
 | Ingestion | Airbyte (abctl / Kubernetes)
 | Landing DB | PostgreSQL 18 (local, port 5432)
-| Transformation | dbt-postgres (staging views + intermediate tables + marts tables)
+| Transformation | dbt-postgres (staging ephemeral parsing + intermediate tables + marts tables)
 | Orchestration | Apache Airflow (Docker, port 8080)
 
 ---
@@ -105,7 +106,7 @@ docker compose up -d
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
 - **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
 - **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test)
-- **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `airbyte_raw` rows per retention policy
+- **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API; add cities via config, no UI
 
 ### Staging (PostgreSQL `staging` schema — views)

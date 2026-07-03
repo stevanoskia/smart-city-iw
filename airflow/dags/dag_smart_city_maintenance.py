@@ -2,12 +2,12 @@
 Smart City Maintenance DAG
 
 Daily housekeeping, decoupled from the hourly ELT pipeline:
-  - Delete old airbyte_raw rows per the retention policy.
+  - Delete old raw rows (the `staging` schema, written by Airbyte) per the retention policy.
 
 Runs independently of smart_city_pipeline so retention pruning happens regardless
 of whether a given ELT run succeeded. Safe to decouple: deduped history is
 preserved downstream in the incremental int_city_hourly_* tables, so raw is just
-a short buffer (14-day retention >> hourly capture window).
+a short buffer (1-day retention >> the hourly models' 6h incremental lookback).
 """
 
 from __future__ import annotations
@@ -25,16 +25,16 @@ from airflow.operators.python import PythonOperator
 # downstream in the incremental int_city_hourly_* tables (which are never pruned).
 # Raw only needs to outlive a sync gap so the hourly models never miss an hour.
 RETENTION_DAYS = {
-    "current_weather":   14,
-    "air_pollution":     14,
-    "weather_forecast":   7,
-    "traffic_flow":      14,
-    "traffic_incidents": 14,
+    "current_weather":   1,
+    "air_pollution":     1,
+    "weather_forecast":  1,
+    "traffic_flow":      1,
+    "traffic_incidents": 1,
 }
 
 
 def cleanup_old_data(**context) -> None:
-    """Delete rows from airbyte_raw tables older than their retention window."""
+    """Delete rows from the staging (raw JSON) tables older than their retention window."""
     conn = psycopg2.connect(
         host=os.environ["SMART_CITY_PG_HOST"],
         port=int(os.environ.get("SMART_CITY_PG_PORT", "5432")),
@@ -47,7 +47,7 @@ def cleanup_old_data(**context) -> None:
             for table, days in RETENTION_DAYS.items():
                 cur.execute(
                     f"""
-                    DELETE FROM airbyte_raw.{table}
+                    DELETE FROM staging.{table}
                     WHERE _airbyte_extracted_at < NOW() - INTERVAL '{days} days'
                     """,
                 )
@@ -83,7 +83,7 @@ default_args = {
 
 with DAG(
     dag_id="smart_city_maintenance",
-    description="Daily housekeeping: prune old airbyte_raw rows per retention policy",
+    description="Daily housekeeping: prune old staging (raw JSON) rows per retention policy",
     schedule_interval="@daily",
     start_date=datetime(2026, 6, 1),
     catchup=False,

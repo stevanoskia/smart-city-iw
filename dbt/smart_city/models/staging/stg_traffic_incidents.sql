@@ -1,5 +1,5 @@
 with source as (
-    select * from {{ source('airbyte_raw', 'traffic_incidents') }}
+    select * from {{ source('staging', 'traffic_incidents') }}
 ),
 
 renamed as (
