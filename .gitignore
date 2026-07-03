@@ -230,6 +230,9 @@ docs/marts_implementation_plan.md
 # Team notification / reconciliation note — kept local, shared manually
 docs/branch-reconciliation.md
 
+# Migration design note — kept local
+docs/staging_as_raw_landing.md
+
 # Airbyte — auto-generated, environment-specific
 ingestion/config/connection_ids.yml
 
