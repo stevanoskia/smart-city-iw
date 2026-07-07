@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import os
 import psycopg2
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
@@ -24,6 +24,17 @@ from airflow.utils.email import send_email
 # Unset = callbacks still run and log, they just skip the email. SMTP itself is
 # configured via AIRFLOW__SMTP__* env vars (see .env / .env.example).
 ALERT_EMAIL = os.environ.get("ALERT_EMAIL")
+
+# Local-time "Completed" stamp for the email body (Airflow run_id is UTC +
+# interval-start, which reads confusingly). Falls back to UTC without tz data.
+try:
+    from zoneinfo import ZoneInfo
+    _LOCAL_TZ = ZoneInfo(os.environ.get("ALERT_TZ", "Europe/Skopje"))
+except Exception:
+    _LOCAL_TZ = timezone.utc
+
+def _completed_now() -> str:
+    return datetime.now(_LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
 
 # ── Data retention ────────────────────────────────────────────────────────────
 
@@ -83,6 +94,7 @@ def on_failure(context) -> None:
                 f"<p><b>DAG:</b> {dag_id}</p>"
                 f"<p><b>Task:</b> {task_id}</p>"
                 f"<p><b>Run:</b> {run_id}</p>"
+                f"<p><b>Failed at:</b> {_completed_now()}</p>"
                 f"<p><b>Error:</b> {error}</p>"
             ),
         )
@@ -101,6 +113,7 @@ def notify_success(context) -> None:
             html_content=(
                 f"<p><b>DAG:</b> {dag_id}</p>"
                 f"<p><b>Run:</b> {run_id}</p>"
+                f"<p><b>Completed:</b> {_completed_now()}</p>"
                 f"<p>Daily staging (raw JSON) cleanup completed.</p>"
             ),
         )

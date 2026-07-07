@@ -19,7 +19,7 @@ from __future__ import annotations
 
 import os
 import yaml
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from airflow import DAG
@@ -34,6 +34,18 @@ from airbyte_utils import trigger_sync, wait_for_sync
 # Unset = callbacks still run and log, they just skip the email — the DAG works
 # fine without it. SMTP itself is configured via AIRFLOW__SMTP__* env vars.
 ALERT_EMAIL = os.environ.get("ALERT_EMAIL")
+
+# Render the email "Completed" timestamp in local time so it matches the inbox
+# clock (Airflow's run_id is UTC + the data-interval start, which reads confusingly).
+# Falls back to UTC if the container has no tz database.
+try:
+    from zoneinfo import ZoneInfo
+    _LOCAL_TZ = ZoneInfo(os.environ.get("ALERT_TZ", "Europe/Skopje"))
+except Exception:
+    _LOCAL_TZ = timezone.utc
+
+def _completed_now() -> str:
+    return datetime.now(_LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
 
 # ── Connection IDs ────────────────────────────────────────────────────────────
 
@@ -86,6 +98,7 @@ def on_failure(context) -> None:
                 f"<p><b>DAG:</b> {dag_id}</p>"
                 f"<p><b>Task:</b> {task_id}</p>"
                 f"<p><b>Run:</b> {run_id}</p>"
+                f"<p><b>Failed at:</b> {_completed_now()}</p>"
                 f"<p><b>Error:</b> {error}</p>"
             ),
         )
@@ -105,6 +118,7 @@ def notify_success(context) -> None:
             html_content=(
                 f"<p><b>DAG:</b> {dag_id}</p>"
                 f"<p><b>Run:</b> {run_id}</p>"
+                f"<p><b>Completed:</b> {_completed_now()}</p>"
                 f"<p>Hourly pipeline completed: all syncs + dbt intermediate + marts.</p>"
             ),
         )
