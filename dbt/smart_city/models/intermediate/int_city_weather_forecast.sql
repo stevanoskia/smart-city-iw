@@ -1,6 +1,6 @@
 -- Durable forecast issue-history (one row per prediction issuance).
 -- Incremental + append-only: persists every forecast AS IT WAS ISSUED, so it
--- survives airbyte_raw pruning (7-day window) and can be scored for accuracy
+-- survives staging (raw) pruning (1-day window) and can be scored for accuracy
 -- after the target time has passed.
 --
 -- Two timestamps:

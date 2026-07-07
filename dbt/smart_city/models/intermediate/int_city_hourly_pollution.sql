@@ -1,6 +1,6 @@
 -- Durable hourly per-city air-quality facts (one row per clock hour).
 -- Incremental + append-only: accumulates clean, deduped hourly history forever,
--- independent of airbyte_raw retention. The daily rollup is built from this.
+-- independent of staging (raw) retention. The daily rollup is built from this.
 
 {{ config(
     materialized='incremental',

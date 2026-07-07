@@ -1,6 +1,6 @@
 -- Durable hourly per-city traffic-flow facts (one snapshot per clock hour).
 -- Incremental + append-only: accumulates clean, deduped history forever,
--- independent of airbyte_raw retention. The daily rollup is built from this.
+-- independent of staging (raw) retention. The daily rollup is built from this.
 -- NOTE: TomTom flow has no event timestamp — observed_at is the Airbyte sync
 -- time, so a clock hour = the latest sync snapshot in that hour.
 

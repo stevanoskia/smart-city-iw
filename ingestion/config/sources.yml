@@ -10,7 +10,7 @@ openweather:
     - air_pollution
     - weather_forecast
   locations:
-    - { city: Skopje,    lat: 41.9981, lon: 21.4321 }
+    - { city: Skopje,    lat: 41.9981, lon: 21.4321 }   #  Macedonia — weather only (no TomTom traffic coverage)
     - { city: Berlin,    lat: 52.5200, lon: 13.4050 }
     - { city: London,    lat: 51.5074, lon: -0.1278 }
     - { city: Amsterdam, lat: 52.3676, lon:  4.9041 }

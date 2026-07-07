@@ -4,7 +4,7 @@ Smart City Analytics Pipeline DAG
 Hourly ELT pipeline:
   1. Trigger all Airbyte syncs in parallel (one per connection in connection_ids.yml)
   2. Wait for all syncs to complete (XCom job IDs passed via context)
-  3. Run dbt staging (PostgreSQL views)
+  3. Compile dbt staging (stg_* are ephemeral — inline CTEs, no DB object)
   4. Build + test dbt intermediate (PostgreSQL tables, hourly facts + forecast history)
   5. Build + test dbt marts (star schema: dims + facts + OBT + analytics marts)
 
@@ -84,7 +84,7 @@ default_args = {
 
 with DAG(
     dag_id="smart_city_pipeline",
-    description="Hourly ELT: Airbyte syncs → dbt staging → dbt intermediate",
+    description="Hourly ELT: Airbyte syncs → dbt staging → dbt intermediate → dbt marts",
     schedule_interval="@hourly",
     start_date=datetime(2026, 6, 1),
     catchup=False,

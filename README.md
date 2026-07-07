@@ -1,8 +1,9 @@
 # Smart City Analytics Pipeline
 
 End-to-end ELT platform that automatically ingests weather, air pollution, and transportation
-data from public APIs, cleans it into PostgreSQL **staging** views and **intermediate** tables
-(incremental hourly facts + forecast issue history) with dbt, and orchestrates the flow with Airflow.
+data from public APIs, parses it with dbt through **ephemeral** staging models (inline CTEs, no DB
+object) into durable **intermediate** tables (incremental hourly facts + forecast issue history),
+and orchestrates the flow with Airflow.
 Everything runs in one PostgreSQL database: Airbyte → `staging` (raw JSON) → dbt `intermediate`
 (hourly facts + forecast history) → dbt `marts` (star schema + OBT + analytics). The `stg_*`
 JSON-parsing models are ephemeral (compile inline as CTEs), so `staging` holds only raw Airbyte tables.
@@ -82,7 +83,7 @@ python ingestion/scripts/setup_airbyte.py
 ### 5. Run dbt manually
 ```bash
 cd dbt/smart_city
-dbt run   --select staging      --target staging   # cleaned views
+dbt run   --select staging      --target staging   # ephemeral parse — no DB object
 dbt build --select intermediate --target staging   # hourly facts + forecast history + tests
 ```
 
@@ -101,7 +102,7 @@ docker compose up -d
 ## What's Built
 
 ### Pipeline
-- **5 dbt staging models** (PostgreSQL views), one per Airbyte source stream
+- **5 dbt staging models** (ephemeral — inline CTEs, no DB object), one per Airbyte source stream
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
 - **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
@@ -109,8 +110,8 @@ docker compose up -d
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API; add cities via config, no UI
 
-### Staging (PostgreSQL `staging` schema — views)
-| View | Description |
+### Staging (ephemeral `stg_*` parsers — no DB object)
+| Model | Description |
 |---|---|
 | `stg_current_weather` | Typed current weather fields per city from OpenWeather |
 | `stg_air_pollution` | Typed AQI + pollutant fields per city from OpenWeather |
@@ -210,7 +211,7 @@ smart-city-iw/
 │       └── dag_smart_city_maintenance.py    <- daily raw-cleanup DAG
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
 │   └── models/
-│       ├── staging/      -> PostgreSQL (5 views)
+│       ├── staging/      -> ephemeral (5 stg_* parsers, no DB object)
 │       ├── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
 │       └── marts/         -> PostgreSQL (12 tables: dims + facts + OBT + analytics)
 ├── venv313/             <- Python 3.13 venv (always use this)

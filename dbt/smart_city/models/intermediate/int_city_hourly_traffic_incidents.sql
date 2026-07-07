@@ -1,6 +1,6 @@
 -- Durable hourly per-city traffic-incident facts (one incident per sync).
 -- Incremental + append-only: accumulates history forever, independent of
--- airbyte_raw retention. The daily rollup is built from this.
+-- staging (raw) retention. The daily rollup is built from this.
 --
 -- TomTom incidents have no event timestamp — observed_at is the Airbyte sync
 -- time, so the grain is (city, incident_id, observed_at). Rows without an
