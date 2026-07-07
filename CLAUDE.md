@@ -42,6 +42,8 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 - ✅ TomTom incidents `fields` fix — full incident detail now ingests (id, delay, magnitudeOfDelay, …)
 - ✅ Split raw cleanup into a separate `@daily` `smart_city_maintenance` DAG
 - ✅ Airflow XCom wait-task fix, on_failure_callback, per-task execution timeouts
+- ✅ **Email alerts** — both DAGs email `ALERT_EMAIL` on failure (which task + error) and success
+  (whole-pipeline / daily-cleanup done) via Gmail SMTP (`AIRFLOW__SMTP__*` env, App Password)
 
 ---
 
@@ -298,6 +300,9 @@ UI: `localhost:8080` — login: `admin / admin`
 - Runs `dbt run --select staging --target staging`
 - Runs `dbt build --select intermediate --target staging` (hourly facts + forecast history)
 - Runs `dbt build --select marts --target staging` (star schema + OBT + analytics, build+test)
+- **Email alerts:** `on_failure_callback` on every task (fires after retries — emails which
+  step failed + the error); `on_success_callback` on the final `dbt_marts` task (one
+  whole-pipeline SUCCESS email). Both guarded by `ALERT_EMAIL`; no-op if unset.
 
 ### DAG: `smart_city_maintenance`
 - Schedule: `@daily`
@@ -305,6 +310,16 @@ UI: `localhost:8080` — login: `admin / admin`
 - Decoupled from the ELT pipeline so pruning runs regardless of any individual
   ELT run. Safe because deduped history is preserved downstream in the
   incremental `int_city_hourly_*` tables (raw is a short 1-day buffer).
+- **Email alerts:** same pattern — failure email on the cleanup task, success email confirming
+  the daily prune ran clean.
+
+### Email alerts (both DAGs)
+Failure/success notifications go to `ALERT_EMAIL` via `airflow.utils.email.send_email`. SMTP is
+configured entirely through `AIRFLOW__SMTP__*` env vars (no `airflow.cfg` edit) — Gmail SMTP with a
+16-char **App Password** (Google Account → Security → 2-Step Verification → App passwords), *not*
+the account login. Callbacks are guarded by `if ALERT_EMAIL:`, so leaving it unset disables email
+without breaking the DAGs. On an eventual Airflow 3 upgrade, move the SMTP creds into an
+`smtp_default` connection (env-var creds are deprecated there).
 
 ### Airflow env vars (from `airflow/.env` and docker-compose)
 | Var | Purpose |
@@ -314,6 +329,8 @@ UI: `localhost:8080` — login: `admin / admin`
 | `AIRBYTE_URL` | `http://host.docker.internal:8000` |
 | `AIRBYTE_CLIENT_ID` | Airbyte OAuth client ID |
 | `AIRBYTE_CLIENT_SECRET` | Airbyte OAuth client secret |
+| `ALERT_EMAIL` | Recipient for pipeline failure/success emails (unset = email disabled) |
+| `AIRFLOW__SMTP__SMTP_HOST` … `_MAIL_FROM` | SMTP config (Gmail + App Password); see Environment Variables |
 
 ---
 
@@ -339,6 +356,16 @@ AIRBYTE_PASSWORD=<your password>
 AIRBYTE_CLIENT_ID=<from Airbyte UI → User → Applications>
 AIRBYTE_CLIENT_SECRET=<from Airbyte UI → User → Applications>
 AIRBYTE_WORKSPACE_ID=<from Airbyte UI URL>
+
+# Email alerts (Airflow reads AIRFLOW__SMTP__* straight from env)
+ALERT_EMAIL=<inbox for pipeline alerts>
+AIRFLOW__SMTP__SMTP_HOST=smtp.gmail.com
+AIRFLOW__SMTP__SMTP_PORT=587
+AIRFLOW__SMTP__SMTP_STARTTLS=True
+AIRFLOW__SMTP__SMTP_SSL=False
+AIRFLOW__SMTP__SMTP_USER=<your gmail>
+AIRFLOW__SMTP__SMTP_PASSWORD=<16-char Gmail App Password>
+AIRFLOW__SMTP__SMTP_MAIL_FROM=<your gmail>
 ```
 
 ---

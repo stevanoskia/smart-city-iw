@@ -17,6 +17,7 @@ Connection IDs loaded from /opt/airflow/ingestion_config/connection_ids.yml
 
 from __future__ import annotations
 
+import os
 import yaml
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -24,9 +25,15 @@ from pathlib import Path
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
+from airflow.utils.email import send_email
 from airflow.utils.task_group import TaskGroup
 
 from airbyte_utils import trigger_sync, wait_for_sync
+
+# Email alerts go here (set in .env → injected via docker-compose env_file).
+# Unset = callbacks still run and log, they just skip the email — the DAG works
+# fine without it. SMTP itself is configured via AIRFLOW__SMTP__* env vars.
+ALERT_EMAIL = os.environ.get("ALERT_EMAIL")
 
 # ── Connection IDs ────────────────────────────────────────────────────────────
 
@@ -69,6 +76,38 @@ def on_failure(context) -> None:
     print(
         f"FAILURE | DAG: {dag_id} | Task: {task_id} | Run: {run_id} | Error: {error}"
     )
+    # Fires once retries are exhausted, on ANY task (a sync trigger/wait or a dbt
+    # step) — so a failed Airbyte sync emails you which step died and why.
+    if ALERT_EMAIL:
+        send_email(
+            to=ALERT_EMAIL,
+            subject=f"[Airflow] {dag_id} FAILED — {task_id}",
+            html_content=(
+                f"<p><b>DAG:</b> {dag_id}</p>"
+                f"<p><b>Task:</b> {task_id}</p>"
+                f"<p><b>Run:</b> {run_id}</p>"
+                f"<p><b>Error:</b> {error}</p>"
+            ),
+        )
+
+# ── Success callback ──────────────────────────────────────────────────────────
+# Attached to the LAST task (dbt_marts) only, so it means "the whole hourly
+# pipeline — all syncs + intermediate + marts — finished clean", not per-task.
+
+def notify_success(context) -> None:
+    dag_id = context["task_instance"].dag_id
+    run_id = context["run_id"]
+    print(f"SUCCESS | DAG: {dag_id} | Run: {run_id} | pipeline completed")
+    if ALERT_EMAIL:
+        send_email(
+            to=ALERT_EMAIL,
+            subject=f"[Airflow] {dag_id} SUCCESS",
+            html_content=(
+                f"<p><b>DAG:</b> {dag_id}</p>"
+                f"<p><b>Run:</b> {run_id}</p>"
+                f"<p>Hourly pipeline completed: all syncs + dbt intermediate + marts.</p>"
+            ),
+        )
 
 # ── DAG definition ────────────────────────────────────────────────────────────
 
@@ -142,6 +181,7 @@ with DAG(
         task_id="dbt_marts",
         bash_command=dbt_cmd("marts", "staging", command="build"),
         execution_timeout=timedelta(minutes=15),
+        on_success_callback=notify_success,   # last task = whole-pipeline success email
     )
 
     # ── Pipeline order ────────────────────────────────────────────────────────

@@ -108,6 +108,7 @@ docker compose up -d
 - **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
 - **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test)
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
+- **Email alerts** — both DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API; add cities via config, no UI
 
 ### Staging (ephemeral `stg_*` parsers — no DB object)
