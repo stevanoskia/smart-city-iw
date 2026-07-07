@@ -270,6 +270,16 @@ Airbyte API uses OAuth application tokens (not basic auth).
 Get `client_id` / `client_secret` from Airbyte UI → User → Applications.
 Set `AIRBYTE_CLIENT_ID` and `AIRBYTE_CLIENT_SECRET` in `.env`.
 
+> **Short-lived tokens — poll loop re-auths.** Application access tokens expire in minutes.
+> `airbyte_utils.py` caches the token in a module global, so a long sync (> token TTL)
+> outlives the token cached at the start of `wait_for_sync`, and mid-poll the `jobs/get`
+> call 401s. Because `HTTPError` subclasses `RequestException`, the poll loop's transient
+> handler catches the 401 too — it now detects 401/403, clears the cached token so the next
+> `_headers()` re-authenticates, and retries (instead of spinning on the dead token until the
+> task's `execution_timeout` kills it — a 401 that looked like a slow sync). `wait_for_sync`'s
+> default `timeout` is `2100`s (35 min), just under the wait task's 40-min `execution_timeout`,
+> so its own `TimeoutError` (which names the `job_id`) surfaces before Airflow's generic kill.
+
 ### Known quirks
 - Destination host must be LAN IP (`AIRBYTE_PG_HOST`) — not localhost (sync pods run in Kind)
 - Schema refresh may 403 on connector version change — delete and recreate the connection instead
@@ -295,6 +305,12 @@ UI: `localhost:8080` — login: `admin / admin`
 
 ### DAG: `smart_city_pipeline`
 - Schedule: `@hourly`
+- `max_active_runs=1` — **runs are serialized.** Worst-case duration (wait_syncs 40m +
+  the three dbt steps 15m each) can exceed the hourly interval; without this the scheduler
+  would start the next run while the current one is still writing, so two
+  `dbt_intermediate`/`dbt_marts` tasks would `DELETE+INSERT` the same incremental Postgres
+  tables concurrently (deadlocks / lost rows). `=1` queues the next run; `catchup=False`
+  means a long run skips ahead rather than piling up.
 - Triggers all Airbyte syncs in parallel (one task per connection in `connection_ids.yml` — now 2: `openweather_all`, `tomtom_all`)
 - Waits for all syncs to complete
 - Runs `dbt run --select staging --target staging`
@@ -306,6 +322,8 @@ UI: `localhost:8080` — login: `admin / admin`
 
 ### DAG: `smart_city_maintenance`
 - Schedule: `@daily`
+- `max_active_runs=1` — serialized, so a slow prune can't overlap the next day's (both
+  `DELETE` from the same `staging` tables and would race the pipeline's reads).
 - Cleans up old `staging` (raw JSON) rows per retention policy (`RETENTION_DAYS`)
 - Decoupled from the ELT pipeline so pruning runs regardless of any individual
   ELT run. Safe because deduped history is preserved downstream in the

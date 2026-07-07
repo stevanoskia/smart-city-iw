@@ -139,6 +139,9 @@ with DAG(
     schedule_interval="@daily",
     start_date=datetime(2026, 6, 1),
     catchup=False,
+    # Serialize runs so a slow prune can't overlap the next day's — both would
+    # DELETE from the same staging tables (and race the pipeline's reads).
+    max_active_runs=1,
     default_args=default_args,
     tags=["smart_city", "maintenance"],
 ) as dag:

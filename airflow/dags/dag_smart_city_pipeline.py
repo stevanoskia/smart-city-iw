@@ -144,6 +144,13 @@ with DAG(
     schedule_interval="@hourly",
     start_date=datetime(2026, 6, 1),
     catchup=False,
+    # Serialize runs: a run's worst-case duration (wait_syncs 40m + the three dbt
+    # steps 15m each) can exceed the hourly interval. Without this, the scheduler
+    # would start the next run while the current one is still writing, so two
+    # dbt_intermediate/dbt_marts tasks would DELETE+INSERT the same incremental
+    # Postgres tables concurrently (deadlocks / lost rows). =1 queues the next run
+    # instead; catchup=False means we skip ahead rather than pile up.
+    max_active_runs=1,
     default_args=default_args,
     tags=["smart_city", "airbyte", "dbt"],
 ) as dag:

@@ -85,8 +85,14 @@ def trigger_sync(connection_id: str) -> str:
     return str(job_id)
 
 
-def wait_for_sync(job_id: str, timeout: int = 3600, poll_interval: int = 30) -> None:
-    """Poll Airbyte until the job completes. Raises on failure or timeout."""
+def wait_for_sync(job_id: str, timeout: int = 2100, poll_interval: int = 30) -> None:
+    """Poll Airbyte until the job completes. Raises on failure or timeout.
+
+    Default timeout (2100s / 35 min) is kept just under the wait task's
+    execution_timeout (40 min) so this function's own TimeoutError — which names
+    the job_id — surfaces before Airflow's generic 'task timed out' kill.
+    """
+    global _token
     if job_id == "skip":
         print("  Sync already completed before we attached — skipping wait")
         return
@@ -103,10 +109,21 @@ def wait_for_sync(job_id: str, timeout: int = 3600, poll_interval: int = 30) -> 
             resp.raise_for_status()
             status = resp.json()["job"]["status"]
         except requests.exceptions.RequestException as e:
-            # Transient network blip (e.g. the abctl ingress dropping a connection)
-            # must NOT fail the task — a single bad poll is not a sync failure.
-            # Log and poll again; only a real job failure or the timeout ends the wait.
-            print(f"  Poll error for job {job_id}: {e} — retrying in {poll_interval}s")
+            # A single bad poll must NOT fail the task — log and poll again; only a
+            # real job failure or the timeout ends the wait.
+            #   • 401/403: Airbyte OAuth tokens are short-lived (~minutes). A long
+            #     sync outlives the token cached at the start of this wait, so mid-
+            #     poll we get 401. HTTPError subclasses RequestException, so it lands
+            #     here too — drop the cached token so the next _headers() re-auths.
+            #     (Without this, we'd retry the same dead token forever until the
+            #     task's execution_timeout kills it — a 401 disguised as a slow sync.)
+            #   • everything else (network blip, transient 5xx): plain retry, as before.
+            resp_err = getattr(e, "response", None)
+            if resp_err is not None and resp_err.status_code in (401, 403):
+                _token = None
+                print(f"  Token expired for job {job_id} — re-authenticating, retrying in {poll_interval}s")
+            else:
+                print(f"  Poll error for job {job_id}: {e} — retrying in {poll_interval}s")
             time.sleep(poll_interval)
             continue
         print(f"  Job {job_id} status: {status}")
