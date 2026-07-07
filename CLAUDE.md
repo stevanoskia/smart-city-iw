@@ -318,8 +318,10 @@ Failure/success notifications go to `ALERT_EMAIL` via `airflow.utils.email.send_
 configured entirely through `AIRFLOW__SMTP__*` env vars (no `airflow.cfg` edit) — Gmail SMTP with a
 16-char **App Password** (Google Account → Security → 2-Step Verification → App passwords), *not*
 the account login. Callbacks are guarded by `if ALERT_EMAIL:`, so leaving it unset disables email
-without breaking the DAGs. On an eventual Airflow 3 upgrade, move the SMTP creds into an
-`smtp_default` connection (env-var creds are deprecated there).
+without breaking the DAGs. Each email carries a `Completed`/`Failed at` timestamp rendered in
+local time (`ALERT_TZ`, default `Europe/Skopje`) — clearer than the `run_id`, which is UTC + the
+data-interval start. On an eventual Airflow 3 upgrade, move the SMTP creds into an `smtp_default`
+connection (env-var creds are deprecated there).
 
 ### Airflow env vars (from `airflow/.env` and docker-compose)
 | Var | Purpose |
@@ -330,6 +332,7 @@ without breaking the DAGs. On an eventual Airflow 3 upgrade, move the SMTP creds
 | `AIRBYTE_CLIENT_ID` | Airbyte OAuth client ID |
 | `AIRBYTE_CLIENT_SECRET` | Airbyte OAuth client secret |
 | `ALERT_EMAIL` | Recipient for pipeline failure/success emails (unset = email disabled) |
+| `ALERT_TZ` | Optional — tz for the email "Completed"/"Failed at" stamp (default `Europe/Skopje`, UTC fallback) |
 | `AIRFLOW__SMTP__SMTP_HOST` … `_MAIL_FROM` | SMTP config (Gmail + App Password); see Environment Variables |
 
 ---
@@ -359,6 +362,7 @@ AIRBYTE_WORKSPACE_ID=<from Airbyte UI URL>
 
 # Email alerts (Airflow reads AIRFLOW__SMTP__* straight from env)
 ALERT_EMAIL=<inbox for pipeline alerts>
+ALERT_TZ=Europe/Skopje   # optional — tz for the "Completed" stamp (UTC fallback)
 AIRFLOW__SMTP__SMTP_HOST=smtp.gmail.com
 AIRFLOW__SMTP__SMTP_PORT=587
 AIRFLOW__SMTP__SMTP_STARTTLS=True
