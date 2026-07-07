@@ -30,10 +30,13 @@ from airflow.utils.task_group import TaskGroup
 
 from airbyte_utils import trigger_sync, wait_for_sync
 
-# Email alerts go here (set in .env → injected via docker-compose env_file).
-# Unset = callbacks still run and log, they just skip the email — the DAG works
-# fine without it. SMTP itself is configured via AIRFLOW__SMTP__* env vars.
-ALERT_EMAIL = os.environ.get("ALERT_EMAIL")
+# Email recipients for pipeline alerts (set in .env → injected via docker-compose
+# env_file). To notify more than one person, comma-separate the addresses, e.g.
+#   ALERT_EMAIL=you@example.com,teammate@example.com
+# every address in the list gets both the failure and success emails. Unset =
+# callbacks still run and log, they just skip the email. SMTP itself is configured
+# via AIRFLOW__SMTP__* env vars.
+ALERT_EMAILS = [e.strip() for e in os.environ.get("ALERT_EMAIL", "").split(",") if e.strip()]
 
 # Render the email "Completed" timestamp in local time so it matches the inbox
 # clock (Airflow's run_id is UTC + the data-interval start, which reads confusingly).
@@ -90,9 +93,9 @@ def on_failure(context) -> None:
     )
     # Fires once retries are exhausted, on ANY task (a sync trigger/wait or a dbt
     # step) — so a failed Airbyte sync emails you which step died and why.
-    if ALERT_EMAIL:
+    if ALERT_EMAILS:
         send_email(
-            to=ALERT_EMAIL,
+            to=ALERT_EMAILS,
             subject=f"[Airflow] {dag_id} FAILED — {task_id}",
             html_content=(
                 f"<p><b>DAG:</b> {dag_id}</p>"
@@ -111,9 +114,9 @@ def notify_success(context) -> None:
     dag_id = context["task_instance"].dag_id
     run_id = context["run_id"]
     print(f"SUCCESS | DAG: {dag_id} | Run: {run_id} | pipeline completed")
-    if ALERT_EMAIL:
+    if ALERT_EMAILS:
         send_email(
-            to=ALERT_EMAIL,
+            to=ALERT_EMAILS,
             subject=f"[Airflow] {dag_id} SUCCESS",
             html_content=(
                 f"<p><b>DAG:</b> {dag_id}</p>"

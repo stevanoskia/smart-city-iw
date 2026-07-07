@@ -20,10 +20,13 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.utils.email import send_email
 
-# Email alerts go here (set in .env → injected via docker-compose env_file).
-# Unset = callbacks still run and log, they just skip the email. SMTP itself is
-# configured via AIRFLOW__SMTP__* env vars (see .env / .env.example).
-ALERT_EMAIL = os.environ.get("ALERT_EMAIL")
+# Email recipients for maintenance alerts (set in .env → injected via docker-compose
+# env_file). To notify more than one person, comma-separate the addresses, e.g.
+#   ALERT_EMAIL=you@example.com,teammate@example.com
+# every address in the list gets both the failure and success emails. Unset =
+# callbacks still run and log, they just skip the email. SMTP itself is configured
+# via AIRFLOW__SMTP__* env vars (see .env / .env.example).
+ALERT_EMAILS = [e.strip() for e in os.environ.get("ALERT_EMAIL", "").split(",") if e.strip()]
 
 # Local-time "Completed" stamp for the email body (Airflow run_id is UTC +
 # interval-start, which reads confusingly). Falls back to UTC without tz data.
@@ -86,9 +89,9 @@ def on_failure(context) -> None:
         f"FAILURE | DAG: {dag_id} | Task: {task_id} | Run: {run_id} | Error: {error}"
     )
     # Fires once retries are exhausted — emails you that the daily raw cleanup failed.
-    if ALERT_EMAIL:
+    if ALERT_EMAILS:
         send_email(
-            to=ALERT_EMAIL,
+            to=ALERT_EMAILS,
             subject=f"[Airflow] {dag_id} FAILED — {task_id}",
             html_content=(
                 f"<p><b>DAG:</b> {dag_id}</p>"
@@ -106,9 +109,9 @@ def notify_success(context) -> None:
     dag_id = context["task_instance"].dag_id
     run_id = context["run_id"]
     print(f"SUCCESS | DAG: {dag_id} | Run: {run_id} | cleanup completed")
-    if ALERT_EMAIL:
+    if ALERT_EMAILS:
         send_email(
-            to=ALERT_EMAIL,
+            to=ALERT_EMAILS,
             subject=f"[Airflow] {dag_id} SUCCESS",
             html_content=(
                 f"<p><b>DAG:</b> {dag_id}</p>"

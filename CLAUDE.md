@@ -331,7 +331,7 @@ connection (env-var creds are deprecated there).
 | `AIRBYTE_URL` | `http://host.docker.internal:8000` |
 | `AIRBYTE_CLIENT_ID` | Airbyte OAuth client ID |
 | `AIRBYTE_CLIENT_SECRET` | Airbyte OAuth client secret |
-| `ALERT_EMAIL` | Recipient for pipeline failure/success emails (unset = email disabled) |
+| `ALERT_EMAIL` | Recipient(s) for pipeline failure/success emails — comma-separate for several (unset = email disabled) |
 | `ALERT_TZ` | Optional — tz for the email "Completed"/"Failed at" stamp (default `Europe/Skopje`, UTC fallback) |
 | `AIRFLOW__SMTP__SMTP_HOST` … `_MAIL_FROM` | SMTP config (Gmail + App Password); see Environment Variables |
 
@@ -361,7 +361,7 @@ AIRBYTE_CLIENT_SECRET=<from Airbyte UI → User → Applications>
 AIRBYTE_WORKSPACE_ID=<from Airbyte UI URL>
 
 # Email alerts (Airflow reads AIRFLOW__SMTP__* straight from env)
-ALERT_EMAIL=<inbox for pipeline alerts>
+ALERT_EMAIL=<inbox for pipeline alerts>   # one address, or several comma-separated
 ALERT_TZ=Europe/Skopje   # optional — tz for the "Completed" stamp (UTC fallback)
 AIRFLOW__SMTP__SMTP_HOST=smtp.gmail.com
 AIRFLOW__SMTP__SMTP_PORT=587
