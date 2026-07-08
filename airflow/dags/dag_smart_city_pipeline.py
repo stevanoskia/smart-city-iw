@@ -31,9 +31,16 @@ from airbyte_utils import trigger_sync, wait_for_sync
 # ── Connection IDs ────────────────────────────────────────────────────────────
 
 CONNECTION_IDS_FILE = Path("/opt/airflow/ingestion_config/connection_ids.yml")
-CONNECTION_IDS: dict[str, str] = yaml.safe_load(
-    CONNECTION_IDS_FILE.read_text(encoding="utf-8")
-)
+if CONNECTION_IDS_FILE.exists():
+    CONNECTION_IDS: dict[str, str] = yaml.safe_load(
+        CONNECTION_IDS_FILE.read_text(encoding="utf-8")
+    )
+else:
+    print(
+        f"WARNING: {CONNECTION_IDS_FILE} not found — run "
+        f"ingestion/scripts/setup_airbyte.py first. DAG will have no sync tasks."
+    )
+    CONNECTION_IDS: dict[str, str] = {}
 
 # ── dbt command template ──────────────────────────────────────────────────────
 
@@ -88,6 +95,7 @@ with DAG(
     schedule_interval="@hourly",
     start_date=datetime(2026, 6, 1),
     catchup=False,
+    max_active_runs=1,
     default_args=default_args,
     tags=["smart_city", "airbyte", "dbt"],
 ) as dag:

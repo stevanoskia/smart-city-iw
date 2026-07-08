@@ -4,10 +4,10 @@ smart_city:
     staging:                          # PostgreSQL — staging models
       type: postgres
       host: "{{ env_var('SMART_CITY_PG_HOST', 'host.docker.internal') }}"
-      port: 5432
-      dbname: smart_city
-      user: postgres
-      pass: "{{ env_var('SMART_CITY_PG_PASSWORD') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | int }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'smart_city') }}"
+      user: "{{ env_var('POSTGRES_USER', 'postgres') }}"
+      pass: "{{ env_var('POSTGRES_PASSWORD') }}"
       schema: staging
       threads: 4
 

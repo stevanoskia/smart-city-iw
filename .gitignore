@@ -247,3 +247,17 @@ airflow/logs/
 
 # Database backup dumps (e.g. pre-migration pg_dump snapshots)
 *.dump
+
+# Airbyte instance-admin secrets backup (client secret, admin password, JWT signing secret)
+airflow/scripts/airbyte_secrets.env
+
+# Personal setup notes — has historically contained live credentials (SMTP app
+# password, DB password placeholders); keep local-only, never commit
+SETUP_NOTES.md
+
+# Handoff doc — may contain credentials/internal notes
+handoff_notes.docx
+
+# Irina's local Python ingestion line — main uses Airbyte, not this (see SETUP_NOTES §6)
+ingestion/ingest.py
+ingestion/config.py

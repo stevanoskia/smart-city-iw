@@ -304,7 +304,7 @@ UI: `localhost:8080` — login: `admin / admin`
 - Cleans up old `staging` (raw JSON) rows per retention policy (`RETENTION_DAYS`)
 - Decoupled from the ELT pipeline so pruning runs regardless of any individual
   ELT run. Safe because deduped history is preserved downstream in the
-  incremental `int_city_hourly_*` tables (raw is a short 14-day buffer).
+  incremental `int_city_hourly_*` tables (raw is a short 1-day buffer).
 
 ### Airflow env vars (from `airflow/.env` and docker-compose)
 | Var | Purpose |

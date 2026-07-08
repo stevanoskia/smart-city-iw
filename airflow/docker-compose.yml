@@ -9,12 +9,12 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
-    # Smart city DB connection (used by dbt staging target inside container)
+    # Smart city DB connection (used by dbt staging target inside container).
+    # Only HOST needs a container-specific override (host.docker.internal to
+    # reach the Windows host) — PORT/DB/USER/PASSWORD are the same values
+    # regardless of who's asking, so profiles.yml reads them straight from
+    # POSTGRES_* (already injected via env_file above).
     SMART_CITY_PG_HOST: host.docker.internal
-    SMART_CITY_PG_PORT: '5432'
-    SMART_CITY_PG_DB: smart_city
-    SMART_CITY_PG_USER: postgres
-    SMART_CITY_PG_PASSWORD: ${POSTGRES_PASSWORD}
     # Airbyte OAuth credentials (used by airbyte_utils.py in DAGs)
     AIRBYTE_URL: 'http://host.docker.internal:8000'
     AIRBYTE_CLIENT_ID: ${AIRBYTE_CLIENT_ID}
@@ -37,7 +37,7 @@ services:
       POSTGRES_PASSWORD: airflow
       POSTGRES_DB: airflow
     ports:
-      - "5434:5432"
+      - "5433:5432"
     healthcheck:
       test: ["CMD", "pg_isready", "-U", "airflow"]
       interval: 5s

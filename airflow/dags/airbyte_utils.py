@@ -85,7 +85,7 @@ def trigger_sync(connection_id: str) -> str:
     return str(job_id)
 
 
-def wait_for_sync(job_id: str, timeout: int = 3600, poll_interval: int = 30) -> None:
+def wait_for_sync(job_id: str, timeout: int = 2100, poll_interval: int = 30) -> None:
     """Poll Airbyte until the job completes. Raises on failure or timeout."""
     if job_id == "skip":
         print("  Sync already completed before we attached — skipping wait")
@@ -102,6 +102,19 @@ def wait_for_sync(job_id: str, timeout: int = 3600, poll_interval: int = 30) -> 
             )
             resp.raise_for_status()
             status = resp.json()["job"]["status"]
+
+
+        except requests.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code in (401, 403):
+                # Airbyte tokens expire in minutes — force re-auth on next _headers() call
+                global _token
+                _token = None
+                print(f"  Token expired while polling job {job_id} — re-authenticating")
+                time.sleep(poll_interval)
+                continue
+            print(f"  HTTP error polling job {job_id}: {e} — retrying in {poll_interval}s")
+            time.sleep(poll_interval)
+            continue
         except requests.exceptions.RequestException as e:
             # Transient network blip (e.g. the abctl ingress dropping a connection)
             # must NOT fail the task — a single bad poll is not a sync failure.
