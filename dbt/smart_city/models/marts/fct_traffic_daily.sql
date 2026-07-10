@@ -31,8 +31,8 @@ daily_incidents as (
 )
 
 select
-    md5(f.city || '|' || f.date_utc::text)  as city_date_key,
-    md5(f.city)                             as city_key,
+    {{ dbt_utils.generate_surrogate_key(['f.city', 'f.date_utc']) }} as city_date_key,
+    {{ dbt_utils.generate_surrogate_key(['f.city']) }}              as city_key,
     to_char(f.date_utc, 'YYYYMMDD')::int    as date_key,
     f.city,
     f.date_utc,

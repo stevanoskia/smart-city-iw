@@ -24,8 +24,8 @@ with daily as (
 )
 
 select
-    md5(city || '|' || date_utc::text)  as city_date_key,   -- row identity (PK)
-    md5(city)                           as city_key,          -- FK → dim_city
+    {{ dbt_utils.generate_surrogate_key(['city', 'date_utc']) }} as city_date_key,   -- row identity (PK)
+    {{ dbt_utils.generate_surrogate_key(['city']) }}            as city_key,          -- FK → dim_city
     to_char(date_utc, 'YYYYMMDD')::int  as date_key,          -- FK → dim_date
     daily.*
 from daily

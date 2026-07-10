@@ -22,7 +22,7 @@ actuals as (
 
 select
     p.forecast_key,
-    md5(p.city)                                            as city_key,
+    {{ dbt_utils.generate_surrogate_key(['p.city']) }}     as city_key,
     to_char(p.forecast_at::date, 'YYYYMMDD')::int          as date_key,
     p.city,
     p.forecast_at,

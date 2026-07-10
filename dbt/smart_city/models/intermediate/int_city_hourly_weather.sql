@@ -29,7 +29,7 @@ deduped as (
 )
 
 select
-    md5(city || '|' || date_trunc('hour', observed_at)::text) as city_hour_key,
+    {{ dbt_utils.generate_surrogate_key(['city', "date_trunc('hour', observed_at)"]) }} as city_hour_key,
     city,
     country,
     latitude,                                       -- carried from stg so coords survive raw pruning (dim_city reads them here, not from staging)

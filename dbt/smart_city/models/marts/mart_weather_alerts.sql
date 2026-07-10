@@ -29,8 +29,8 @@ alerts as (
 )
 
 select
-    md5(city || '|' || forecast_at::text || '|' || alert_type) as alert_key,
-    md5(city)                                                  as city_key,
+    {{ dbt_utils.generate_surrogate_key(['city', 'forecast_at', 'alert_type']) }} as alert_key,
+    {{ dbt_utils.generate_surrogate_key(['city']) }}                              as city_key,
     to_char(forecast_at::date, 'YYYYMMDD')::int               as date_key,
     city, forecast_at, lead_time_hours, alert_type, severity, trigger_value, trigger_unit
 from alerts
