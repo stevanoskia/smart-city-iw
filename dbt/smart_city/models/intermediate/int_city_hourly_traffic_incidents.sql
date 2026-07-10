@@ -35,7 +35,7 @@ deduped as (
 )
 
 select
-    md5(city || '|' || incident_id || '|' || observed_at::text)  as city_incident_key,
+    {{ dbt_utils.generate_surrogate_key(['city', 'incident_id', 'observed_at']) }}  as city_incident_key,
     city,
     incident_id,
     observed_at,

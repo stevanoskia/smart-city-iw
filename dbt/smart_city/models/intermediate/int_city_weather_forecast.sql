@@ -39,7 +39,7 @@ deduped as (
 )
 
 select
-    md5(city || '|' || forecast_at::text || '|' || issued_at_utc::text) as forecast_key,
+    {{ dbt_utils.generate_surrogate_key(['city', 'forecast_at', 'issued_at_utc']) }} as forecast_key,
     city,
     forecast_at,
     issued_at_utc                                           as issued_at,

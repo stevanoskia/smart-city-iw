@@ -13,8 +13,8 @@ with ranked as (
 )
 
 select
-    md5(city || '|' || forecast_at::text)   as forecast_slot_key,
-    md5(city)                               as city_key,
+    {{ dbt_utils.generate_surrogate_key(['city', 'forecast_at']) }} as forecast_slot_key,
+    {{ dbt_utils.generate_surrogate_key(['city']) }}               as city_key,
     city,
     forecast_at,
     forecast_date_utc,

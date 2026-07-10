@@ -5,7 +5,7 @@
 
 select
     city_hour_key,
-    md5(city)                           as city_key,    -- FK → dim_city
+    {{ dbt_utils.generate_surrogate_key(['city']) }} as city_key,    -- FK → dim_city
     to_char(date_utc, 'YYYYMMDD')::int  as date_key,     -- FK → dim_date
     hour_utc,                                            -- FK → dim_hour
     city,

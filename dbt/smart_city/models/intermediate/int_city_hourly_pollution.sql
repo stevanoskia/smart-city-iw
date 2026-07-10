@@ -29,7 +29,7 @@ deduped as (
 )
 
 select
-    md5(city || '|' || date_trunc('hour', observed_at)::text) as city_hour_key,
+    {{ dbt_utils.generate_surrogate_key(['city', "date_trunc('hour', observed_at)"]) }} as city_hour_key,
     city,
     observed_at,
     date_trunc('day', observed_at)::date            as date_utc,   -- for daily rollups

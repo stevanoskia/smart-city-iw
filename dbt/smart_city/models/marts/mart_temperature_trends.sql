@@ -18,8 +18,8 @@ windowed as (
 )
 
 select
-    md5(city || '|' || date_utc::text)  as city_date_key,
-    md5(city)                           as city_key,
+    {{ dbt_utils.generate_surrogate_key(['city', 'date_utc']) }} as city_date_key,
+    {{ dbt_utils.generate_surrogate_key(['city']) }}            as city_key,
     to_char(date_utc, 'YYYYMMDD')::int  as date_key,
     city, date_utc,
     avg_temp_celsius, min_temp_celsius, max_temp_celsius, temp_7d_avg, temp_30d_avg,

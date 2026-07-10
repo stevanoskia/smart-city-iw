@@ -35,7 +35,7 @@ traffic_cities as (
 )
 
 select
-    md5(w.city)              as city_key,
+    {{ dbt_utils.generate_surrogate_key(['w.city']) }} as city_key,
     w.city,
     w.country,
     c.latitude,
