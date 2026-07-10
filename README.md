@@ -29,6 +29,7 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt intermediate --> dbt mart
 | Landing DB | PostgreSQL 18 (local, port 5432)
 | Transformation | dbt-postgres (staging ephemeral parsing + intermediate tables + marts tables)
 | Orchestration | Apache Airflow (Docker, port 8080)
+| Reporting | Power BI (dashboards built on the `marts` layer)
 
 ---
 
@@ -164,6 +165,13 @@ with `relationships` tests enforcing FK→dimension integrity.
 
 Design + step-by-step build guide live in `docs/marts_implementation_plan.md` and
 `docs/marts_build_guide.md`.
+
+### Reporting — Power BI
+Business reporting is done in **Power BI** (`smart_city_dashboard.pbip`), connected to the
+PostgreSQL `marts` schema (Import mode) — a star-schema model with KPI measures and an Executive
+Overview page (KPI cards, Azure Map, air-quality + forecast visuals). Build log and current status
+live in `docs/powerbi_dashboard.md`. *(In progress — the model + 7 KPI cards are built; a
+data-refresh issue is being resolved.)*
 
 ---
 

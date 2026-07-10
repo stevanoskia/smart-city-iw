@@ -25,7 +25,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 ### Medium Priority (the marts now exist — these are unblocked)
 | Task | Notes |
 |---|---|
-| BI dashboard | Power BI / Metabase — build on `mart_city_daily` + the analytics marts (spec deliverable) |
+| BI dashboard | Power BI — **in progress (blocked)**. Model (10 marts tables, clean star, 11 measures, dark theme) + 7 KPI cards built in `smart_city_dashboard.pbip`; **data refresh currently fails with a cyclic-reference error**. Full build log + open issue in `docs/powerbi_dashboard.md`. |
 | Noise / energy APIs | Additional smart city data sources |
 
 ### Bonus (not in original scope)
@@ -47,7 +47,26 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 
 ---
 
-## Current Status (as of 2026-07-07)
+## Power BI Dashboard (started 2026-07-09 — BLOCKED)
+
+Live work on `C:\Users\Andrej\Documents\smart_city_dashboard.pbip` (Power BI **project**/PBIP,
+connected to PostgreSQL `marts`). **Full build log + the open blocker: `docs/powerbi_dashboard.md`.**
+
+- **Done:** converted the project to TMDL (model) + PBIR (report); loaded 10 of 12 marts tables
+  (missing `fct_traffic_hourly`, `fct_forecast_accuracy`); cleaned Power BI's auto-detected
+  relationships into a proper star (deleted 4 fact-to-fact `city_date_key` links, activated the 6
+  `fct_* → dim` links); added **11 measures** on `mart_city_daily`; applied the dark theme
+  (`smart_city_theme.json`); authored the **7 KPI-card row** on Page 1.
+- **⚠️ BLOCKED:** Home → Refresh fails with *"A cyclic reference was encountered during
+  evaluation."* Removing the one custom calc column (`AQI Category (daily)`, self-qualified ref —
+  a known trap) did **not** fix it; it now cites `mart_city_daily` + `mart_temperature_trends`.
+  Because refresh fails, model data is stale → the Wind Speed / Rain Probability cards show blank
+  (their source data exists in Postgres). **First thing to try:** disable Auto Date/Time (Options →
+  Data Load) + delete the auto `LocalDateTable_*` tables. More diagnostics in
+  `docs/powerbi_dashboard.md` §5.
+- **Not done yet:** Azure Map, AQI gauge, pollutant cards, chance-of-rain bars, Sankeys, extra pages.
+
+## Current Status (as of 2026-07-09)
 
 ### Infrastructure
 | Component | Status | Notes |
