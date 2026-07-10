@@ -1,4 +1,6 @@
-# dbt
+# dbt — keep in lockstep with airflow/Dockerfile so package-lock.yml stays readable on both
+# (dbt 1.9+ writes a `name:` key into the lock that older dbt can't parse → `dbt deps` fails).
+dbt-core==1.11.11
 dbt-postgres==1.8.2
 
 # Airflow providers (install alongside apache-airflow in Docker)

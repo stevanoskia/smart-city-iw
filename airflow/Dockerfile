@@ -19,7 +19,13 @@ RUN pip install --no-cache-dir \
 # Only dbt-core needs an explicit pin: the adapters declare an open
 # "dbt-core>=1.8.0a1", whose pre-release marker otherwise pulls dbt-core 2.0
 # ("dbt Fusion"), which dropped the postgres adapter ("InvalidConfig dbt1005").
+# Pin dbt-core to 1.11.11 to MATCH the host (venv313) that generates
+# package-lock.yml. dbt 1.9+ writes a `name:` key into each lock entry that the
+# old 1.8.2 container couldn't parse — so the `dbt deps` step failed with
+# "packages.yml is malformed". Keeping both on 1.11.11 means the committed lock
+# format the host writes is exactly what the container reads. dbt-postgres stays
+# 1.8.2 (the host runs that same adapter with core 1.11.11).
 RUN python -m venv /home/airflow/dbt_venv && \
     /home/airflow/dbt_venv/bin/pip install --no-cache-dir \
-        "dbt-core==1.8.2" \
+        "dbt-core==1.11.11" \
         "dbt-postgres==1.8.2"

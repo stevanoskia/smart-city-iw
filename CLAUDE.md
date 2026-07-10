@@ -209,10 +209,16 @@ dbt build --select staging intermediate --target staging
 build the marts per `docs/marts_build_guide.md`, add `dbt build --select marts` to the
 sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 
-> Host runs dbt 1.11 and reads `~/.dbt/profiles.yml` (localhost). Because a `profiles.yml`
-> also lives in the project dir (for Airflow/Docker, needs `SMART_CITY_PG_*` env vars), pass
-> `--profiles-dir C:/Users/Andrej/.dbt` when running on the host so it doesn't pick up the
-> container profile.
+> Host runs **dbt-core 1.11.11 + dbt-postgres 1.8.2** and reads `~/.dbt/profiles.yml` (localhost).
+> Because a `profiles.yml` also lives in the project dir (for Airflow/Docker, needs
+> `SMART_CITY_PG_*` env vars), pass `--profiles-dir C:/Users/Andrej/.dbt` when running on the host
+> so it doesn't pick up the container profile.
+>
+> **Keep the Airflow container's dbt on the same version.** `airflow/Dockerfile` pins the container's
+> dbt to `dbt-core==1.11.11` / `dbt-postgres==1.8.2` to match the host — because dbt 1.9+ writes a
+> `name:` key into each `package-lock.yml` entry that older dbt can't parse. An older container dbt
+> (1.8.2) made the DAG's `dbt deps` step fail with *"packages.yml is malformed"* (exit 2) on the
+> host-generated lock. Host + container on the same version keeps the committed lock readable on both.
 
 ---
 
