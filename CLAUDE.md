@@ -42,6 +42,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
   image can't bake it in). Historic rows in the incremental `intermediate` tables were rewritten
   **in place** (no history loss) by the one-off `macros/backfill_surrogate_keys.sql`
   (`dbt run-operation`); `dbt build` green (85 tests incl. all `relationships` FK tests).
+  **Migration how-to (for anyone still on hand-written `md5` keys): `docs/surrogate_key_migration.md`.**
 - ✅ **Marts layer (star schema + OBT + analytics)** — 12 models in `models/marts/`: dims (`dim_city` *derived, no seed*; `dim_hour`; `dim_date`), daily facts (`fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily`), `fct_traffic_hourly`, `fct_forecast_accuracy`, the derived OBT `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`). `dbt build --select marts` green (57 nodes incl. relationships/unique/accepted_values tests); wired as the `dbt_marts` DAG step.
 - ✅ **One Airbyte connection per API** — connectors are partition-routed (`ListPartitionRouter`) over a `locations` list, so a single connection (`openweather_all`, `tomtom_all`) ingests every city instead of one connection per city. Scales to many cities; Airflow + dbt unchanged.
 - ✅ Expanded city coverage to **10 weather cities** (added Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid) and **6 traffic cities** (added Belgrade, Brussels, Barcelona); the 4 Macedonian cities are weather-only (no TomTom coverage)
@@ -477,6 +478,7 @@ smart-city-iw/
 │           └── marts/           ← 12 models: dims + facts + OBT + analytics → tables
 ├── docs/
 │   ├── staging_as_raw_landing.md     ← airbyte_raw→staging collapse: ephemeral parsing, JSON→typed, migration
+│   ├── surrogate_key_migration.md    ← md5(...) → dbt_utils.generate_surrogate_key migration how-to
 │   ├── marts_build_guide.md          ← marts build walkthrough + reference SQL
 │   └── marts_implementation_plan.md  ← marts star-schema design / rationale
 ├── venv313/                     ← Python 3.13 venv (use this one)
