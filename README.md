@@ -84,9 +84,13 @@ python ingestion/scripts/setup_airbyte.py
 ### 5. Run dbt manually
 ```bash
 cd dbt/smart_city
+dbt deps                                           # install pinned dbt_utils (from package-lock.yml)
 dbt run   --select staging      --target staging   # ephemeral parse — no DB object
 dbt build --select intermediate --target staging   # hourly facts + forecast history + tests
+dbt build --select marts        --target staging   # star schema + OBT + analytics + tests
 ```
+> `dbt deps` is required once (and after any `packages.yml` change) — it installs `dbt_utils`,
+> which every model's surrogate keys (`dbt_utils.generate_surrogate_key`) depend on.
 
 ### 6. Start Airflow
 ```bash
@@ -107,7 +111,8 @@ docker compose up -d
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
 - **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
-- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test)
+- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs **dbt deps** (install pinned `dbt_utils`) → dbt staging → dbt intermediate → dbt marts (build + test)
+- **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
 - **Email alerts** — both DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API; add cities via config, no UI
@@ -131,8 +136,9 @@ docker compose up -d
 
 Each dedupes to **one row per clock hour** — it partitions on `(city, date_trunc('hour', observed_at))`
 and keeps the freshest reading in the hour (`order by observed_at desc, extracted_at desc`); the
-surrogate `city_hour_key` is hour-truncated too, so two syncs in the same clock hour collapse to a
-single row (idempotent across runs). Incidents key on `(city, incident_id, observed_at)` instead.
+surrogate `city_hour_key` (built with `dbt_utils.generate_surrogate_key`) is hour-truncated too, so
+two syncs in the same clock hour collapse to a single row (idempotent across runs). Incidents key on
+`(city, incident_id, observed_at)` instead.
 Each is **incremental** (`delete+insert`, 6h lookback) — required because Airbyte runs
 `full_refresh_append` (appends a fresh full snapshot every hour). Append-only, so they accumulate
 clean hourly history forever, independent of raw pruning. Carry `date_utc` + `hour_utc`.
@@ -146,8 +152,8 @@ Models the 5-day / 3-hour forecast (two timestamps: `forecast_at` = predicted ti
 
 ### Marts (PostgreSQL `marts` schema — tables)
 Star schema + derived OBT + analytics marts. Daily facts and the OBT share the grain
-`(city, date_utc)`; star keys are `city_key = md5(city)` and `date_key = YYYYMMDD::int`,
-with `relationships` tests enforcing FK→dimension integrity.
+`(city, date_utc)`; star keys are `city_key` = `dbt_utils.generate_surrogate_key(['city'])` and
+`date_key = YYYYMMDD::int`, with `relationships` tests enforcing FK→dimension integrity.
 | Model | Kind | Description |
 |---|---|---|
 | `dim_city` | dimension | One row per city, **derived** from data (no seed): city/country + coords + weather/traffic coverage flags |
@@ -219,6 +225,8 @@ smart-city-iw/
 │       ├── dag_smart_city_pipeline.py       <- hourly ELT DAG
 │       └── dag_smart_city_maintenance.py    <- daily raw-cleanup DAG
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
+│   ├── packages.yml     <- dbt package deps (dbt_utils); package-lock.yml pins 1.4.1
+│   ├── macros/          <- incl. backfill_surrogate_keys.sql (one-off key migration)
 │   └── models/
 │       ├── staging/      -> ephemeral (5 stg_* parsers, no DB object)
 │       ├── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)

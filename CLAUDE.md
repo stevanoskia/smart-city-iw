@@ -34,6 +34,14 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 | AI-generated city summaries | Claude API reads `mart_city_daily` → daily narrative summaries (marts now available) |
 
 ### Recently Completed
+- ✅ **Surrogate keys → `dbt_utils.generate_surrogate_key`** (2026-07-10) — all keys across the
+  intermediate + marts layers migrated from hand-written `md5(a || '|' || b)` to
+  `dbt_utils.generate_surrogate_key([...])` (NULL-safe, `-` separator, consistent). `dbt_utils`
+  added in `packages.yml`, pinned to **1.4.1** via `package-lock.yml`; the hourly DAG now runs a
+  **`dbt deps`** step first (dbt_packages/ is gitignored + the project is volume-mounted, so the
+  image can't bake it in). Historic rows in the incremental `intermediate` tables were rewritten
+  **in place** (no history loss) by the one-off `macros/backfill_surrogate_keys.sql`
+  (`dbt run-operation`); `dbt build` green (85 tests incl. all `relationships` FK tests).
 - ✅ **Marts layer (star schema + OBT + analytics)** — 12 models in `models/marts/`: dims (`dim_city` *derived, no seed*; `dim_hour`; `dim_date`), daily facts (`fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily`), `fct_traffic_hourly`, `fct_forecast_accuracy`, the derived OBT `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`). `dbt build --select marts` green (57 nodes incl. relationships/unique/accepted_values tests); wired as the `dbt_marts` DAG step.
 - ✅ **One Airbyte connection per API** — connectors are partition-routed (`ListPartitionRouter`) over a `locations` list, so a single connection (`openweather_all`, `tomtom_all`) ingests every city instead of one connection per city. Scales to many cities; Airflow + dbt unchanged.
 - ✅ Expanded city coverage to **10 weather cities** (added Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid) and **6 traffic cities** (added Belgrade, Brussels, Barcelona); the 4 Macedonian cities are weather-only (no TomTom coverage)
@@ -182,6 +190,10 @@ Always run from `dbt/smart_city/`. One target: `staging` → PostgreSQL (holds a
 ```bash
 cd dbt/smart_city
 
+# Install pinned dbt packages (dbt_utils 1.4.1 via package-lock.yml) — required once, and after
+# any packages.yml change. Every model's surrogate keys use dbt_utils.generate_surrogate_key.
+dbt deps
+
 # Compile staging (stg_* are ephemeral — no DB object; builds nothing physical, just validates)
 dbt run --select staging --target staging
 
@@ -234,16 +246,18 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 
 **Hourly facts grain & keys:** one row per clock hour. Each model dedupes its staging source on the
 stream's business key — `(city, date_trunc('hour', observed_at))` for weather/pollution/flow (key
-`city_hour_key = md5(city|hour)`), keeping the **freshest reading in the hour** (`order by observed_at
-desc, extracted_at desc`); `(city, incident_id, observed_at)` for incidents (key `city_incident_key =
-md5(city|incident_id|observed_at)`, with `where incident_id is not null`). Hour-truncating both the
-partition and the key means two syncs in one clock hour collapse to a single row (idempotent across
-runs). `materialized='incremental'`, `delete+insert`, 6h lookback; carries `date_utc` + `hour_utc`
-for time-of-day analysis. `unique`/`not_null` tests on the surrogate key.
+`city_hour_key`), keeping the **freshest reading in the hour** (`order by observed_at
+desc, extracted_at desc`); `(city, incident_id, observed_at)` for incidents (key `city_incident_key`,
+with `where incident_id is not null`). All surrogate keys are built with
+`dbt_utils.generate_surrogate_key([...])` over those columns (was hand-written `md5(a || '|' || b)`).
+Hour-truncating both the partition and the key means two syncs in one clock hour collapse to a single
+row (idempotent across runs). `materialized='incremental'`, `delete+insert`, 6h lookback; carries
+`date_utc` + `hour_utc` for time-of-day analysis. `unique`/`not_null` tests on the surrogate key.
 
 **Marts grain & keys:** daily facts + OBT one row per `(city, date_utc)`, surrogate
-`city_date_key = md5(city|date_utc)`; star keys `city_key = md5(city)`,
-`date_key = YYYYMMDD::int`; `relationships` tests enforce FK→dimension integrity.
+`city_date_key = generate_surrogate_key(['city','date_utc'])`; star keys
+`city_key = generate_surrogate_key(['city'])`, `date_key = YYYYMMDD::int`;
+`relationships` tests enforce FK→dimension integrity.
 `dim_city` is **derived** from data (weather facts + traffic presence), not a seed.
 `dim_date` is an **independent** calendar spine (fixed 2026-01-01 anchor → `current_date + 365d`,
 not bounded by the facts) so the dims resolve first; the fixed anchor still guarantees every
@@ -332,6 +346,9 @@ UI: `localhost:8080` — login: `admin / admin`
   means a long run skips ahead rather than piling up.
 - Triggers all Airbyte syncs in parallel (one task per connection in `connection_ids.yml` — now 2: `openweather_all`, `tomtom_all`)
 - Waits for all syncs to complete
+- Runs `dbt deps` — installs pinned `dbt_utils` (1.4.1) into the mounted project's `dbt_packages/`
+  before any model runs. Required: `dbt_packages/` is gitignored and the project is volume-mounted,
+  so the image can't bake it in (the mount would shadow it). Idempotent — a no-op when present.
 - Runs `dbt run --select staging --target staging`
 - Runs `dbt build --select intermediate --target staging` (hourly facts + forecast history)
 - Runs `dbt build --select marts --target staging` (star schema + OBT + analytics, build+test)
@@ -452,7 +469,8 @@ smart-city-iw/
 │   └── smart_city/              ← dbt project root (run dbt here)
 │       ├── dbt_project.yml
 │       ├── profiles.yml         ← Docker/Airflow profiles (container paths)
-│       ├── macros/
+│       ├── packages.yml         ← dbt package deps (dbt_utils); package-lock.yml pins 1.4.1
+│       ├── macros/              ← incl. backfill_surrogate_keys.sql (one-off key migration)
 │       └── models/
 │           ├── staging/         ← 5 stg_* JSON-parsing models → ephemeral (inline CTEs, no DB object)
 │           ├── intermediate/    ← hourly facts (4) + forecast history (1) → tables
