@@ -223,6 +223,14 @@ dbt project into the Airflow container (`../dbt:/opt/airflow/dbt`). So:
 Implemented in [`dag_smart_city_pipeline.py`](../airflow/dags/dag_smart_city_pipeline.py) as:
 `wait_group >> dbt_deps >> dbt_staging >> dbt_intermediate >> dbt_marts`.
 
+> ⚠️ **Match the container's dbt version to the host's.** `package-lock.yml` is written by whichever
+> dbt runs `dbt deps` on the host, and **dbt 1.9+ adds a `name:` key to each lock entry** that older
+> dbt rejects as *"packages.yml is malformed"* (exit 2). This bit the `dbt_deps` task the first time it
+> ran: the host was on dbt 1.11 while the Airflow container was still pinned to dbt 1.8.2, so the
+> container couldn't read the host-generated lock. Fixed by pinning the container to
+> `dbt-core==1.11.11` / `dbt-postgres==1.8.2` in [`airflow/Dockerfile`](../airflow/Dockerfile) to match
+> the host. Keep both in lockstep (host `requirements.txt` pins the same).
+
 ---
 
 ## Rollback

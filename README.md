@@ -56,7 +56,7 @@ git clone https://github.com/stevanoskia/smart-city-iw.git
 cd smart-city-iw
 py -3.13 -m venv venv313
 source venv313/Scripts/activate
-pip install dbt-postgres==1.8.2 psycopg2-binary \
+pip install dbt-core==1.11.11 dbt-postgres==1.8.2 psycopg2-binary \
             python-dotenv requests pyyaml
 cp .env.example .env   # fill in credentials
 ```
