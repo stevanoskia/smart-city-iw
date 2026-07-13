@@ -239,6 +239,9 @@ docs/deployment.md
 # Power BI dashboard build log — kept local
 docs/powerbi_dashboard.md
 
+# Power BI multi-page report plan — kept local
+docs/powerbi_dashboard_plan.md
+
 # Airbyte — auto-generated, environment-specific
 ingestion/config/connection_ids.yml
 
