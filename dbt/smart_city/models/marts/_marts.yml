@@ -196,3 +196,20 @@ models:
         tests: [not_null]
       - name: forecast_at
         tests: [not_null]
+
+  - name: mart_pollution_alerts
+    description: >
+      Air-quality alerts, one row per fired (city, observed_at, alert_type), built from
+      real hourly readings in fct_pollution_hourly (measured, not forecast — mirrors
+      mart_weather_alerts but for pollution).
+    columns:
+      - name: alert_key
+        tests: [not_null]
+      - name: alert_type
+        tests:
+          - accepted_values:
+              values: ['Poor air quality', 'High PM2.5', 'High PM10', 'High NO2']
+      - name: city
+        tests: [not_null]
+      - name: observed_at
+        tests: [not_null]
