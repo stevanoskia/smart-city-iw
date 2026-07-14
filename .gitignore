@@ -156,9 +156,13 @@ activemq-data/
 env/
 venv/
 venv313/
+dbt-env/
 ENV/
 env.bak/
 venv.bak/
+
+# Local secrets backups (never commit — see comment inside the file itself)
+airflow/scripts/airbyte_secrets.env
 
 # Spyder project settings
 .spyderproject
