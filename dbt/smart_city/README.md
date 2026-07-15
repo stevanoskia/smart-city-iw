@@ -14,7 +14,7 @@ DB object. That's why `staging` contains only Airbyte's raw tables and no `stg_*
 
 | Target | Database | Schemas | Models |
 |---|---|---|---|
-| `staging` | PostgreSQL (localhost:5432, db `smart_city`) | `staging` (raw JSON, Airbyte-owned), `intermediate`, `marts` | 5 ephemeral parsers + 5 intermediate tables + 12 marts tables |
+| `staging` | PostgreSQL (localhost:5432, db `smart_city`) | `staging` (raw JSON, Airbyte-owned), `intermediate`, `marts` | 5 ephemeral parsers + 5 intermediate tables + 15 marts tables |
 
 > The `staging` **schema** holds Airbyte's raw JSON tables. The dbt `staging` **models** (`stg_*`)
 > are ephemeral — they parse that JSON inline and create no DB object.
@@ -88,18 +88,21 @@ Plus the forecast building block:
   raw pruning and can be scored for accuracy later.
 
 ### Marts → `marts` schema (tables — star schema + OBT + analytics)
-Built from the intermediate facts. 12 models:
-- **Dimensions:** `dim_city` (**derived from data — no seed**), `dim_date` (independent calendar
+Built from the intermediate facts. 15 models:
+- **Dimensions (3):** `dim_city` (**derived from data — no seed**), `dim_date` (independent calendar
   spine), `dim_hour` (`hour_label` + `day_part`).
-- **Daily facts:** `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` — one row per
+- **Daily facts (3):** `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` — one row per
   `(city, date_utc)`, `city_date_key = generate_surrogate_key(['city', 'date_utc'])`.
-- **Extra facts:** `fct_traffic_hourly` (⚠️ **not** a diurnal curve — Airflow only runs while the
-  dev machine is on, so coverage is ~07:00–15:00 UTC with no evening/overnight data; peak-hour
-  analysis is not viable on it), `fct_forecast_accuracy` (past predictions scored against
-  observed `int_city_hourly_weather`).
-- **OBT + analytics:** `mart_city_daily` (LEFT-joins weather+pollution+traffic; weather-only cities
-  appear with NULL traffic), `mart_forecast_latest` (current forward-looking forecast),
-  `mart_temperature_trends`, `mart_weather_alerts`.
+- **Hourly facts (3):** `fct_weather_hourly`, `fct_pollution_hourly`, `fct_traffic_hourly` — one row
+  per `(city, hour)`. ⚠️ **Not diurnal curves**: Airflow only runs while the dev machine is on, so
+  coverage is ~07:00–15:00 UTC with no evening/overnight data — peak-hour / time-of-day analysis is
+  not viable on them. Their honest use is point-in-time "latest reading" semantics.
+- **Forecast fact (1):** `fct_forecast_accuracy` — past predictions scored against observed
+  `int_city_hourly_weather`.
+- **OBT + analytics (5):** `mart_city_daily` (LEFT-joins weather+pollution+traffic; weather-only
+  cities appear with NULL traffic), `mart_forecast_latest` (current forward-looking forecast),
+  `mart_temperature_trends`, `mart_weather_alerts` (forward-looking, from the forecast), and
+  `mart_pollution_alerts` (AQI/PM2.5/PM10/NO2 threshold breaches — **measured**, not forecast).
 
 Star keys `city_key = generate_surrogate_key(['city'])`, `date_key = YYYYMMDD::int`;
 `relationships` tests enforce FK→dimension integrity, plus `unique` / `not_null` /

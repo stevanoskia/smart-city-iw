@@ -26,7 +26,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 ### Medium Priority (the marts now exist — these are unblocked)
 | Task | Notes |
 |---|---|
-| BI dashboard | Power BI — **in progress (blocked)**. Model (10 marts tables, clean star, 11 measures, dark theme) + 7 KPI cards built in `smart_city_dashboard.pbip`; **data refresh currently fails with a cyclic-reference error**. Full build log + open issue in `docs/powerbi_dashboard.md`. |
+| BI dashboard | Power BI — **in active build**. Cyclic-refresh blocker **fixed** (Auto Date/Time); model layer complete (12 tables, clean star, 27 measures, 2 calc columns); Pages 1 (Executive Overview) + 2 (Weather & Forecast) built. Pages 3–5 + Sankeys + Azure Maps remain. Approach + status in the Power BI section below; page-by-page plan in `docs/powerbi_dashboard_plan.md`. |
 | Noise / energy APIs | Additional smart city data sources |
 
 ### Bonus (not in original scope)
@@ -47,7 +47,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
   re-running converges on the same value) and nothing calls it automatically, so it's kept as the
   repair tool if keys ever drift from the models. Its migration *guide* was retired — the
   migration is done and the macro's own header documents it (recoverable from `9b718a4`).
-- ✅ **Marts layer (star schema + OBT + analytics)** — 12 models in `models/marts/`: dims (`dim_city` *derived, no seed*; `dim_hour`; `dim_date`), daily facts (`fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily`), `fct_traffic_hourly`, `fct_forecast_accuracy`, the derived OBT `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`). `dbt build --select marts` green (57 nodes incl. relationships/unique/accepted_values tests); wired as the `dbt_marts` DAG step.
+- ✅ **Marts layer (star schema + OBT + analytics)** — **15** models in `models/marts/`: dims (`dim_city` *derived, no seed*; `dim_hour`; `dim_date`), daily facts (`fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily`), hourly facts (`fct_weather_hourly`, `fct_pollution_hourly`, `fct_traffic_hourly`), `fct_forecast_accuracy`, the derived OBT `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`, `mart_pollution_alerts`). Wired as the `dbt_marts` DAG step.
 - ✅ **One Airbyte connection per API** — connectors are partition-routed (`ListPartitionRouter`) over a `locations` list, so a single connection (`openweather_all`, `tomtom_all`) ingests every city instead of one connection per city. Scales to many cities; Airflow + dbt unchanged.
 - ✅ Expanded city coverage to **10 weather cities** (added Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid) and **6 traffic cities** (added Belgrade, Brussels, Barcelona); the 4 Macedonian cities are weather-only (no TomTom coverage)
 - ✅ **Forecast** intermediate layer — incremental issue history (`int_city_weather_forecast`); the forward-looking *latest* (`mart_forecast_latest`) + prediction-vs-actual *accuracy* (`fct_forecast_accuracy`) models now live in the marts layer
@@ -60,24 +60,65 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 
 ---
 
-## Power BI Dashboard (started 2026-07-09 — BLOCKED)
+## Power BI Dashboard (in active build — cyclic blocker FIXED 2026-07-13)
 
 Live work on `C:\Users\Andrej\Documents\smart_city_dashboard.pbip` (Power BI **project**/PBIP,
-connected to PostgreSQL `marts`). **Full build log + the open blocker: `docs/powerbi_dashboard.md`.**
+connected to PostgreSQL `marts`, Import mode). It lives **outside** this git repo.
+**Multi-page report plan: `docs/powerbi_dashboard_plan.md`** (gitignored). Build log:
+`docs/powerbi_dashboard.md` (gitignored). Requirements/spec + example images:
+`C:\Users\Andrej\Documents\smart-city-powerbi-skill\SKILL.md` and
+`C:\Users\Andrej\Desktop\smart_city_examples\image*.png`.
 
-- **Done:** converted the project to TMDL (model) + PBIR (report); loaded 10 of 12 marts tables
-  (missing `fct_traffic_hourly`, `fct_forecast_accuracy`); cleaned Power BI's auto-detected
-  relationships into a proper star (deleted 4 fact-to-fact `city_date_key` links, activated the 6
-  `fct_* → dim` links); added **11 measures** on `mart_city_daily`; applied the dark theme
-  (`smart_city_theme.json`); authored the **7 KPI-card row** on Page 1.
-- **⚠️ BLOCKED:** Home → Refresh fails with *"A cyclic reference was encountered during
-  evaluation."* Removing the one custom calc column (`AQI Category (daily)`, self-qualified ref —
-  a known trap) did **not** fix it; it now cites `mart_city_daily` + `mart_temperature_trends`.
-  Because refresh fails, model data is stale → the Wind Speed / Rain Probability cards show blank
-  (their source data exists in Postgres). **First thing to try:** disable Auto Date/Time (Options →
-  Data Load) + delete the auto `LocalDateTable_*` tables. More diagnostics in
-  `docs/powerbi_dashboard.md` §5.
-- **Not done yet:** Azure Map, AQI gauge, pollutant cards, chance-of-rain bars, Sankeys, extra pages.
+### How Claude edits Power BI (two surfaces — keep PBIP, not PBIX)
+- **PBIP is required** for the file-authoring half: the project is text — **TMDL** (model) + **PBIR**
+  (report JSON) — so Claude can read/edit/diff it. A binary `.pbix` cannot be edited this way (only
+  the live-model half below would work). Convert via *File → Save as → Power BI project* if ever on
+  `.pbix`.
+- **Model edits — LIVE, no reopen.** While PBI Desktop is open it hosts an Analysis Services engine
+  (`msmdsrv`) on a local port. Claude connects over XMLA using the GAC-installed **ADOMD.NET + TOM**
+  assemblies (no install needed) to read (DAX/DMV, e.g. `$SYSTEM.DISCOVER_CALC_DEPENDENCY`) and write
+  measures / calc columns (TMSL/TOM). Helper scripts (session scratchpad): `pbi_query.ps1` (auto-finds
+  port+catalog, runs DAX/DMV), `pbi_add_measures*.ps1`, `pbi_add_calccol.ps1`, `pbi_list_rels.ps1`.
+  Port changes each launch — always auto-discover via `Get-Process msmdsrv`.
+  ⚠️ **Calc columns added via TOM stay empty until the user does an in-Desktop Home → Refresh**
+  (external `refresh type=calculate` does not materialize them); measures work immediately.
+- **Report/canvas edits — files, PBI CLOSED.** Visuals/pages are authored by writing PBIR
+  `visual.json` / `page.json` files (register pages in `pages/pages.json`), then the user reopens.
+  PBI **owns the files while open**, so this half and the user's UI edits are mutually exclusive in
+  time — alternate (save+close → Claude edits → reopen). Azure Maps, gauges, and Sankey custom
+  visuals are added via the **UI** (not hand-authored).
+
+### Status
+- ✅ **Cyclic-reference refresh blocker FIXED** — root cause was **Auto Date/Time** (it had generated
+  a `DateTableTemplate_*` + ~13 hidden `LocalDateTable_*` tables whose date-variation relationships
+  formed a cycle). Fix: Options → Current File → Data Load → untick **Auto date/time**. All KPIs green.
+- ✅ **Model layer complete** — 12 marts tables loaded (incl. `fct_traffic_hourly`,
+  `fct_forecast_accuracy`); clean star (no junk fact-to-fact links); **27 measures** + 2 calc columns
+  (`AQI Category (daily)`, `Congestion Band` — both **bare-ref**, never self-qualified) added live.
+- ✅ **Page 1 (Executive Overview)** — 7 KPI cards, temp line, city slicer, 6 pollutant cards.
+- ✅ **Page 2 (Weather & Forecast)** — 8 condition cards, temp trend + 7-day-avg line, 7-day forecast
+  columns, chance-of-rain bars, temp-anomaly-by-city, city slicer.
+- Dark theme (`smart_city_theme.json`) applied.
+
+### Layout & readability standard (v1 pages came out cramped — fix 2026-07-13)
+Full spec in `docs/powerbi_dashboard_plan.md`. Essentials: **≤ 6 KPI cards + ≤ 5 other visuals per
+page** (split the page if more). 1280×720, **24 px outer margin**, **16 px gutter**, snap to grid.
+KPI cards **190×96** with a **short custom `title`** + **hidden category label** (long measure names
+like `Current PM2.5 (µg/m³)` clip otherwise — keep units in the measure, short name on the card).
+Charts **≥ 460×280**. **Line charts: never a Legend + multiple value measures together** (Power BI
+error *"too many columns in the Legend bucket"* — that broke the v1 Page-2 trend line; fix = two
+measures `Avg Temp (°C)` + `Temp 7d Avg (°C)` with **no** legend). One city slicer per page (sync later).
+
+### To be implemented (per `docs/powerbi_dashboard_plan.md`)
+- **Page 3 Air Quality** — migrate the 6 pollutant cards here; AQI gauge (UI), AQI-by-city bar, AQI
+  category distribution donut, **AQI Heatmap Calendar** matrix, pollutant trend.
+- **Page 4 Traffic & Congestion** — congestion/speed/incident cards, peak-hour by `day_part`, jam map (UI).
+- **Page 5 City Livability** — livability ranking, comfort index/trend, component breakdown; add the
+  `Best/Worst City` text measures.
+- **Page 1 finish** — Azure Map (UI) + AQI gauge (UI) in the reserved center gap; Active Alerts.
+- **Sankeys** (custom visual, UI): City→AQI Category, City→Congestion Label, Day Part→Congestion Band.
+- **Deferred**: weather-type donut (needs a row-count measure, add live), cross-page **slicer sync**
+  (`View → Sync slicers`), styling/label polish.
 
 ## Current Status (as of 2026-07-09)
 
@@ -118,7 +159,7 @@ connected to PostgreSQL `marts`). **Full build log + the open blocker: `docs/pow
 | Intermediate (forecast) | PostgreSQL | `int_city_weather_forecast` | ✅ Built (incremental issue history) |
 | Marts (dims) | PostgreSQL | `dim_city` (derived), `dim_hour`, `dim_date` | ✅ Built |
 | Marts (daily facts) | PostgreSQL | `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` | ✅ Built |
-| Marts (extra facts) | PostgreSQL | `fct_traffic_hourly`, `fct_forecast_accuracy` | ✅ Built |
+| Marts (extra facts) | PostgreSQL | `fct_traffic_hourly`, `fct_weather_hourly`, `fct_pollution_hourly`, `fct_forecast_accuracy` | ✅ Built |
 | Marts (OBT + analytics) | PostgreSQL | `mart_city_daily`, `mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts` | ✅ Built |
 
 ### Orchestration
@@ -160,7 +201,7 @@ connected to PostgreSQL `marts`). **Full build log + the open blocker: `docs/pow
   - **Forecast issue history** (`int_city_weather_forecast`) — incremental, every prediction as
     issued; the building block the forecast marts consume.
 - **`marts`** — ✅ built. Dimensions (`dim_city` *derived, no seed* / `dim_date` / `dim_hour`),
-  daily facts (`fct_*_daily`), `fct_traffic_hourly`, `fct_forecast_accuracy`, the derived OBT
+  daily facts (`fct_*_daily`), hourly facts (`fct_traffic_hourly`, `fct_weather_hourly`, `fct_pollution_hourly`), `fct_forecast_accuracy`, the derived OBT
   `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`,
   `mart_weather_alerts`). Star keys with `relationships` tests enforcing FK→dimension integrity.
 
@@ -253,7 +294,7 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 | _(ephemeral, no DB object)_ | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (ephemeral CTEs — compile inline) |
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
 | `intermediate` (forecast) | int_city_weather_forecast | dbt (incremental issue history) |
-| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts | dbt (tables) |
+| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts | dbt (tables) |
 
 **Hourly facts grain & keys:** one row per clock hour. Each model dedupes its staging source on the
 stream's business key — `(city, date_trunc('hour', observed_at))` for weather/pollution/flow (key
@@ -514,7 +555,7 @@ smart-city-iw/
 │       └── models/
 │           ├── staging/         ← 5 stg_* JSON-parsing models → ephemeral (inline CTEs, no DB object)
 │           ├── intermediate/    ← hourly facts (4) + forecast history (1) → tables
-│           └── marts/           ← 12 models: dims + facts + OBT + analytics → tables
+│           └── marts/           ← 15 models: dims + facts (incl. hourly weather/pollution) + OBT + analytics → tables
 ├── docs/                        ← ⚠️ LOCAL-ONLY, gitignored. The repo ships only docs/.gitkeep —
 │   │                              a fresh clone has NONE of the files below. The READMEs (root,
 │   │                              ingestion/, dbt/smart_city/) are the shipped docs and must stay

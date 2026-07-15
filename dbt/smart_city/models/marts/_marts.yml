@@ -99,6 +99,41 @@ models:
         tests:
           - relationships: { to: ref('dim_hour'), field: hour_utc }
 
+  - name: fct_weather_hourly
+    description: >
+      Hourly weather fact (city × date × hour) for time-of-day and latest-reading analysis.
+      Full hourly history from int_city_hourly_weather; fct_weather_daily rolls it up to daily.
+    columns:
+      - name: city_hour_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+      - name: hour_utc
+        tests:
+          - relationships: { to: ref('dim_hour'), field: hour_utc }
+
+  - name: fct_pollution_hourly
+    description: >
+      Hourly air-quality fact (city × date × hour) for time-of-day and latest-reading analysis
+      (e.g. Latest PM2.5). Full hourly history from int_city_hourly_pollution; fct_pollution_daily
+      rolls it up to daily.
+    columns:
+      - name: city_hour_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+      - name: hour_utc
+        tests:
+          - relationships: { to: ref('dim_hour'), field: hour_utc }
+
   - name: fct_forecast_accuracy
     description: Prediction-vs-actual scoring, one row per matured forecast issuance.
     columns:
@@ -163,4 +198,21 @@ models:
       - name: city
         tests: [not_null]
       - name: forecast_at
+        tests: [not_null]
+
+  - name: mart_pollution_alerts
+    description: >
+      Air-quality alerts, one row per fired (city, observed_at, alert_type), built from
+      real hourly readings in fct_pollution_hourly (measured, not forecast — mirrors
+      mart_weather_alerts but for pollution).
+    columns:
+      - name: alert_key
+        tests: [not_null]
+      - name: alert_type
+        tests:
+          - accepted_values:
+              values: ['Poor air quality', 'High PM2.5', 'High PM10', 'High NO2']
+      - name: city
+        tests: [not_null]
+      - name: observed_at
         tests: [not_null]

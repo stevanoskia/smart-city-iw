@@ -110,7 +110,7 @@ docker compose up -d
 - **5 dbt staging models** (ephemeral — inline CTEs, no DB object), one per Airbyte source stream
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
-- **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
+- **15 dbt marts models** — star schema (3 dims + 7 facts), the `mart_city_daily` OBT, and 4 analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
 - **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs **dbt deps** (install pinned `dbt_utils`) → dbt staging → dbt intermediate → dbt marts (build + test)
 - **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
@@ -163,12 +163,20 @@ Star schema + derived OBT + analytics marts. Daily facts and the OBT share the g
 | `fct_weather_daily` | fact | Daily weather rollup per city |
 | `fct_pollution_daily` | fact | Daily AQI + pollutant rollup per city |
 | `fct_traffic_daily` | fact | Daily flow + incident rollup per city |
-| `fct_traffic_hourly` | fact | Per-hour flow + incidents per city. ⚠️ **Not a diurnal curve** — Airflow only runs while the dev machine is on, so coverage is roughly 07:00–15:00 UTC with **no evening or overnight data**. Peak-hour / time-of-day analysis is not viable on it (an empty Night/Evening reads as a finding when it's really a sampling artifact) |
+| `fct_weather_hourly` | fact | Hourly weather per city — the real point-in-time reading (also carries `visibility_m`, `wind_gust_ms`, `weather_description`) |
+| `fct_pollution_hourly` | fact | Hourly AQI + pollutant concentrations per city |
+| `fct_traffic_hourly` | fact | Per-hour flow + incidents per city |
 | `fct_forecast_accuracy` | fact | Prediction-vs-actual scoring from the forecast issue history |
 | `mart_city_daily` | OBT | One wide row per `(city, date_utc)` — weather + pollution + traffic LEFT-joined (weather-only cities get NULL traffic) |
 | `mart_forecast_latest` | analytics | Latest issued forecast per city / future slot |
 | `mart_temperature_trends` | analytics | Temperature trend + anomaly detection |
-| `mart_weather_alerts` | analytics | Severe-weather flags |
+| `mart_weather_alerts` | analytics | Severe-weather flags (forward-looking, from the forecast) |
+| `mart_pollution_alerts` | analytics | Air-quality threshold breaches per `(city, observed_at, alert_type)` — **measured, not forecast** (AQI 4–5 = OpenWeather's Poor/Very Poor; PM2.5/PM10/NO2 on WHO guideline ballparks) |
+
+> ⚠️ **The hourly facts are not diurnal curves.** Airflow only runs while the dev machine is on, so
+> they cover roughly 07:00–15:00 UTC with **no evening or overnight data**. Peak-hour / time-of-day
+> analysis is not viable on them — an empty Night/Evening reads as a finding when it's really a
+> sampling artifact. Their honest use is point-in-time "latest reading" semantics.
 
 ### Reporting — Power BI
 Business reporting is done in **Power BI** (`smart_city_dashboard.pbip` — a PBIP *project*, so the
@@ -255,7 +263,7 @@ smart-city-iw/
 │   └── models/
 │       ├── staging/      -> ephemeral (5 stg_* parsers, no DB object)
 │       ├── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
-│       └── marts/         -> PostgreSQL (12 tables: dims + facts + OBT + analytics)
+│       └── marts/         -> PostgreSQL (15 tables: dims + facts + OBT + analytics)
 ├── venv313/             <- Python 3.13 venv (always use this)
 └── .env                 <- secrets (not committed)
 ```
