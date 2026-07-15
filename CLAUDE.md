@@ -26,7 +26,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 ### Medium Priority (the marts now exist — these are unblocked)
 | Task | Notes |
 |---|---|
-| BI dashboard | Power BI — **in active build**. Cyclic-refresh blocker **fixed** (Auto Date/Time); model layer complete (12 tables, clean star, 27 measures, 2 calc columns); Pages 1 (Executive Overview) + 2 (Weather & Forecast) built. Pages 3–5 + Sankeys + Azure Maps remain. Approach + status in the Power BI section below; page-by-page plan in `docs/powerbi_dashboard_plan.md`. |
+| BI dashboard | Power BI — **in active build**. Cyclic-refresh blocker **fixed** (Auto Date/Time); model layer complete (14 tables, clean star, 42 measures, 2 calc columns); Pages 1 + 2 (Weather & Forecast) + 3 (Air Quality) built. Pages 4–5 + Sankeys + Azure Maps remain; Page 1 still needs its v2 re-layout. Approach + status in the Power BI section below; page-by-page plan in `docs/powerbi_dashboard_plan.md`. |
 | Noise / energy APIs | Additional smart city data sources |
 
 ### Bonus (not in original scope)
@@ -89,16 +89,72 @@ connected to PostgreSQL `marts`, Import mode). It lives **outside** this git rep
   visuals are added via the **UI** (not hand-authored).
 
 ### Status
-- ✅ **Cyclic-reference refresh blocker FIXED** — root cause was **Auto Date/Time** (it had generated
-  a `DateTableTemplate_*` + ~13 hidden `LocalDateTable_*` tables whose date-variation relationships
-  formed a cycle). Fix: Options → Current File → Data Load → untick **Auto date/time**. All KPIs green.
-- ✅ **Model layer complete** — 12 marts tables loaded (incl. `fct_traffic_hourly`,
-  `fct_forecast_accuracy`); clean star (no junk fact-to-fact links); **27 measures** + 2 calc columns
+### ⚠️ Two Power BI settings that BOTH cause "A cyclic reference was encountered"
+Both live in **File → Options → Current File → Data Load**, are **per-file** (not in git — they do
+**not** survive rebuilding the PBIP from scratch), and produce the *same* misleading error. If a
+refresh ever fails with "cyclic reference", check these two **first** — the model is probably fine.
+
+| Setting | Must be | Why |
+|---|---|---|
+| **Auto date/time** | ☐ **off** | Generated a `DateTableTemplate_*` + ~13 hidden `LocalDateTable_*` tables whose date-variation relationships formed a cycle. Fixed 2026-07-13. Use `dim_date` instead. |
+| **Autodetect new relationships after data is loaded** | ☐ **off** | Fixed 2026-07-14. See below. |
+| *(also untick)* **Import relationships from data sources on first load** | ☐ off | Same mechanism, fires on a fresh open. Relationships are defined explicitly in `relationships.tmdl`, so nothing is lost. |
+
+**The autodetect trap (2026-07-14).** All three hourly facts share a **`city_hour_key`** column (plus
+`city`, `date_utc`, `observed_at`). After *every* refresh, autodetect matched those columns and wired
+the fact tables **to each other**, closing a loop against `dim_city`/`dim_date` → genuine cycle →
+**every** query blocked. It appeared the moment `fct_weather_hourly` + `fct_pollution_hourly` were
+added (3rd + 4th `city_hour_key`), blamed a **different, arbitrary table each refresh** (scan order
+varies), and never showed up over **XMLA** (external refresh doesn't run Desktop's autodetect) — which
+is what proved the model itself was sound. The refresh failed *at* the autodetect step and rolled
+back, so the junk relationships never persisted; the star always read a clean 24. This is also why
+the star previously needed cleaning of "junk fact-to-fact links" — same setting, cleaned by hand
+instead of switched off. **Verified fixed:** refresh now pulls new rows (weather_hourly 377→397,
+pollution_hourly 938→957) and the star stays at **24 relationships, all fact→dim**.
+
+- ✅ **Cyclic-reference refresh blocker FIXED** — root cause was **Auto Date/Time** (see table above).
+  All KPIs green.
+- ✅ **Refresh cyclic-reference FIXED (2026-07-14)** — root cause was **Autodetect new relationships**
+  (see table above). Refresh green; star holds at 24 fact→dim relationships.
+- ✅ **Filters pane readability FIXED (2026-07-14)** — the theme set a dark page background but defined
+  no `outspacePane`/`filterCard` styles, so the Filters pane kept Power BI's default **light-theme
+  black text** → black-on-black, unreadable. Added both (incl. the `Applied`/`Available` card states)
+  to `smart_city_theme.json`. ⚠️ **Editing the theme file does nothing on its own** — it must be
+  re-imported via **View → Themes → Browse for themes**; Power BI bakes a copy into
+  `Report/StaticResources/RegisteredResources/`.
+- ✅ **Model layer complete** — 14 marts tables loaded (incl. `fct_traffic_hourly`,
+  `fct_forecast_accuracy`, and the hourly `fct_weather_hourly` + `fct_pollution_hourly` added
+  2026-07-14); clean star (no junk fact-to-fact links); **42 measures** + 2 calc columns
   (`AQI Category (daily)`, `Congestion Band` — both **bare-ref**, never self-qualified) added live.
-- ✅ **Page 1 (Executive Overview)** — 7 KPI cards, temp line, city slicer, 6 pollutant cards.
-- ✅ **Page 2 (Weather & Forecast)** — 8 condition cards, temp trend + 7-day-avg line, 7-day forecast
+  All measures live on `mart_city_daily` (single measure home).
+- ⚠️ **Page 1** — built but still on the **v1 cramped grid** (cards 168×100 from x=15, slicer
+  overruns the 1256 content edge, no card titles, page still literally named "Page 1"). Needs the
+  v2 re-layout + rename to "Executive Overview". Pages 2/3 already meet the v2 standard.
+- ✅ **Page 2 (Weather & Forecast)** — 6 condition cards, temp trend + 7-day-avg line, 7-day forecast
   columns, chance-of-rain bars, temp-anomaly-by-city, city slicer.
+- ✅ **Page 3 (Air Quality)** — AQI gauge, 6 pollutant cards, Avg-AQI-by-city bar, AQI-category
+  donut, AQI heatmap-calendar matrix (mirrors example image (8)), city slicer.
 - Dark theme (`smart_city_theme.json`) applied.
+
+### ⚠️ Hourly coverage constraint — no diurnal / peak-hour analysis (found 2026-07-14)
+The hourly facts only cover **06:00–15:00 UTC** — Airflow runs only while the dev machine is on, so
+there is **no evening or overnight data at all**:
+
+| Table | Distinct hours | Window |
+|---|---|---|
+| `fct_weather_hourly` | 9 / 24 | 06h–14h |
+| `fct_pollution_hourly` | 10 / 24 | 06h–15h |
+| `fct_traffic_hourly` | 9 / 24 | 06h–14h |
+
+**Consequence:** peak-hour / time-of-day analysis is **not viable** and must not be shipped — a
+`day_part` chart would render Morning+Afternoon only, with Night/Evening empty, which reads as a
+finding ("no traffic at night!") when it is really a sampling artifact. This **cancels** the planned
+Page-4 peak-hour column and **Sankey #3** (`Day Part → Congestion Band`). It predates the new marts
+(`fct_traffic_hourly` always had it). Revisit only if the pipeline ever runs 24/7 (cloud/always-on host).
+
+**The hourly facts' honest use is point-in-time "latest reading" semantics**, not diurnal curves —
+i.e. the real newest observation (the hero card in example images (2)/(4)), replacing "current" KPIs
+that are really daily averages of `mart_city_daily`.
 
 ### Layout & readability standard (v1 pages came out cramped — fix 2026-07-13)
 Full spec in `docs/powerbi_dashboard_plan.md`. Essentials: **≤ 6 KPI cards + ≤ 5 other visuals per
@@ -110,15 +166,32 @@ error *"too many columns in the Legend bucket"* — that broke the v1 Page-2 tre
 measures `Avg Temp (°C)` + `Temp 7d Avg (°C)` with **no** legend). One city slicer per page (sync later).
 
 ### To be implemented (per `docs/powerbi_dashboard_plan.md`)
-- **Page 3 Air Quality** — migrate the 6 pollutant cards here; AQI gauge (UI), AQI-by-city bar, AQI
-  category distribution donut, **AQI Heatmap Calendar** matrix, pollutant trend.
-- **Page 4 Traffic & Congestion** — congestion/speed/incident cards, peak-hour by `day_part`, jam map (UI).
+- **Page 1 rebuild** — rename "Page 1" → "Executive Overview"; re-lay-out to the v2 standard; swap
+  the KPI cards onto the new point-in-time `Latest *` measures; Azure Map (UI) in the reserved
+  center gap; Active Alerts.
+- **Page 4 Traffic & Congestion** — congestion/speed/incident cards, congestion-by-city bar,
+  speed-vs-free-flow, congestion-over-time **by date** (⚠️ *not* peak-hour by `day_part` — see the
+  hourly coverage constraint above), jam map (UI).
 - **Page 5 City Livability** — livability ranking, comfort index/trend, component breakdown; add the
-  `Best/Worst City` text measures.
-- **Page 1 finish** — Azure Map (UI) + AQI gauge (UI) in the reserved center gap; Active Alerts.
-- **Sankeys** (custom visual, UI): City→AQI Category, City→Congestion Label, Day Part→Congestion Band.
+  `Best/Worst City` text measures. No data constraints on this page.
+- **Sankeys** (custom visual, UI): City→AQI Category, City→Congestion Label.
+  (~~Day Part→Congestion Band~~ — cancelled, no evening/overnight data.)
 - **Deferred**: weather-type donut (needs a row-count measure, add live), cross-page **slicer sync**
   (`View → Sync slicers`), styling/label polish.
+
+### Example images — what our data can and cannot mirror
+Images at `C:\Users\Andrej\Desktop\smart_city_examples\image*.png` are a **visual vocabulary only** —
+the numbers/domains are not ours. Reproducible: dark card grid + hero "last updated" card (2)(4);
+pollutant dot-cards + AQI gauge (3)(4)(5); AQI-by-city bar + category donut (5); heatmap calendar (8);
+7-day forecast tiles + chance-of-rain bars (1)(3)(4); map bubbles (5)(7)(8) via Azure Maps.
+**Not reproducible — do not chase:** sunrise/sunset (1)(2)(4) and UV index (2)(4) are *not ingested*;
+the 0–500 AQI gauge (3)(4)(5) must stay **1–5** (OpenWeather scale); image (6)'s per-street jam
+segments need road geometry we don't have (we hold 6 city *points*, not segments); image (7)'s
+pedestrian/car counters and image (0)'s energy/parking are different IoT domains entirely.
+**Now newly available** via `fct_weather_hourly`: `visibility_m`, `wind_gust_ms`, `weather_description`
+— so the "Visibility" card from (2)/(4) *is* possible (earlier docs said it wasn't). Caveat:
+`visibility_m` reads a flat 10000 (OpenWeather's clear-sky cap) in every row sampled — check its
+variance before spending a card on it.
 
 ## Current Status (as of 2026-07-09)
 
