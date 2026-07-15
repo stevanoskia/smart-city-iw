@@ -16,7 +16,8 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 > + analytics marts, all green (`dbt build --select marts`, relationships/unique/
 > accepted_values tests pass) and orchestrated as the `dbt_marts` step in the hourly DAG.
 > `dim_city` is **derived from data — no seed**. Design/rationale live in
-> `docs/marts_implementation_plan.md`; the build walkthrough in `docs/marts_build_guide.md`.
+> `docs/marts_implementation_plan.md`; the build walkthrough in `docs/marts_build_guide.md`
+> — both **local-only (gitignored)**, absent from a fresh clone.
 
 ---
 
@@ -40,9 +41,12 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
   added in `packages.yml`, pinned to **1.4.1** via `package-lock.yml`; the hourly DAG now runs a
   **`dbt deps`** step first (dbt_packages/ is gitignored + the project is volume-mounted, so the
   image can't bake it in). Historic rows in the incremental `intermediate` tables were rewritten
-  **in place** (no history loss) by the one-off `macros/backfill_surrogate_keys.sql`
-  (`dbt run-operation`); `dbt build` green (85 tests incl. all `relationships` FK tests).
-  **Migration how-to (for anyone still on hand-written `md5` keys): `docs/surrogate_key_migration.md`.**
+  **in place** (no history loss) by `macros/backfill_surrogate_keys.sql`, run via
+  `dbt run-operation`; `dbt build` green (85 tests incl. all `relationships` FK tests). That macro
+  **stays** — it's **idempotent** (each key is a pure function of columns already in the row, so
+  re-running converges on the same value) and nothing calls it automatically, so it's kept as the
+  repair tool if keys ever drift from the models. Its migration *guide* was retired — the
+  migration is done and the macro's own header documents it (recoverable from `9b718a4`).
 - ✅ **Marts layer (star schema + OBT + analytics)** — 12 models in `models/marts/`: dims (`dim_city` *derived, no seed*; `dim_hour`; `dim_date`), daily facts (`fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily`), `fct_traffic_hourly`, `fct_forecast_accuracy`, the derived OBT `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`). `dbt build --select marts` green (57 nodes incl. relationships/unique/accepted_values tests); wired as the `dbt_marts` DAG step.
 - ✅ **One Airbyte connection per API** — connectors are partition-routed (`ListPartitionRouter`) over a `locations` list, so a single connection (`openweather_all`, `tomtom_all`) ingests every city instead of one connection per city. Scales to many cities; Airflow + dbt unchanged.
 - ✅ Expanded city coverage to **10 weather cities** (added Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid) and **6 traffic cities** (added Belgrade, Brussels, Barcelona); the 4 Macedonian cities are weather-only (no TomTom coverage)
@@ -505,16 +509,23 @@ smart-city-iw/
 │       ├── dbt_project.yml
 │       ├── profiles.yml         ← Docker/Airflow profiles (container paths)
 │       ├── packages.yml         ← dbt package deps (dbt_utils); package-lock.yml pins 1.4.1
-│       ├── macros/              ← incl. backfill_surrogate_keys.sql (one-off key migration)
+│       ├── macros/              ← generate_schema_name.sql; backfill_surrogate_keys.sql
+│       │                          (idempotent key repair, run manually — never auto-runs)
 │       └── models/
 │           ├── staging/         ← 5 stg_* JSON-parsing models → ephemeral (inline CTEs, no DB object)
 │           ├── intermediate/    ← hourly facts (4) + forecast history (1) → tables
 │           └── marts/           ← 12 models: dims + facts + OBT + analytics → tables
-├── docs/
-│   ├── staging_as_raw_landing.md     ← airbyte_raw→staging collapse: ephemeral parsing, JSON→typed, migration
-│   ├── surrogate_key_migration.md    ← md5(...) → dbt_utils.generate_surrogate_key migration how-to
+├── docs/                        ← ⚠️ LOCAL-ONLY, gitignored. The repo ships only docs/.gitkeep —
+│   │                              a fresh clone has NONE of the files below. The READMEs (root,
+│   │                              ingestion/, dbt/smart_city/) are the shipped docs and must stay
+│   │                              self-contained: never link a README to anything in here.
+│   ├── staging_as_raw_landing.md     ← airbyte_raw→staging collapse: ephemeral parsing, JSON→typed
 │   ├── marts_build_guide.md          ← marts build walkthrough + reference SQL
-│   └── marts_implementation_plan.md  ← marts star-schema design / rationale
+│   ├── marts_implementation_plan.md  ← marts star-schema design / rationale
+│   ├── powerbi_dashboard.md          ← Power BI build log
+│   ├── powerbi_dashboard_plan.md     ← Power BI page-by-page plan
+│   ├── deployment.md                 ← deployment notes
+│   └── branch-reconciliation.md      ← branch reconciliation notes
 ├── venv313/                     ← Python 3.13 venv (use this one)
 ├── venv/                        ← Python 3.8 venv (legacy, do not use)
 ├── requirements.txt

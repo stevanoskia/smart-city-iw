@@ -5,9 +5,10 @@ dbt project for the Smart City Analytics Pipeline. Parses raw Airbyte JSON into 
 issue history, and models it into a **marts** star schema (dims + facts + OBT + analytics). All in
 one PostgreSQL database, one target (`staging`).
 
-Pipeline: **Airbyte → `staging` (raw JSON) → intermediate → marts.** See
-[docs/staging_as_raw_landing.md](../../docs/staging_as_raw_landing.md) for how the raw-JSON
-landing + ephemeral parsing works.
+Pipeline: **Airbyte → `staging` (raw JSON) → intermediate → marts.** Airbyte lands raw API
+snapshots as JSON directly in the `staging` schema and owns those tables; the `stg_*` models parse
+that JSON but are **ephemeral**, so they compile inline as CTEs into their consumers and create no
+DB object. That's why `staging` contains only Airbyte's raw tables and no `stg_*` views.
 
 ## Target
 
@@ -103,10 +104,6 @@ Built from the intermediate facts. 12 models:
 Star keys `city_key = generate_surrogate_key(['city'])`, `date_key = YYYYMMDD::int`;
 `relationships` tests enforce FK→dimension integrity, plus `unique` / `not_null` /
 `accepted_values`.
-
-See [docs/marts_build_guide.md](../../docs/marts_build_guide.md) for the marts build walkthrough and
-reference SQL, and [docs/marts_implementation_plan.md](../../docs/marts_implementation_plan.md) for
-the design rationale.
 
 ## Profiles (`~/.dbt/profiles.yml`)
 

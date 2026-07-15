@@ -112,7 +112,7 @@ docker compose up -d
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
 - **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
 - **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs **dbt deps** (install pinned `dbt_utils`) → dbt staging → dbt intermediate → dbt marts (build + test)
-- **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`. Migration how-to for the old hand-written `md5` keys: `docs/surrogate_key_migration.md`
+- **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
 - **Email alerts** — both DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled. Shared by both DAGs via `airflow/dags/alert_utils.py`
 - **Sync failures explain themselves** — a failed Airbyte sync reports `failureOrigin` / `failureType` and the underlying message (read from the job's `failureSummary`), plus a plain-English hint for common causes: Postgres unreachable after a network change, a rejected API key, a rate limit. Stacktraces stay in the task log
@@ -170,9 +170,6 @@ Star schema + derived OBT + analytics marts. Daily facts and the OBT share the g
 | `mart_temperature_trends` | analytics | Temperature trend + anomaly detection |
 | `mart_weather_alerts` | analytics | Severe-weather flags |
 
-Design + step-by-step build guide live in `docs/marts_implementation_plan.md` and
-`docs/marts_build_guide.md`.
-
 ### Reporting — Power BI
 Business reporting is done in **Power BI** (`smart_city_dashboard.pbip` — a PBIP *project*, so the
 model is text TMDL and the report is PBIR JSON; it lives outside this repo), connected to the
@@ -187,8 +184,6 @@ layout, pending a re-layout and rename to "Executive Overview"), **Weather & For
 > separate per-file settings each cause that same misleading error, and neither lives in git:
 > **Auto date/time** and **Autodetect new relationships after data is loaded**
 > (File → Options → Current File → Data Load). Both must be **off**; the model itself was fine.
-
-Build log: `docs/powerbi_dashboard.md`. Page-by-page plan: `docs/powerbi_dashboard_plan.md`.
 
 ---
 

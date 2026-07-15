@@ -1,7 +1,8 @@
 {#
-    One-off migration: rewrite the surrogate keys already stored in the durable
-    incremental `intermediate` tables so they match the new
-    `dbt_utils.generate_surrogate_key` format the models now emit.
+    Rewrite the surrogate keys stored in the durable incremental `intermediate`
+    tables so they match the `dbt_utils.generate_surrogate_key` format the models
+    emit. Written for the 2026-07-10 migration off hand-written md5(a || '|' || b),
+    but NOT single-use — see idempotency below.
 
     Runs in place (UPDATE) — it recomputes each key from columns ALREADY in the
     row, so it never touches staging and never loses accumulated history. The key
@@ -9,9 +10,20 @@
     so a backfilled historic key is byte-identical to what a fresh model build
     produces for the same row.
 
+    IDEMPOTENT — safe to re-run any time. Each key is a pure function of columns
+    already in the row, so a second run recomputes the same value it just wrote;
+    the result converges rather than drifting. Nothing calls this automatically
+    (no DAG step, no hook) — it only fires via an explicit `dbt run-operation`.
+    Keep it as the repair tool if keys ever diverge from the models.
+
+    Cost: the UPDATE is unconditional (no WHERE), so every run rewrites every row
+    of all five tables. Cheap at current volumes; on much larger tables that means
+    dead tuples and a VACUUM, so it isn't free — just correct.
+
     Column lists mirror each model's own key, using the STORED column names
     (note: int_city_weather_forecast stores `issued_at`, the alias of the model's
-    `issued_at_utc` — same value).
+    `issued_at_utc` — same value). If a model's key columns ever change, update
+    them here too — nothing enforces that link.
 
     Usage:
         dbt run-operation backfill_surrogate_keys --target staging \
