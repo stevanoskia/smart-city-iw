@@ -18,52 +18,17 @@ Connection IDs loaded from /opt/airflow/ingestion_config/connection_ids.yml
 
 from __future__ import annotations
 
-import html
-import os
 import yaml
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from airflow import DAG
 from airflow.operators.bash import BashOperator
 from airflow.operators.python import PythonOperator
-from airflow.utils.email import send_email
 from airflow.utils.task_group import TaskGroup
 
 from airbyte_utils import trigger_sync, wait_for_sync
-
-# Email recipients for pipeline alerts (set in .env → injected via docker-compose
-# env_file). To notify more than one person, comma-separate the addresses, e.g.
-#   ALERT_EMAIL=you@example.com,teammate@example.com
-# every address in the list gets both the failure and success emails. Unset =
-# callbacks still run and log, they just skip the email. SMTP itself is configured
-# via AIRFLOW__SMTP__* env vars.
-ALERT_EMAILS = [e.strip() for e in os.environ.get("ALERT_EMAIL", "").split(",") if e.strip()]
-
-# Render the email "Completed" timestamp in local time so it matches the inbox
-# clock (Airflow's run_id is UTC + the data-interval start, which reads confusingly).
-# Falls back to UTC if the container has no tz database.
-try:
-    from zoneinfo import ZoneInfo
-    _LOCAL_TZ = ZoneInfo(os.environ.get("ALERT_TZ", "Europe/Skopje"))
-except Exception:
-    _LOCAL_TZ = timezone.utc
-
-def _completed_now() -> str:
-    return datetime.now(_LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
-
-def _error_html(error) -> str:
-    """Render an exception for the alert email, preserving line breaks.
-
-    Airbyte failures arrive multi-line (origin/type, message, hint — see
-    airbyte_utils._describe_failures); a plain <p> collapses them into one run-on, and
-    the messages contain characters HTML would eat, hence <pre> + escape.
-    """
-    return (
-        '<pre style="white-space:pre-wrap;font-family:monospace">'
-        f"{html.escape(str(error))}"
-        "</pre>"
-    )
+from alert_utils import make_success_callback, on_failure
 
 # ── Connection IDs ────────────────────────────────────────────────────────────
 
@@ -105,50 +70,15 @@ def wait_for_sync_xcom(trigger_task_id: str, **context) -> None:
         raise ValueError(f"No job_id found in XCom from {trigger_task_id}")
     wait_for_sync(str(job_id))
 
-# ── Failure callback ──────────────────────────────────────────────────────────
+# ── Alert callbacks ───────────────────────────────────────────────────────────
+# on_failure is imported from alert_utils and attached to every task via default_args.
+# The success email is attached to the LAST task (dbt_marts) only, so it means "the
+# whole hourly pipeline — all syncs + intermediate + marts — finished clean", not
+# per-task.
 
-def on_failure(context) -> None:
-    task_id = context["task_instance"].task_id
-    dag_id  = context["task_instance"].dag_id
-    run_id  = context["run_id"]
-    error   = context.get("exception", "unknown error")
-    print(
-        f"FAILURE | DAG: {dag_id} | Task: {task_id} | Run: {run_id} | Error: {error}"
-    )
-    # Fires once retries are exhausted, on ANY task (a sync trigger/wait or a dbt
-    # step) — so a failed Airbyte sync emails you which step died and why.
-    if ALERT_EMAILS:
-        send_email(
-            to=ALERT_EMAILS,
-            subject=f"[Airflow] {dag_id} FAILED — {task_id}",
-            html_content=(
-                f"<p><b>DAG:</b> {dag_id}</p>"
-                f"<p><b>Task:</b> {task_id}</p>"
-                f"<p><b>Run:</b> {run_id}</p>"
-                f"<p><b>Failed at:</b> {_completed_now()}</p>"
-                f"<p><b>Error:</b></p>{_error_html(error)}"
-            ),
-        )
-
-# ── Success callback ──────────────────────────────────────────────────────────
-# Attached to the LAST task (dbt_marts) only, so it means "the whole hourly
-# pipeline — all syncs + intermediate + marts — finished clean", not per-task.
-
-def notify_success(context) -> None:
-    dag_id = context["task_instance"].dag_id
-    run_id = context["run_id"]
-    print(f"SUCCESS | DAG: {dag_id} | Run: {run_id} | pipeline completed")
-    if ALERT_EMAILS:
-        send_email(
-            to=ALERT_EMAILS,
-            subject=f"[Airflow] {dag_id} SUCCESS",
-            html_content=(
-                f"<p><b>DAG:</b> {dag_id}</p>"
-                f"<p><b>Run:</b> {run_id}</p>"
-                f"<p><b>Completed:</b> {_completed_now()}</p>"
-                f"<p>Hourly pipeline completed: all syncs + dbt intermediate + marts.</p>"
-            ),
-        )
+notify_success = make_success_callback(
+    "Hourly pipeline completed: all syncs + dbt intermediate + marts."
+)
 
 # ── DAG definition ────────────────────────────────────────────────────────────
 

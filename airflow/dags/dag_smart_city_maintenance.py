@@ -12,41 +12,14 @@ a short buffer (1-day retention >> the hourly models' 6h incremental lookback).
 
 from __future__ import annotations
 
-import html
 import os
 import psycopg2
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
 
 from airflow import DAG
 from airflow.operators.python import PythonOperator
-from airflow.utils.email import send_email
 
-# Email recipients for maintenance alerts (set in .env → injected via docker-compose
-# env_file). To notify more than one person, comma-separate the addresses, e.g.
-#   ALERT_EMAIL=you@example.com,teammate@example.com
-# every address in the list gets both the failure and success emails. Unset =
-# callbacks still run and log, they just skip the email. SMTP itself is configured
-# via AIRFLOW__SMTP__* env vars (see .env / .env.example).
-ALERT_EMAILS = [e.strip() for e in os.environ.get("ALERT_EMAIL", "").split(",") if e.strip()]
-
-# Local-time "Completed" stamp for the email body (Airflow run_id is UTC +
-# interval-start, which reads confusingly). Falls back to UTC without tz data.
-try:
-    from zoneinfo import ZoneInfo
-    _LOCAL_TZ = ZoneInfo(os.environ.get("ALERT_TZ", "Europe/Skopje"))
-except Exception:
-    _LOCAL_TZ = timezone.utc
-
-def _completed_now() -> str:
-    return datetime.now(_LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
-
-def _error_html(error) -> str:
-    """Render an exception for the alert email, preserving line breaks and escaping HTML."""
-    return (
-        '<pre style="white-space:pre-wrap;font-family:monospace">'
-        f"{html.escape(str(error))}"
-        "</pre>"
-    )
+from alert_utils import make_success_callback, on_failure
 
 # ── Data retention ────────────────────────────────────────────────────────────
 
@@ -87,48 +60,11 @@ def cleanup_old_data(**context) -> None:
     finally:
         conn.close()
 
-# ── Failure callback ──────────────────────────────────────────────────────────
+# ── Alert callbacks ───────────────────────────────────────────────────────────
+# on_failure is imported from alert_utils and attached via default_args; the success
+# email confirms the daily prune ran clean.
 
-def on_failure(context) -> None:
-    task_id = context["task_instance"].task_id
-    dag_id  = context["task_instance"].dag_id
-    run_id  = context["run_id"]
-    error   = context.get("exception", "unknown error")
-    print(
-        f"FAILURE | DAG: {dag_id} | Task: {task_id} | Run: {run_id} | Error: {error}"
-    )
-    # Fires once retries are exhausted — emails you that the daily raw cleanup failed.
-    if ALERT_EMAILS:
-        send_email(
-            to=ALERT_EMAILS,
-            subject=f"[Airflow] {dag_id} FAILED — {task_id}",
-            html_content=(
-                f"<p><b>DAG:</b> {dag_id}</p>"
-                f"<p><b>Task:</b> {task_id}</p>"
-                f"<p><b>Run:</b> {run_id}</p>"
-                f"<p><b>Failed at:</b> {_completed_now()}</p>"
-                f"<p><b>Error:</b></p>{_error_html(error)}"
-            ),
-        )
-
-# ── Success callback ──────────────────────────────────────────────────────────
-# Attached to the cleanup task so it confirms the daily prune ran clean.
-
-def notify_success(context) -> None:
-    dag_id = context["task_instance"].dag_id
-    run_id = context["run_id"]
-    print(f"SUCCESS | DAG: {dag_id} | Run: {run_id} | cleanup completed")
-    if ALERT_EMAILS:
-        send_email(
-            to=ALERT_EMAILS,
-            subject=f"[Airflow] {dag_id} SUCCESS",
-            html_content=(
-                f"<p><b>DAG:</b> {dag_id}</p>"
-                f"<p><b>Run:</b> {run_id}</p>"
-                f"<p><b>Completed:</b> {_completed_now()}</p>"
-                f"<p>Daily staging (raw JSON) cleanup completed.</p>"
-            ),
-        )
+notify_success = make_success_callback("Daily staging (raw JSON) cleanup completed.")
 
 # ── DAG definition ────────────────────────────────────────────────────────────
 

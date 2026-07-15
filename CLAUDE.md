@@ -423,6 +423,10 @@ UI: `localhost:8080` — login: `admin / admin`
   the daily prune ran clean.
 
 ### Email alerts (both DAGs)
+Both DAGs share `airflow/dags/alert_utils.py` — `on_failure` (attached to every task via
+`default_args`) and `make_success_callback(message)` (attached to the DAG's **last** task only, so
+it means "the whole pipeline finished clean"). The logic used to be copy-pasted in both DAGs, so
+every fix had to land twice.
 Failure/success notifications go to `ALERT_EMAIL` via `airflow.utils.email.send_email`. SMTP is
 configured entirely through `AIRFLOW__SMTP__*` env vars (no `airflow.cfg` edit) — Gmail SMTP with a
 16-char **App Password** (Google Account → Security → 2-Step Verification → App passwords), *not*
@@ -533,7 +537,8 @@ smart-city-iw/
 │   ├── docker-compose.yml
 │   ├── .env                     ← POSTGRES_PASSWORD, AIRBYTE_* (not committed)
 │   └── dags/
-│       ├── airbyte_utils.py     ← OAuth trigger/wait helpers
+│       ├── airbyte_utils.py     ← OAuth trigger/wait helpers + sync-failure diagnosis
+│       ├── alert_utils.py       ← shared failure/success email callbacks (both DAGs)
 │       ├── dag_smart_city_pipeline.py      ← hourly ELT
 │       └── dag_smart_city_maintenance.py   ← daily raw cleanup
 ├── dbt/
