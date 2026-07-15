@@ -18,6 +18,7 @@ Connection IDs loaded from /opt/airflow/ingestion_config/connection_ids.yml
 
 from __future__ import annotations
 
+import html
 import os
 import yaml
 from datetime import datetime, timedelta, timezone
@@ -50,6 +51,19 @@ except Exception:
 
 def _completed_now() -> str:
     return datetime.now(_LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
+
+def _error_html(error) -> str:
+    """Render an exception for the alert email, preserving line breaks.
+
+    Airbyte failures arrive multi-line (origin/type, message, hint — see
+    airbyte_utils._describe_failures); a plain <p> collapses them into one run-on, and
+    the messages contain characters HTML would eat, hence <pre> + escape.
+    """
+    return (
+        '<pre style="white-space:pre-wrap;font-family:monospace">'
+        f"{html.escape(str(error))}"
+        "</pre>"
+    )
 
 # ── Connection IDs ────────────────────────────────────────────────────────────
 
@@ -112,7 +126,7 @@ def on_failure(context) -> None:
                 f"<p><b>Task:</b> {task_id}</p>"
                 f"<p><b>Run:</b> {run_id}</p>"
                 f"<p><b>Failed at:</b> {_completed_now()}</p>"
-                f"<p><b>Error:</b> {error}</p>"
+                f"<p><b>Error:</b></p>{_error_html(error)}"
             ),
         )
 

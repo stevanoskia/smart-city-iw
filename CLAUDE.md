@@ -321,7 +321,14 @@ Set `AIRBYTE_CLIENT_ID` and `AIRBYTE_CLIENT_SECRET` in `.env`.
 > so its own `TimeoutError` (which names the `job_id`) surfaces before Airflow's generic kill.
 
 ### Known quirks
-- Destination host must be LAN IP (`AIRBYTE_PG_HOST`) — not localhost (sync pods run in Kind)
+- Destination host must be LAN IP (`AIRBYTE_PG_HOST`) — not localhost (sync pods run in Kind).
+  **The LAN IP changes when you join a different network**, and Airbyte stores it *literally*,
+  so every sync fails from a new network until the destination is re-pointed (this bit us
+  2026-07-14: both connections failed all evening from home, then "fixed themselves" back at
+  the office). Now handled: `AIRBYTE_PG_HOST=auto` auto-detects the default-route IP and
+  `setup_airbyte.py` **pushes** it to the existing destination. **After switching networks,
+  re-run `python ingestion/scripts/setup_airbyte.py`** — that's the whole procedure.
+  Postgres's side is already network-agnostic (`pg_hba.conf` uses `samenet`, see below).
 - Schema refresh may 403 on connector version change — delete and recreate the connection instead
 - `city` column injected via `AddFields` — old rows synced before connector update have NULL city (filter with `WHERE city IS NOT NULL` in any downstream model that aggregates by city)
 - TomTom incidentDetails v5 returns only `iconCategory` + geometry **unless** the `fields` query param lists the attributes — the `traffic_incidents` requester now sends it (fix). Editing the repo YAML alone has no effect: the connector must be **republished in the Airbyte Builder UI** to take effect.
@@ -384,6 +391,17 @@ local time (`ALERT_TZ`, default `Europe/Skopje`) — clearer than the `run_id`, 
 data-interval start. On an eventual Airflow 3 upgrade, move the SMTP creds into an `smtp_default`
 connection (env-var creds are deprecated there).
 
+**Sync-failure emails explain *why*.** A failed Airbyte sync used to email only `Airbyte job N
+ended with status: failed`, which couldn't tell a network problem from a bad API key.
+`wait_for_sync` now reads the failure detail Airbyte already returns in the `jobs/get` payload
+(`attempts[].attempt.failureSummary.failures[]`) and raises with `failureOrigin` /
+`failureType` / the messages, plus a plain-English hint for common causes (Postgres
+unreachable → re-run `setup_airbyte.py`; `no pg_hba.conf entry`; bad password; rejected API
+key; rate limit). Unmatched failures still show their raw message — the hint map never hides
+detail. Java stacktraces go to the **task log only**, never the email. The callbacks render the
+error in `<pre>` + `html.escape` (`_error_html`) because the detail is multi-line and a plain
+`<p>` collapsed it into one run-on.
+
 ### Airflow env vars (from `airflow/.env` and docker-compose)
 | Var | Purpose |
 |---|---|
@@ -413,7 +431,7 @@ OPENWEATHER_API_KEY=<from openweathermap.org>
 TOMTOM_API_KEY=<from developer.tomtom.com>
 
 # Airbyte
-AIRBYTE_PG_HOST=10.2.x.x   # LAN IP — NOT localhost
+AIRBYTE_PG_HOST=auto       # auto-detect LAN IP (or pin an explicit IP) — NEVER localhost
 AIRBYTE_URL=http://localhost:8000
 AIRBYTE_USERNAME=<your email>
 AIRBYTE_PASSWORD=<your password>
@@ -439,7 +457,12 @@ AIRFLOW__SMTP__SMTP_MAIL_FROM=<your gmail>
 
 - Always use `venv313` (Python 3.13) — old `venv` (Python 3.8) has incompatible dbt pins
 - PostgreSQL runs locally (not Docker) on port 5432
-- `AIRBYTE_PG_HOST` must be LAN IP — Airbyte pods can't reach host `localhost`
+- `AIRBYTE_PG_HOST` must be LAN IP — Airbyte pods can't reach host `localhost`. Leave it at
+  `auto` and re-run `setup_airbyte.py` after switching networks
+- `pg_hba.conf` uses `host all all samenet scram-sha-256` — accepts any subnet this machine is
+  directly attached to, so Postgres needs no edit per network. **Host config, not in git** —
+  a rebuilt machine must redo it (`SELECT type, address, auth_method FROM pg_hba_file_rules;`
+  to check; `SELECT pg_reload_conf();` to apply)
 - Airflow runs in Docker (not natively on Windows)
 - dbt runs in `venv313` on the host machine (manual) OR inside Airflow container (automated)
 - All timestamps stored as UTC
