@@ -21,6 +21,7 @@ Auth:
 
 import os
 import sys
+import socket
 import yaml
 import requests
 from pathlib import Path
@@ -48,11 +49,53 @@ AIRBYTE_WORKSPACE_ID = os.getenv("AIRBYTE_WORKSPACE_ID")
 
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 TOMTOM_API_KEY      = os.getenv("TOMTOM_API_KEY")
-PG_HOST = os.getenv("AIRBYTE_PG_HOST")
+PG_HOST_SETTING = (os.getenv("AIRBYTE_PG_HOST") or "").strip()
 PG_PORT = int(os.getenv("POSTGRES_PORT", "5432"))
 PG_DB   = os.getenv("POSTGRES_DB", "smart_city")
 PG_USER = os.getenv("POSTGRES_USER", "postgres")
 PG_PASS = os.getenv("POSTGRES_PASSWORD")
+
+# ── Postgres host resolution ──────────────────────────────────────────────────
+# Airbyte's sync pods run inside Kind and cannot reach this machine via localhost, so
+# the destination must hold this machine's LAN IP. That IP is assigned by whatever
+# network you're on (office vs home), and Airbyte stores it *literally* — so switching
+# networks silently breaks every sync until the destination is re-pointed. Detecting it
+# here means re-running this script is all a network switch costs.
+
+
+def detect_lan_ip() -> str:
+    """LAN IP of the interface holding the default route.
+
+    Connecting a UDP socket sends no packet — it only makes the OS choose the outbound
+    interface, whose address is the one Kind pods must dial. Selecting by default route
+    is what keeps us off the WSL/Docker adapter (172.28.x), which pods can't use.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+
+
+def resolve_pg_host() -> str:
+    """Explicit AIRBYTE_PG_HOST wins; 'auto' or unset auto-detects the LAN IP."""
+    if PG_HOST_SETTING and PG_HOST_SETTING.lower() != "auto":
+        print(f"  Postgres host: {PG_HOST_SETTING} (pinned via AIRBYTE_PG_HOST)")
+        return PG_HOST_SETTING
+
+    try:
+        ip = detect_lan_ip()
+    except OSError as e:
+        raise RuntimeError(
+            f"Could not auto-detect this machine's LAN IP ({e}). "
+            "Set AIRBYTE_PG_HOST in .env to an explicit IP address."
+        ) from e
+
+    if ip.startswith("127."):
+        raise RuntimeError(
+            f"Auto-detected a loopback address ({ip}), which Airbyte's pods cannot reach. "
+            "Check you're connected to a network, or set AIRBYTE_PG_HOST explicitly."
+        )
+    print(f"  Postgres host: {ip} (auto-detected LAN IP)")
+    return ip
 
 # ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -155,15 +198,32 @@ def find_postgres_destination_definition() -> str:
 
 def ensure_destination(workspace_id: str, cfg: dict, existing: dict) -> str:
     name = cfg["destination"]["name"]
-    if name in existing:
-        print(f"  ✓ Destination '{name}' already exists — skipping")
-        return existing[name]["destinationId"]
+    pg_host = resolve_pg_host()
+    dest_cfg = {
+        "host": pg_host,
+        "port": PG_PORT,
+        "database": PG_DB,
+        "username": PG_USER,
+        "password": PG_PASS,
+        "schema": cfg["destination"]["schema"],
+        "ssl": cfg["destination"]["ssl"],
+    }
 
-    if not PG_HOST:
-        raise RuntimeError(
-            "AIRBYTE_PG_HOST is not set in .env. "
-            "Set it to your machine's LAN IP (e.g. 10.2.12.150), not localhost."
+    if name in existing:
+        destination_id = existing[name]["destinationId"]
+        # Push the latest config so a changed LAN IP (new network) updates the existing
+        # destination instead of being skipped. Airbyte stores the host literally, so
+        # this is the only thing that re-points the sync pods after a network switch.
+        api(
+            "POST", "destinations/update",
+            json={
+                "destinationId": destination_id,
+                "name": name,
+                "connectionConfiguration": dest_cfg,
+            },
         )
+        print(f"  ~ Destination '{name}' already exists — config updated (host={pg_host})")
+        return destination_id
 
     defn_id = find_postgres_destination_definition()
     result = api(
@@ -172,18 +232,10 @@ def ensure_destination(workspace_id: str, cfg: dict, existing: dict) -> str:
             "workspaceId": workspace_id,
             "name": name,
             "destinationDefinitionId": defn_id,
-            "connectionConfiguration": {
-                "host": PG_HOST,
-                "port": PG_PORT,
-                "database": PG_DB,
-                "username": PG_USER,
-                "password": PG_PASS,
-                "schema": cfg["destination"]["schema"],
-                "ssl": cfg["destination"]["ssl"],
-            },
+            "connectionConfiguration": dest_cfg,
         },
     )
-    print(f"  + Destination '{name}' created")
+    print(f"  + Destination '{name}' created (host={pg_host})")
     return result["destinationId"]
 
 

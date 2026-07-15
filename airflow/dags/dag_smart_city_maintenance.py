@@ -12,6 +12,7 @@ a short buffer (1-day retention >> the hourly models' 6h incremental lookback).
 
 from __future__ import annotations
 
+import html
 import os
 import psycopg2
 from datetime import datetime, timedelta, timezone
@@ -38,6 +39,14 @@ except Exception:
 
 def _completed_now() -> str:
     return datetime.now(_LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
+
+def _error_html(error) -> str:
+    """Render an exception for the alert email, preserving line breaks and escaping HTML."""
+    return (
+        '<pre style="white-space:pre-wrap;font-family:monospace">'
+        f"{html.escape(str(error))}"
+        "</pre>"
+    )
 
 # ── Data retention ────────────────────────────────────────────────────────────
 
@@ -98,7 +107,7 @@ def on_failure(context) -> None:
                 f"<p><b>Task:</b> {task_id}</p>"
                 f"<p><b>Run:</b> {run_id}</p>"
                 f"<p><b>Failed at:</b> {_completed_now()}</p>"
-                f"<p><b>Error:</b> {error}</p>"
+                f"<p><b>Error:</b></p>{_error_html(error)}"
             ),
         )
 
