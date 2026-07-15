@@ -6,12 +6,15 @@ models:
     description: >
       City dimension (one row per city), DERIVED from observed data (no seed):
       city + country from int_city_hourly_weather, coords from stg_current_weather,
-      coverage flags from presence in the weather / traffic facts. city_key = md5(city)
-      is the foreign key every fact joins on. Note: cities/flags reflect whatever the
-      pipeline actually collected (see docs/marts_implementation_plan.md §6.2).
+      coverage flags from presence in the weather / traffic facts.
+      city_key = dbt_utils.generate_surrogate_key(['city']) is the foreign key every fact
+      joins on. Note: cities/flags reflect whatever the pipeline actually collected
+      (see docs/marts_implementation_plan.md §6.2).
     columns:
       - name: city_key
-        description: Surrogate key — md5(city). Primary key; FK target for all facts.
+        description: >
+          Surrogate key — dbt_utils.generate_surrogate_key(['city']). Primary key;
+          FK target for all facts.
         tests: [unique, not_null]
       - name: city
         tests: [not_null]

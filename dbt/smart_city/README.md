@@ -28,6 +28,10 @@ Always activate `venv313` first and run from this directory. On the host, pass
 source venv313/Scripts/activate
 cd dbt/smart_city
 
+# Install pinned packages (dbt_utils 1.4.1, from package-lock.yml). Required once, and
+# after any packages.yml change — every model's surrogate keys depend on it.
+dbt deps
+
 # Staging is ephemeral — this builds nothing physical, just validates the parse compiles
 dbt run   --select staging --target staging
 
@@ -69,12 +73,15 @@ forever, independent of `staging` raw pruning (dedup is required because Airbyte
 - `int_city_hourly_traffic_flow` — per-hour congestion/speed snapshots
 - `int_city_hourly_traffic_incidents` — per-hour incident detail (keyed on `(city, incident_id, observed_at)`, `where incident_id is not null`)
 
-Keys: `city_hour_key = md5(city|date_trunc('hour', observed_at))` (weather/pollution/flow);
-`city_incident_key = md5(city|incident_id|observed_at)` (incidents). `unique`/`not_null` tested.
+Keys are built with **`dbt_utils.generate_surrogate_key`** (NULL-safe, `-` separator):
+`city_hour_key = generate_surrogate_key(['city', hour-truncated observed_at])`
+(weather/pollution/flow); `city_incident_key = generate_surrogate_key(['city', 'incident_id',
+'observed_at'])` (incidents). `unique`/`not_null` tested.
 
 Plus the forecast building block:
 - `int_city_weather_forecast` — **incremental, append-only issue history**: one row per prediction
-  issuance `(city, forecast_at, issued_at)`, keyed `md5(city|forecast_at|issued_at)`. A forecast row
+  issuance `(city, forecast_at, issued_at)`, keyed
+  `generate_surrogate_key(['city', 'forecast_at', 'issued_at'])`. A forecast row
   has two timestamps — `forecast_at` (the future time predicted) and `issued_at` (when it was
   predicted); `lead_time = forecast_at − issued_at`. Persists predictions as issued so they survive
   raw pruning and can be scored for accuracy later.
@@ -84,15 +91,18 @@ Built from the intermediate facts. 12 models:
 - **Dimensions:** `dim_city` (**derived from data — no seed**), `dim_date` (independent calendar
   spine), `dim_hour` (`hour_label` + `day_part`).
 - **Daily facts:** `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` — one row per
-  `(city, date_utc)`, `city_date_key = md5(city|date_utc)`.
-- **Extra facts:** `fct_traffic_hourly`, `fct_forecast_accuracy` (past predictions scored against
+  `(city, date_utc)`, `city_date_key = generate_surrogate_key(['city', 'date_utc'])`.
+- **Extra facts:** `fct_traffic_hourly` (⚠️ **not** a diurnal curve — Airflow only runs while the
+  dev machine is on, so coverage is ~07:00–15:00 UTC with no evening/overnight data; peak-hour
+  analysis is not viable on it), `fct_forecast_accuracy` (past predictions scored against
   observed `int_city_hourly_weather`).
 - **OBT + analytics:** `mart_city_daily` (LEFT-joins weather+pollution+traffic; weather-only cities
   appear with NULL traffic), `mart_forecast_latest` (current forward-looking forecast),
   `mart_temperature_trends`, `mart_weather_alerts`.
 
-Star keys `city_key = md5(city)`, `date_key = YYYYMMDD::int`; `relationships` tests enforce
-FK→dimension integrity, plus `unique` / `not_null` / `accepted_values`.
+Star keys `city_key = generate_surrogate_key(['city'])`, `date_key = YYYYMMDD::int`;
+`relationships` tests enforce FK→dimension integrity, plus `unique` / `not_null` /
+`accepted_values`.
 
 See [docs/marts_build_guide.md](../../docs/marts_build_guide.md) for the marts build walkthrough and
 reference SQL, and [docs/marts_implementation_plan.md](../../docs/marts_implementation_plan.md) for
