@@ -110,12 +110,13 @@ docker compose up -d
 - **5 dbt staging models** (ephemeral — inline CTEs, no DB object), one per Airbyte source stream
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
-- **12 dbt marts models** — star schema (dims + facts), the `mart_city_daily` OBT, and analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
+- **15 dbt marts models** — star schema (3 dims + 7 facts), the `mart_city_daily` OBT, and 4 analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
 - **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs **dbt deps** (install pinned `dbt_utils`) → dbt staging → dbt intermediate → dbt marts (build + test)
-- **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`. Migration how-to for the old hand-written `md5` keys: `docs/surrogate_key_migration.md`
+- **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
-- **Email alerts** — both DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled
-- **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API; add cities via config, no UI
+- **Email alerts** — both DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled. Shared by both DAGs via `airflow/dags/alert_utils.py`
+- **Sync failures explain themselves** — a failed Airbyte sync reports `failureOrigin` / `failureType` and the underlying message (read from the job's `failureSummary`), plus a plain-English hint for common causes: Postgres unreachable after a network change, a rejected API key, a rate limit. Stacktraces stay in the task log
+- **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API and **pushes config on re-run** (so a changed LAN IP re-points the destination); add cities via config, no UI
 
 ### Staging (ephemeral `stg_*` parsers — no DB object)
 | Model | Description |
@@ -162,22 +163,35 @@ Star schema + derived OBT + analytics marts. Daily facts and the OBT share the g
 | `fct_weather_daily` | fact | Daily weather rollup per city |
 | `fct_pollution_daily` | fact | Daily AQI + pollutant rollup per city |
 | `fct_traffic_daily` | fact | Daily flow + incident rollup per city |
-| `fct_traffic_hourly` | fact | Per-hour-of-day flow + incidents for peak-hour analysis |
+| `fct_weather_hourly` | fact | Hourly weather per city — the real point-in-time reading (also carries `visibility_m`, `wind_gust_ms`, `weather_description`) |
+| `fct_pollution_hourly` | fact | Hourly AQI + pollutant concentrations per city |
+| `fct_traffic_hourly` | fact | Per-hour flow + incidents per city |
 | `fct_forecast_accuracy` | fact | Prediction-vs-actual scoring from the forecast issue history |
 | `mart_city_daily` | OBT | One wide row per `(city, date_utc)` — weather + pollution + traffic LEFT-joined (weather-only cities get NULL traffic) |
 | `mart_forecast_latest` | analytics | Latest issued forecast per city / future slot |
 | `mart_temperature_trends` | analytics | Temperature trend + anomaly detection |
-| `mart_weather_alerts` | analytics | Severe-weather flags |
+| `mart_weather_alerts` | analytics | Severe-weather flags (forward-looking, from the forecast) |
+| `mart_pollution_alerts` | analytics | Air-quality threshold breaches per `(city, observed_at, alert_type)` — **measured, not forecast** (AQI 4–5 = OpenWeather's Poor/Very Poor; PM2.5/PM10/NO2 on WHO guideline ballparks) |
 
-Design + step-by-step build guide live in `docs/marts_implementation_plan.md` and
-`docs/marts_build_guide.md`.
+> ⚠️ **The hourly facts are not diurnal curves.** Airflow only runs while the dev machine is on, so
+> they cover roughly 07:00–15:00 UTC with **no evening or overnight data**. Peak-hour / time-of-day
+> analysis is not viable on them — an empty Night/Evening reads as a finding when it's really a
+> sampling artifact. Their honest use is point-in-time "latest reading" semantics.
 
 ### Reporting — Power BI
-Business reporting is done in **Power BI** (`smart_city_dashboard.pbip`), connected to the
-PostgreSQL `marts` schema (Import mode) — a star-schema model with KPI measures and an Executive
-Overview page (KPI cards, Azure Map, air-quality + forecast visuals). Build log and current status
-live in `docs/powerbi_dashboard.md`. *(In progress — the model + 7 KPI cards are built; a
-data-refresh issue is being resolved.)*
+Business reporting is done in **Power BI** (`smart_city_dashboard.pbip` — a PBIP *project*, so the
+model is text TMDL and the report is PBIR JSON; it lives outside this repo), connected to the
+PostgreSQL `marts` schema (Import mode).
+
+*In active build.* The model layer is **complete** — clean star (fact→dim only), 42 measures + 2
+calculated columns. Three pages are built: an overview page of KPI cards (still on the first-pass
+layout, pending a re-layout and rename to "Executive Overview"), **Weather & Forecast**, and
+**Air Quality**. Remaining: Traffic & Congestion, City Livability, Sankeys, and Azure Maps.
+
+> The refresh previously failed with *"A cyclic reference was encountered"* — **fixed**. Two
+> separate per-file settings each cause that same misleading error, and neither lives in git:
+> **Auto date/time** and **Autodetect new relationships after data is loaded**
+> (File → Options → Current File → Data Load). Both must be **off**; the model itself was fine.
 
 ---
 
@@ -196,6 +210,24 @@ cd airflow
 docker compose up -d
 # UI: localhost:8080
 ```
+
+## After switching networks
+
+Airbyte's sync pods run inside Kind and can't reach the host via `localhost`, so the destination
+holds this machine's **LAN IP** — which the router reassigns on every network. Airbyte stores that
+IP *literally*, so **every sync fails from a new network** until the destination is re-pointed.
+
+```bash
+# once you're connected to the new network (it detects the current default route)
+python ingestion/scripts/setup_airbyte.py
+```
+
+That's the whole procedure. `AIRBYTE_PG_HOST=auto` detects the IP and the script pushes it to the
+existing destination; Postgres needs nothing (`pg_hba.conf` uses `samenet`, which accepts any
+directly-attached subnet). Re-run it *before* the next hourly DAG run, or that run fails.
+
+> If a sync does fail, the alert email now names the cause — a `[destination/config_error]` with a
+> connection timeout means exactly this, and says so.
 
 ---
 
@@ -221,7 +253,8 @@ smart-city-iw/
 │   ├── Dockerfile       <- extends apache/airflow:2.9.3 with dbt
 │   ├── docker-compose.yml
 │   └── dags/
-│       ├── airbyte_utils.py                 <- OAuth trigger/wait helpers
+│       ├── airbyte_utils.py                 <- OAuth trigger/wait helpers + failure diagnosis
+│       ├── alert_utils.py                   <- shared failure/success email callbacks
 │       ├── dag_smart_city_pipeline.py       <- hourly ELT DAG
 │       └── dag_smart_city_maintenance.py    <- daily raw-cleanup DAG
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
@@ -230,7 +263,7 @@ smart-city-iw/
 │   └── models/
 │       ├── staging/      -> ephemeral (5 stg_* parsers, no DB object)
 │       ├── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
-│       └── marts/         -> PostgreSQL (12 tables: dims + facts + OBT + analytics)
+│       └── marts/         -> PostgreSQL (15 tables: dims + facts + OBT + analytics)
 ├── venv313/             <- Python 3.13 venv (always use this)
 └── .env                 <- secrets (not committed)
 ```

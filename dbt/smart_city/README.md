@@ -5,15 +5,16 @@ dbt project for the Smart City Analytics Pipeline. Parses raw Airbyte JSON into 
 issue history, and models it into a **marts** star schema (dims + facts + OBT + analytics). All in
 one PostgreSQL database, one target (`staging`).
 
-Pipeline: **Airbyte → `staging` (raw JSON) → intermediate → marts.** See
-[docs/staging_as_raw_landing.md](../../docs/staging_as_raw_landing.md) for how the raw-JSON
-landing + ephemeral parsing works.
+Pipeline: **Airbyte → `staging` (raw JSON) → intermediate → marts.** Airbyte lands raw API
+snapshots as JSON directly in the `staging` schema and owns those tables; the `stg_*` models parse
+that JSON but are **ephemeral**, so they compile inline as CTEs into their consumers and create no
+DB object. That's why `staging` contains only Airbyte's raw tables and no `stg_*` views.
 
 ## Target
 
 | Target | Database | Schemas | Models |
 |---|---|---|---|
-| `staging` | PostgreSQL (localhost:5432, db `smart_city`) | `staging` (raw JSON, Airbyte-owned), `intermediate`, `marts` | 5 ephemeral parsers + 5 intermediate tables + 12 marts tables |
+| `staging` | PostgreSQL (localhost:5432, db `smart_city`) | `staging` (raw JSON, Airbyte-owned), `intermediate`, `marts` | 5 ephemeral parsers + 5 intermediate tables + 15 marts tables |
 
 > The `staging` **schema** holds Airbyte's raw JSON tables. The dbt `staging` **models** (`stg_*`)
 > are ephemeral — they parse that JSON inline and create no DB object.
@@ -27,6 +28,10 @@ Always activate `venv313` first and run from this directory. On the host, pass
 # From project root
 source venv313/Scripts/activate
 cd dbt/smart_city
+
+# Install pinned packages (dbt_utils 1.4.1, from package-lock.yml). Required once, and
+# after any packages.yml change — every model's surrogate keys depend on it.
+dbt deps
 
 # Staging is ephemeral — this builds nothing physical, just validates the parse compiles
 dbt run   --select staging --target staging
@@ -69,34 +74,39 @@ forever, independent of `staging` raw pruning (dedup is required because Airbyte
 - `int_city_hourly_traffic_flow` — per-hour congestion/speed snapshots
 - `int_city_hourly_traffic_incidents` — per-hour incident detail (keyed on `(city, incident_id, observed_at)`, `where incident_id is not null`)
 
-Keys: `city_hour_key = md5(city|date_trunc('hour', observed_at))` (weather/pollution/flow);
-`city_incident_key = md5(city|incident_id|observed_at)` (incidents). `unique`/`not_null` tested.
+Keys are built with **`dbt_utils.generate_surrogate_key`** (NULL-safe, `-` separator):
+`city_hour_key = generate_surrogate_key(['city', hour-truncated observed_at])`
+(weather/pollution/flow); `city_incident_key = generate_surrogate_key(['city', 'incident_id',
+'observed_at'])` (incidents). `unique`/`not_null` tested.
 
 Plus the forecast building block:
 - `int_city_weather_forecast` — **incremental, append-only issue history**: one row per prediction
-  issuance `(city, forecast_at, issued_at)`, keyed `md5(city|forecast_at|issued_at)`. A forecast row
+  issuance `(city, forecast_at, issued_at)`, keyed
+  `generate_surrogate_key(['city', 'forecast_at', 'issued_at'])`. A forecast row
   has two timestamps — `forecast_at` (the future time predicted) and `issued_at` (when it was
   predicted); `lead_time = forecast_at − issued_at`. Persists predictions as issued so they survive
   raw pruning and can be scored for accuracy later.
 
 ### Marts → `marts` schema (tables — star schema + OBT + analytics)
-Built from the intermediate facts. 12 models:
-- **Dimensions:** `dim_city` (**derived from data — no seed**), `dim_date` (independent calendar
+Built from the intermediate facts. 15 models:
+- **Dimensions (3):** `dim_city` (**derived from data — no seed**), `dim_date` (independent calendar
   spine), `dim_hour` (`hour_label` + `day_part`).
-- **Daily facts:** `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` — one row per
-  `(city, date_utc)`, `city_date_key = md5(city|date_utc)`.
-- **Extra facts:** `fct_traffic_hourly`, `fct_forecast_accuracy` (past predictions scored against
-  observed `int_city_hourly_weather`).
-- **OBT + analytics:** `mart_city_daily` (LEFT-joins weather+pollution+traffic; weather-only cities
-  appear with NULL traffic), `mart_forecast_latest` (current forward-looking forecast),
-  `mart_temperature_trends`, `mart_weather_alerts`.
+- **Daily facts (3):** `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` — one row per
+  `(city, date_utc)`, `city_date_key = generate_surrogate_key(['city', 'date_utc'])`.
+- **Hourly facts (3):** `fct_weather_hourly`, `fct_pollution_hourly`, `fct_traffic_hourly` — one row
+  per `(city, hour)`. ⚠️ **Not diurnal curves**: Airflow only runs while the dev machine is on, so
+  coverage is ~07:00–15:00 UTC with no evening/overnight data — peak-hour / time-of-day analysis is
+  not viable on them. Their honest use is point-in-time "latest reading" semantics.
+- **Forecast fact (1):** `fct_forecast_accuracy` — past predictions scored against observed
+  `int_city_hourly_weather`.
+- **OBT + analytics (5):** `mart_city_daily` (LEFT-joins weather+pollution+traffic; weather-only
+  cities appear with NULL traffic), `mart_forecast_latest` (current forward-looking forecast),
+  `mart_temperature_trends`, `mart_weather_alerts` (forward-looking, from the forecast), and
+  `mart_pollution_alerts` (AQI/PM2.5/PM10/NO2 threshold breaches — **measured**, not forecast).
 
-Star keys `city_key = md5(city)`, `date_key = YYYYMMDD::int`; `relationships` tests enforce
-FK→dimension integrity, plus `unique` / `not_null` / `accepted_values`.
-
-See [docs/marts_build_guide.md](../../docs/marts_build_guide.md) for the marts build walkthrough and
-reference SQL, and [docs/marts_implementation_plan.md](../../docs/marts_implementation_plan.md) for
-the design rationale.
+Star keys `city_key = generate_surrogate_key(['city'])`, `date_key = YYYYMMDD::int`;
+`relationships` tests enforce FK→dimension integrity, plus `unique` / `not_null` /
+`accepted_values`.
 
 ## Profiles (`~/.dbt/profiles.yml`)
 

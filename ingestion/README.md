@@ -21,8 +21,10 @@ sources.yml + connections.yml  ──►  setup_airbyte.py  ──►  Airbyte (
   (one object per city: coordinates; TomTom cities also have a bounding box).
 - **`config/connections.yml`** — the PostgreSQL destination + sync settings (`full_refresh_append`).
 - **`scripts/setup_airbyte.py`** — reads both, creates any missing sources / destination /
-  connections via the Airbyte API (idempotent — safe to re-run), and writes
-  **`config/connection_ids.yml`** (the connection UUIDs Airflow triggers).
+  connections via the Airbyte API, and writes **`config/connection_ids.yml`** (the connection
+  UUIDs Airflow triggers). Idempotent, and re-running **pushes the current config** to resources
+  that already exist rather than skipping them — that's what applies a new city, or a new LAN IP
+  after a network change.
 - **`connections/*.yaml`** — the custom connector definitions:
   `open_weather_free_2_5.yaml`, `tomtom_traffic.yaml`.
 
@@ -41,8 +43,9 @@ the same `staging` (raw JSON) tables, tagged with the `city` column.
 - The two custom connectors published in the Connector Builder ("OpenWeather Free 2.5",
   "TomTom Traffic").
 - `.env` populated: `AIRBYTE_CLIENT_ID`, `AIRBYTE_CLIENT_SECRET`, `AIRBYTE_WORKSPACE_ID`
-  (from Airbyte UI → User → Applications), `AIRBYTE_PG_HOST` (**LAN IP, not localhost** — sync
-  pods run in Kind and can't reach the host via localhost), `OPENWEATHER_API_KEY`,
+  (from Airbyte UI → User → Applications), `AIRBYTE_PG_HOST` (leave at **`auto`** — it detects this
+  machine's LAN IP; **never localhost**, since sync pods run in Kind and can't reach the host that
+  way. Pin an explicit IP only if detection picks the wrong interface), `OPENWEATHER_API_KEY`,
   `TOMTOM_API_KEY`, and the `POSTGRES_*` creds.
 
 ### 2. Run the setup script
@@ -82,6 +85,13 @@ or dbt changes — the connector partition-routes over the `locations` list, inj
 
 ## Notes / known quirks
 
+- **Switching networks breaks syncs until you re-run the setup script.** The destination holds this
+  machine's LAN IP (pods run in Kind — `localhost` is the pod itself), and the router reassigns that
+  IP per network. Airbyte stores it *literally*, so every sync fails from a new network until the
+  destination is re-pointed. Fix: `python ingestion/scripts/setup_airbyte.py` once connected to the
+  new network. Postgres itself is already network-agnostic (`pg_hba.conf` uses `samenet`).
+  A failed sync now names this cause in the alert email (`[destination/config_error]` + a
+  connection timeout).
 - **Sync mode is `full_refresh_append`** by design — each sync appends a fresh full snapshot;
   deduplication happens downstream in dbt (the `int_city_hourly_*` models).
 - **Connector edits take effect only after republishing** in the Airbyte Builder UI — editing the

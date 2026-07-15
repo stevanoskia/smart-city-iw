@@ -236,10 +236,8 @@ docs/staging_as_raw_landing.md
 # Server-hosting exploration note — kept local
 docs/deployment.md
 
-# Power BI dashboard build log — kept local
+# Power BI dashboard build log + page plan — kept local
 docs/powerbi_dashboard.md
-
-# Power BI multi-page report plan — kept local
 docs/powerbi_dashboard_plan.md
 
 # Airbyte — auto-generated, environment-specific

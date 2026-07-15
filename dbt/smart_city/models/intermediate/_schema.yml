@@ -10,7 +10,9 @@ models:
       staging (raw) pruning. Source for fct_weather_daily.
     columns:
       - name: city_hour_key
-        description: Surrogate key — md5(city|hour). Primary key of this table.
+        description: >
+          Surrogate key — dbt_utils.generate_surrogate_key(['city', hour-truncated
+          observed_at]). Primary key of this table.
         tests:
           - unique
           - not_null
@@ -26,7 +28,9 @@ models:
       deduped and accumulated incrementally. Source for fct_pollution_daily.
     columns:
       - name: city_hour_key
-        description: Surrogate key — md5(city|hour). Primary key of this table.
+        description: >
+          Surrogate key — dbt_utils.generate_surrogate_key(['city', hour-truncated
+          observed_at]). Primary key of this table.
         tests:
           - unique
           - not_null
@@ -45,7 +49,9 @@ models:
       and accumulated incrementally.
     columns:
       - name: city_hour_key
-        description: Surrogate key — md5(city|hour). Primary key of this table.
+        description: >
+          Surrogate key — dbt_utils.generate_surrogate_key(['city', hour-truncated
+          observed_at]). Primary key of this table.
         tests:
           - unique
           - not_null
@@ -61,7 +67,9 @@ models:
       Deduped and accumulated incrementally.
     columns:
       - name: city_incident_key
-        description: Surrogate key — md5(city|incident_id|observed_at). Primary key.
+        description: >
+          Surrogate key — dbt_utils.generate_surrogate_key(['city', 'incident_id',
+          'observed_at']). Primary key.
         tests:
           - unique
           - not_null
@@ -82,7 +90,9 @@ models:
       mart_forecast_latest and fct_forecast_accuracy.
     columns:
       - name: forecast_key
-        description: Surrogate key — md5(city|forecast_at|issued_at). Primary key.
+        description: >
+          Surrogate key — dbt_utils.generate_surrogate_key(['city', 'forecast_at',
+          'issued_at']). Primary key.
         tests:
           - unique
           - not_null
