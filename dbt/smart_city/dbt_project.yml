@@ -23,6 +23,9 @@ models:
       +materialized: table
       +schema: intermediate
     marts:
+      # Default = table (used by the 3 dims + the rolling-window and forward-looking marts).
+      # The 8 append-only facts override this to materialized='incremental' (delete+insert)
+      # in their own config() block — see each model header and CLAUDE.md "Marts materialization".
       +materialized: table
       +schema: marts
 

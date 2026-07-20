@@ -87,8 +87,8 @@ Plus the forecast building block:
   predicted); `lead_time = forecast_at − issued_at`. Persists predictions as issued so they survive
   raw pruning and can be scored for accuracy later.
 
-### Marts → `marts` schema (tables — star schema + OBT + analytics)
-Built from the intermediate facts. 15 models:
+### Marts → `marts` schema (incremental facts + tables — star schema + OBT + analytics)
+Built from the intermediate facts. 15 models (materialization is mixed — see below):
 - **Dimensions (3):** `dim_city` (**derived from data — no seed**), `dim_date` (independent calendar
   spine), `dim_hour` (`hour_label` + `day_part`).
 - **Daily facts (3):** `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` — one row per
@@ -107,6 +107,17 @@ Built from the intermediate facts. 15 models:
 Star keys `city_key = generate_surrogate_key(['city'])`, `date_key = YYYYMMDD::int`;
 `relationships` tests enforce FK→dimension integrity, plus `unique` / `not_null` /
 `accepted_values`.
+
+**Materialization (mixed).** The **8 append-only facts** are `materialized='incremental'`,
+`delete+insert` (like the intermediate layer): the 3 hourly facts (`city_hour_key`, 12h lookback),
+the 3 daily facts (`city_date_key`, 2-day lookback — only today's row is still mutable),
+`fct_forecast_accuracy` (`forecast_key`), and `mart_pollution_alerts` (`alert_key`, measured
+history). The other **7 stay full-rebuild `table`s** on purpose: the 3 dims (tiny/static), the two
+rolling-window marts (`mart_city_daily`, `mart_temperature_trends` — a window needs the prior days
+as *input* rows, so an incremental batch would truncate it), and the two forward-looking snapshots
+(`mart_forecast_latest`, `mart_weather_alerts` — passed slots must drop out, which `delete+insert`
+can't express). Output is byte-identical to a full rebuild, so
+`dbt build --select marts --full-refresh` reproduces it exactly.
 
 ## Profiles (`~/.dbt/profiles.yml`)
 
