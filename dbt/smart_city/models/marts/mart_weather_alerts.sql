@@ -1,5 +1,11 @@
 -- Forward-looking severe-weather alerts: one row per (city, forecast_at, alert_type)
 -- that breaches a threshold, built from the latest forecast. Closes spec area #3.
+--
+-- Stays materialized=table (NOT incremental): built off mart_forecast_latest, so it inherits
+-- the same forward-looking churn — alerts for slots that have passed must DISAPPEAR each run,
+-- which delete+insert cannot do (it never removes rows that fell out of the filter). Full
+-- rebuild is the correct semantics. (mart_pollution_alerts differs — it's MEASURED history,
+-- append-only, so that one IS incremental.)
 
 with fc as (
     select * from {{ ref('mart_forecast_latest') }}

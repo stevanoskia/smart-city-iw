@@ -1,6 +1,11 @@
 -- The headline OBT: one wide row per (city, date), LEFT-joining the three daily
 -- facts onto a city×date base so every city appears every day (traffic NULL for
 -- weather-only cities). Adds a comfort_index, labels, and rolling trend columns.
+--
+-- Stays materialized=table (NOT incremental): the rolling_7d / prior_7d comfort windows
+-- need the prior days as INPUT rows, so a recent-rows-only incremental batch would compute
+-- truncated (wrong) averages at the boundary. Daily grain × ~10 cities is tiny — full
+-- rebuild is correct and cheap.
 
 with base as (
     select distinct city, date_utc from (

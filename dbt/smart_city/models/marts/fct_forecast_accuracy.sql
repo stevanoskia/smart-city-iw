@@ -1,12 +1,26 @@
 -- Forecast accuracy fact: joins each past prediction to what actually happened.
 -- predictions = forecast issuances whose target time has now passed;
 -- actuals = the observed hourly weather at that target hour.
+--
+-- Incremental (delete+insert on forecast_key): a prediction only enters this fact once its
+-- target time passes, and its actual (past hourly weather) is then immutable — so scored rows
+-- never change. The 2-day forecast_at lookback recomputes only the recently-matured issuances
+-- and replaces them by key.
+
+{{ config(
+    materialized='incremental',
+    unique_key='forecast_key',
+    incremental_strategy='delete+insert'
+) }}
 
 with predictions as (
     select *
     from {{ ref('int_city_weather_forecast') }}
     where forecast_at < (now() at time zone 'UTC')
       and lead_time_hours >= 0
+    {% if is_incremental() %}
+      and forecast_at >= (select max(forecast_at) - interval '2 days' from {{ this }})
+    {% endif %}
 ),
 
 actuals as (

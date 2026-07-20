@@ -1,5 +1,15 @@
 -- Daily weather fact: one row per (city, date_utc), rolled up from the hourly
 -- weather facts. Star-schema fact — carries city_key / date_key for the dims.
+--
+-- Incremental (delete+insert on city_date_key): only the current UTC day is mutable
+-- (its hourly observations still accumulate); past days are immutable. The 2-day
+-- source lookback re-aggregates today (+ yesterday for safety) and replaces by key.
+
+{{ config(
+    materialized='incremental',
+    unique_key='city_date_key',
+    incremental_strategy='delete+insert'
+) }}
 
 with daily as (
     select
@@ -20,6 +30,9 @@ with daily as (
         mode() within group (order by weather_main)     as dominant_weather_main,
         count(*)                                        as observation_count
     from {{ ref('int_city_hourly_weather') }}
+    {% if is_incremental() %}
+    where date_utc >= (select max(date_utc) - interval '2 days' from {{ this }})
+    {% endif %}
     group by city, country, date_utc
 )
 

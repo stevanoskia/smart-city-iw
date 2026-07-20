@@ -3,6 +3,16 @@
 -- Full hourly history (append-only in the intermediate layer), so point-in-time reads at the
 -- latest observed_at (e.g. "Latest Temp") and diurnal patterns are possible; fct_weather_daily
 -- rolls this same source up to daily. Mirrors fct_traffic_hourly.
+--
+-- Incremental (delete+insert on city_hour_key): a deterministic 1:1 passthrough of the
+-- append-only intermediate, so re-pulling only recent hours and replacing by key converges.
+-- The 12h observed_at lookback safely covers the intermediate's 6h re-sync window.
+
+{{ config(
+    materialized='incremental',
+    unique_key='city_hour_key',
+    incremental_strategy='delete+insert'
+) }}
 
 select
     city_hour_key,
@@ -28,3 +38,6 @@ select
     rain_1h_mm,
     snow_1h_mm
 from {{ ref('int_city_hourly_weather') }}
+{% if is_incremental() %}
+where observed_at > (select max(observed_at) - interval '12 hours' from {{ this }})
+{% endif %}
