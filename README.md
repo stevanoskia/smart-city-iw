@@ -98,9 +98,29 @@ cd airflow
 # First time only — initialises the Airflow DB and creates the admin user
 docker compose run --rm airflow-init
 docker compose up -d
+
+# One-time: populate the dbt_packages named volume (installs pinned dbt_utils 1.4.1
+# from package-lock.yml). Persists across restarts/rebuilds, so the hourly DAG has no
+# per-run `dbt deps` step. Re-run this same command after a `docker compose down -v`
+# (which wipes the volume) or any packages.yml change.
+#   --entrypoint : the airflow image otherwise routes args through its `airflow` CLI
+#   --user root  : a freshly-created named volume is root-owned; root can create the
+#                  install dir. Installed files are world-readable, so the DAG (which
+#                  runs as the airflow user) reads them fine.
+docker compose run --rm --user root \
+  --entrypoint /home/airflow/dbt_venv/bin/dbt airflow-scheduler \
+  deps --project-dir /opt/airflow/dbt/smart_city --profiles-dir /opt/airflow/dbt/smart_city
+
 # UI: localhost:8080  (admin / admin)
 # Enable DAGs: smart_city_pipeline, smart_city_maintenance
 ```
+> The dbt project is bind-mounted **and** `dbt_packages/` is gitignored, so the packages
+> can't be baked into the image (the mount would shadow them). The `dbt_packages` named
+> volume in `docker-compose.yml` holds them durably instead — populate it once with the
+> command above; the DAG then assumes they're present (fails with "dbt_utils not found"
+> only if the volume was wiped and not repopulated). In the container dbt installs into
+> the `dbt_packages/lib` **subdir** of the volume (`DBT_PACKAGES_PATH`), because `dbt deps`
+> deletes its own install path and can't delete a volume's mount root.
 
 ---
 
@@ -111,7 +131,7 @@ docker compose up -d
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
 - **15 dbt marts models** — star schema (3 dims + 7 facts), the `mart_city_daily` OBT, and 4 analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity. The **8 append-only facts load incrementally** (`delete+insert`, mirroring the intermediate layer); the other 7 stay full-rebuild tables (see Marts below)
-- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs **dbt deps** (install pinned `dbt_utils`) → dbt staging → dbt intermediate → dbt marts (build + test)
+- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test). dbt packages (`dbt_utils`) live in a persistent `dbt_packages` **named volume** — populated once (see the one-time command in [Start Airflow](#6-start-airflow)), not reinstalled per run
 - **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
 - **Email alerts** — both DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled. Shared by both DAGs via `airflow/dags/alert_utils.py`

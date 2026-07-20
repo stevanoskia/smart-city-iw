@@ -9,6 +9,13 @@ seed-paths: ["seeds"]
 macro-paths: ["macros"]
 snapshot-paths: ["snapshots"]
 
+# Where `dbt deps` installs packages. Host: default 'dbt_packages'. In the Airflow
+# container a persistent named volume is mounted AT .../dbt_packages, and dbt can't
+# rmtree its own install path when that path is a mount point (Errno 16, "Device or
+# resource busy"). So there we set DBT_PACKAGES_PATH=dbt_packages/lib — a subdir INSIDE
+# the volume that dbt can freely delete/recreate. See docker-compose.yml + CLAUDE.md.
+packages-install-path: "{{ env_var('DBT_PACKAGES_PATH', 'dbt_packages') }}"
+
 clean-targets:
   - "target"  
   - "dbt_packages"

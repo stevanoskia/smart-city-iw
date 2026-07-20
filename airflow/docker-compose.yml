@@ -9,6 +9,10 @@ x-airflow-common: &airflow-common
     AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: 'true'
     AIRFLOW__CORE__LOAD_EXAMPLES: 'false'
     AIRFLOW__API__AUTH_BACKENDS: 'airflow.api.auth.backend.basic_auth'
+    # dbt installs packages into a subdir INSIDE the dbt_packages named volume (below).
+    # It can't be the volume's mount root: `dbt deps` rmtree's its install path, and a
+    # mount point can't be removed (Errno 16). This subdir is a normal dir dbt can manage.
+    DBT_PACKAGES_PATH: dbt_packages/lib
     # Smart city DB connection (used by dbt staging target inside container)
     SMART_CITY_PG_HOST: host.docker.internal
     SMART_CITY_PG_PORT: '5432'
@@ -25,6 +29,15 @@ x-airflow-common: &airflow-common
     - ./plugins:/opt/airflow/plugins
     - ../dbt:/opt/airflow/dbt
     - ../ingestion/config:/opt/airflow/ingestion_config
+    # Named volume for dbt packages (dbt_utils), layered over the ../dbt bind mount at
+    # just the dbt_packages/ subpath. dbt installs into the dbt_packages/lib subdir of it
+    # (see DBT_PACKAGES_PATH above). Populated ONCE via a manual `dbt deps` (see README /
+    # CLAUDE.md), then persists across container restarts and image rebuilds — so the
+    # hourly DAG no longer needs a per-run `dbt deps` step. Wiped only by
+    # `docker compose down -v`, after which re-run the populate command. dbt_packages/ is
+    # gitignored and the project is bind-mounted, so it can't be baked into the image (the
+    # mount would shadow it) — a durable volume is the stable alternative.
+    - dbt_packages:/opt/airflow/dbt/smart_city/dbt_packages
   depends_on:
     airflow-postgres:
       condition: service_healthy
@@ -61,3 +74,8 @@ services:
     <<: *airflow-common
     command: bash -c "airflow db init && airflow users create --username admin --password admin --firstname Admin --lastname User --role Admin --email admin@smartcity.local || true"
     restart: "no"
+
+volumes:
+  # Persists dbt_packages/ (dbt_utils) across restarts/rebuilds. Populate once with the
+  # one-time `dbt deps` command in the README's Airflow section. Removed by `down -v`.
+  dbt_packages:
