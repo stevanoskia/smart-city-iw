@@ -26,7 +26,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 ### Medium Priority (the marts now exist — these are unblocked)
 | Task | Notes |
 |---|---|
-| BI dashboard | Power BI — **in active build**. Cyclic-refresh blocker **fixed** (Auto Date/Time); model layer complete (14 tables, clean star, 42 measures, 2 calc columns); Pages 1 + 2 (Weather & Forecast) + 3 (Air Quality) built. Pages 4–5 + Sankeys + Azure Maps remain; Page 1 still needs its v2 re-layout. Approach + status in the Power BI section below; page-by-page plan in `docs/powerbi_dashboard_plan.md`. |
+| BI dashboard | Power BI — **in active build**. Model layer complete (**15 tables**, clean **26-rel** fact→dim star, **49 measures**, 2 calc columns); Pages 1 (Executive Overview, v2), 2 (Weather & Forecast), 3 (Air Quality) built. Remaining: Azure Map on Page 1, a Page-3 pollution-alerts table (`mart_pollution_alerts` is imported but unused), Pages 4–5, Sankeys. ⚠️ Cyclic-refresh blocker **recurs** after structural changes/restarts (relationship-autodetect resets) — see the RESET note + full-XMLA-refresh playbook in the Power BI section. Page-by-page plan in `docs/powerbi_dashboard_plan.md`. |
 | Noise / energy APIs | Additional smart city data sources |
 
 ### Bonus (not in original scope)
@@ -35,6 +35,23 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 | AI-generated city summaries | Claude API reads `mart_city_daily` → daily narrative summaries (marts now available) |
 
 ### Recently Completed
+- ✅ **Marts facts → incremental `delete+insert`** (2026-07-20) — the 8 **append-only** marts
+  models were switched from full table rebuild to `materialized='incremental'`, mirroring the
+  intermediate layer: the **3 hourly facts** (`fct_weather_hourly`/`fct_pollution_hourly`/
+  `fct_traffic_hourly`, key `city_hour_key`, 12h `observed_at` lookback), the **3 daily facts**
+  (`fct_*_daily`, key `city_date_key`, 2-day `date_utc` source lookback — only today's row is
+  mutable), `fct_forecast_accuracy` (key `forecast_key`, 2-day `forecast_at` lookback), and
+  `mart_pollution_alerts` (key `alert_key`, measured/immutable history). The other **7 stay
+  `table`** *on purpose* (headers say why): the 3 dims (tiny/static); `mart_city_daily` +
+  `mart_temperature_trends` (rolling-window functions — a recent-rows batch would compute
+  truncated averages at the boundary); `mart_forecast_latest` + `mart_weather_alerts`
+  (forward-looking snapshots — passed slots must *disappear*, which `delete+insert` can't do).
+  Verified byte-identical output three ways (full-refresh vs prior golden, incremental vs
+  full-refresh, incremental run twice for idempotency) — schema **and** content md5 unchanged
+  across all 15 tables, so the **Power BI (PBIP) column contract is untouched**; `dbt build`
+  green (75 checks). No DAG change (the `dbt build --select marts` step just runs incrementally).
+  ⚠️ First Desktop refresh after this may re-trip the autodetect cyclic-reference — run the
+  full-XMLA-refresh playbook (Power BI section). PBIP checkpoint zipped before the change.
 - ✅ **Surrogate keys → `dbt_utils.generate_surrogate_key`** (2026-07-10) — all keys across the
   intermediate + marts layers migrated from hand-written `md5(a || '|' || b)` to
   `dbt_utils.generate_surrogate_key([...])` (NULL-safe, `-` separator, consistent). `dbt_utils`
@@ -60,7 +77,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 
 ---
 
-## Power BI Dashboard (in active build — cyclic blocker FIXED 2026-07-13)
+## Power BI Dashboard (in active build — 15 tables, clean 26-rel star, 49 measures)
 
 Live work on `C:\Users\Andrej\Documents\smart_city_dashboard.pbip` (Power BI **project**/PBIP,
 connected to PostgreSQL `marts`, Import mode). It lives **outside** this git repo.
@@ -89,47 +106,82 @@ connected to PostgreSQL `marts`, Import mode). It lives **outside** this git rep
   visuals are added via the **UI** (not hand-authored).
 
 ### Status
-### ⚠️ Two Power BI settings that BOTH cause "A cyclic reference was encountered"
-Both live in **File → Options → Current File → Data Load**, are **per-file** (not in git — they do
-**not** survive rebuilding the PBIP from scratch), and produce the *same* misleading error. If a
-refresh ever fails with "cyclic reference", check these two **first** — the model is probably fine.
+### ⚠️ Four Power BI settings that cause "A cyclic reference was encountered"
+All live in **File → Options → Current File → Data Load** (make sure it's the **CURRENT FILE**
+scope, not GLOBAL), are **per-file** (not in git — they do **not** survive rebuilding the PBIP from
+scratch, **nor a device restart / auto-recovery / external TMDL edit** — see the 2026-07-20 note),
+and produce the *same* misleading error. If a refresh fails with "cyclic reference", check these
+**first** — the model is almost always fine.
 
-| Setting | Must be | Why |
-|---|---|---|
-| **Auto date/time** | ☐ **off** | Generated a `DateTableTemplate_*` + ~13 hidden `LocalDateTable_*` tables whose date-variation relationships formed a cycle. Fixed 2026-07-13. Use `dim_date` instead. |
-| **Autodetect new relationships after data is loaded** | ☐ **off** | Fixed 2026-07-14. See below. |
-| *(also untick)* **Import relationships from data sources on first load** | ☐ off | Same mechanism, fires on a fresh open. Relationships are defined explicitly in `relationships.tmdl`, so nothing is lost. |
+| Setting | Group | Must be | Why |
+|---|---|---|---|
+| **Auto date/time** | Time intelligence | ☐ **off** | Generated a `DateTableTemplate_*` + ~13 hidden `LocalDateTable_*` tables whose date-variation relationships formed a cycle. Fixed 2026-07-13. Use `dim_date` instead. |
+| **Autodetect new relationships after data is loaded** | Relationships | ☐ **off** | Matches shared key columns across facts on *load* → junk fact-to-fact links. Fixed 2026-07-14. |
+| **Update or delete relationships when refreshing data** | Relationships | ☐ **off** | Same mechanism but fires on **refresh** (greys out once the two below/above are off). Untick all three in the group together. |
+| **Import relationships from data sources on first load** | Relationships | ☐ off | Same mechanism, fires on a fresh open. Relationships are defined explicitly in `relationships.tmdl`, so nothing is lost. |
 
 **The autodetect trap (2026-07-14).** All three hourly facts share a **`city_hour_key`** column (plus
-`city`, `date_utc`, `observed_at`). After *every* refresh, autodetect matched those columns and wired
-the fact tables **to each other**, closing a loop against `dim_city`/`dim_date` → genuine cycle →
-**every** query blocked. It appeared the moment `fct_weather_hourly` + `fct_pollution_hourly` were
-added (3rd + 4th `city_hour_key`), blamed a **different, arbitrary table each refresh** (scan order
-varies), and never showed up over **XMLA** (external refresh doesn't run Desktop's autodetect) — which
-is what proved the model itself was sound. The refresh failed *at* the autodetect step and rolled
-back, so the junk relationships never persisted; the star always read a clean 24. This is also why
-the star previously needed cleaning of "junk fact-to-fact links" — same setting, cleaned by hand
-instead of switched off. **Verified fixed:** refresh now pulls new rows (weather_hourly 377→397,
-pollution_hourly 938→957) and the star stays at **24 relationships, all fact→dim**.
+`city`, `date_utc`, `observed_at`); the daily facts + OBT + alert marts share `city_key`/`date_key`/
+`city`. After a refresh, the relationship-autodetect pass matched those columns and wired the fact
+tables **to each other**, closing a loop against `dim_city`/`dim_date` → genuine cycle → **every**
+query blocked (an arbitrary set of tables named each time — even innocent dims like `dim_hour`, since
+it's a *global* cycle-detection failure, not per-table). It never showed up over **XMLA** (external
+refresh doesn't run Desktop's autodetect) — which is what proves the model itself is sound. The
+refresh fails *at* the autodetect step and rolls back, so the junk relationships never persist; the
+star always reads clean.
+
+**The settings RESET — expect recurrence (2026-07-20).** These relationship boxes were confirmed
+**off** yet a Desktop refresh still cyclic-failed. Diagnosis (all verified over XMLA): model
+structurally clean (26 fact→dim rels, no calc tables, no column variations, no bidirectional
+filters, no shared M query, only 2 trivial same-table calc columns); a **full-model XMLA refresh of
+all 15 tables succeeded**; only Desktop's refresh path failed. Root cause: the **first** Desktop
+refresh after a *structural change* (importing `mart_pollution_alerts`, which added fresh
+`city_key`/`date_key`/`city` match surface) tripped the autodetect pass once. A full XMLA refresh
+(brings every table to a consistent `Ready` state) followed by a repeat Desktop refresh cleared it,
+and it stayed green. **Playbook when this recurs:** (1) don't trust that the boxes "look off" — the
+model is the thing to check; (2) run a **full-model XMLA refresh** (`RequestRefresh(Full)` +
+`SaveChanges()` over TOM — see the session scratchpad `pbi_refresh_full.ps1`); (3) then refresh in
+Desktop once more. The star holds at **26 relationships, all fact→dim**.
 
 - ✅ **Cyclic-reference refresh blocker FIXED** — root cause was **Auto Date/Time** (see table above).
   All KPIs green.
-- ✅ **Refresh cyclic-reference FIXED (2026-07-14)** — root cause was **Autodetect new relationships**
-  (see table above). Refresh green; star holds at 24 fact→dim relationships.
+- ⚠️ **Refresh cyclic-reference — recurs after structural changes** (root cause **Autodetect new
+  relationships**, first fixed 2026-07-14; re-appeared + re-cleared 2026-07-20 — see the settings
+  section above for the RESET note + full-XMLA-refresh playbook). Refresh green; star holds at **26**
+  fact→dim relationships.
 - ✅ **Filters pane readability FIXED (2026-07-14)** — the theme set a dark page background but defined
   no `outspacePane`/`filterCard` styles, so the Filters pane kept Power BI's default **light-theme
   black text** → black-on-black, unreadable. Added both (incl. the `Applied`/`Available` card states)
   to `smart_city_theme.json`. ⚠️ **Editing the theme file does nothing on its own** — it must be
   re-imported via **View → Themes → Browse for themes**; Power BI bakes a copy into
   `Report/StaticResources/RegisteredResources/`.
-- ✅ **Model layer complete** — 14 marts tables loaded (incl. `fct_traffic_hourly`,
-  `fct_forecast_accuracy`, and the hourly `fct_weather_hourly` + `fct_pollution_hourly` added
-  2026-07-14); clean star (no junk fact-to-fact links); **42 measures** + 2 calc columns
-  (`AQI Category (daily)`, `Congestion Band` — both **bare-ref**, never self-qualified) added live.
-  All measures live on `mart_city_daily` (single measure home).
-- ⚠️ **Page 1** — built but still on the **v1 cramped grid** (cards 168×100 from x=15, slicer
-  overruns the 1256 content edge, no card titles, page still literally named "Page 1"). Needs the
-  v2 re-layout + rename to "Executive Overview". Pages 2/3 already meet the v2 standard.
+- ✅ **Model layer complete** — **15** marts tables loaded (all of `models/marts/`; `mart_pollution_alerts`
+  imported 2026-07-15 — see below); clean star (**26** relationships, all fact→dim, no junk fact-to-fact
+  links); **49 measures** + 2 calc columns (`AQI Category (daily)` on `fct_pollution_daily`,
+  `Congestion Band` on `fct_traffic_hourly` — both **bare-ref**, never self-qualified) added live.
+  All 49 measures live on `mart_city_daily` (single measure home) even when they aggregate other
+  tables' columns. Measure families: `[Latest Date]` anchor + 25 date-pinned `Current *`; 7
+  point-in-time `Latest *` (read the *hourly* facts, `AVERAGEX` over `dim_city[city_key]`); 9 plain
+  aggregations; 2 label/colour SWITCHes (`AQI Color` defined but not yet wired to a visual).
+- ✅ **`Current *` date-filter pattern fixed (2026-07-15)** — the 29 date-pinned measures were
+  rewritten from `FILTER(ALL(<fact>[date_utc]), <fact>[date_utc] = d)` to
+  `<fact>[date_utc] = d, ALL('marts dim_date')`. The old form cleared the fact's *own* date column
+  but **not** the filter arriving through `dim_date → fact` on `date_key`, so any future date slicer
+  would intersect to empty and blank every `Current *` card. Both forms return identical values with
+  no date slicer (verified live, side by side), so **no existing visual changed** — the fix only
+  removes the latent trap. `[Rain Probability %]` was left alone (reads `mart_forecast_latest`,
+  which has no `dim_date` link).
+- ✅ **`mart_pollution_alerts` imported (2026-07-15)** — the 15th marts model, previously built in dbt
+  but never imported. Now an Import-mode table with `city_key → dim_city` + `date_key → dim_date`
+  relationships (the two that took the star 24 → 26). 14 rows, verified live. Air-quality analogue of
+  `mart_weather_alerts`, but built from **real hourly readings** (`fct_pollution_hourly`), not a
+  forecast. ⚠️ **No visual consumes it yet** — surfacing it on Page 3 (an alerts table mirroring
+  Page 1's weather alerts + an `Active Pollution Alerts` measure) is a *report* edit, PBI **closed**.
+- ✅ **Page 1 (Executive Overview)** — **done** (earlier docs said it was still the v1 cramped grid;
+  that's stale). Renamed to "Executive Overview", on the v2 standard (KPI cards 190×96 from x=24,
+  short custom titles, category labels hidden), with the point-in-time `Latest *` "Live Reading"
+  multi-row card, temp-trend line (Avg Temp + Temp 7d Avg, **no legend**), and weather-alerts table.
+  Still missing only the **Azure Map** in the reserved centre gap.
 - ✅ **Page 2 (Weather & Forecast)** — 6 condition cards, temp trend + 7-day-avg line, 7-day forecast
   columns, chance-of-rain bars, temp-anomaly-by-city, city slicer.
 - ✅ **Page 3 (Air Quality)** — AQI gauge, 6 pollutant cards, Avg-AQI-by-city bar, AQI-category
@@ -166,9 +218,10 @@ error *"too many columns in the Legend bucket"* — that broke the v1 Page-2 tre
 measures `Avg Temp (°C)` + `Temp 7d Avg (°C)` with **no** legend). One city slicer per page (sync later).
 
 ### To be implemented (per `docs/powerbi_dashboard_plan.md`)
-- **Page 1 rebuild** — rename "Page 1" → "Executive Overview"; re-lay-out to the v2 standard; swap
-  the KPI cards onto the new point-in-time `Latest *` measures; Azure Map (UI) in the reserved
-  center gap; Active Alerts.
+- **Page 1** — ✅ rebuilt (Executive Overview, v2 layout, `Latest *` Live Reading card — see status
+  above). Remaining: only the **Azure Map** (UI) in the reserved centre gap.
+- **Page 3 pollution alerts** — surface the newly-imported `mart_pollution_alerts` as an alerts table
+  (mirror Page 1's weather-alerts table) + an `Active Pollution Alerts` measure. Report edit, PBI closed.
 - **Page 4 Traffic & Congestion** — congestion/speed/incident cards, congestion-by-city bar,
   speed-vs-free-flow, congestion-over-time **by date** (⚠️ *not* peak-hour by `day_part` — see the
   hourly coverage constraint above), jam map (UI).
@@ -233,7 +286,7 @@ variance before spending a card on it.
 | Marts (dims) | PostgreSQL | `dim_city` (derived), `dim_hour`, `dim_date` | ✅ Built |
 | Marts (daily facts) | PostgreSQL | `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` | ✅ Built |
 | Marts (extra facts) | PostgreSQL | `fct_traffic_hourly`, `fct_weather_hourly`, `fct_pollution_hourly`, `fct_forecast_accuracy` | ✅ Built |
-| Marts (OBT + analytics) | PostgreSQL | `mart_city_daily`, `mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts` | ✅ Built |
+| Marts (OBT + analytics) | PostgreSQL | `mart_city_daily`, `mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`, `mart_pollution_alerts` | ✅ Built |
 
 ### Orchestration
 | Component | Status | Notes |
@@ -367,7 +420,7 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 | _(ephemeral, no DB object)_ | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (ephemeral CTEs — compile inline) |
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
 | `intermediate` (forecast) | int_city_weather_forecast | dbt (incremental issue history) |
-| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts | dbt (tables) |
+| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt (8 incremental `delete+insert` facts + 7 tables — see Marts materialization) |
 
 **Hourly facts grain & keys:** one row per clock hour. Each model dedupes its staging source on the
 stream's business key — `(city, date_trunc('hour', observed_at))` for weather/pollution/flow (key
@@ -389,6 +442,16 @@ not bounded by the facts) so the dims resolve first; the fixed anchor still guar
 fact `date_key` exists in the dimension. `dim_hour` carries `hour_label` (`'06:00'`) + `day_part`.
 `mart_city_daily` LEFT-joins weather+pollution+traffic so weather-only cities (Skopje, Prilep,
 Bitola, Ohrid) appear with NULL traffic. Full spec + reference SQL in `docs/marts_build_guide.md`.
+
+**Marts materialization (mixed, since 2026-07-20):** the 8 **append-only** facts are
+`materialized='incremental'`, `delete+insert` (3 hourly on `city_hour_key`, 3 daily on
+`city_date_key`, `fct_forecast_accuracy` on `forecast_key`, `mart_pollution_alerts` on
+`alert_key`). The other 7 stay `table` on purpose — dims (tiny/static), the two rolling-window
+marts (`mart_city_daily`, `mart_temperature_trends` — windows need prior days as input rows, so
+an incremental batch would truncate them), and the two forward-looking snapshots
+(`mart_forecast_latest`, `mart_weather_alerts` — passed slots must drop out, which `delete+insert`
+can't express). Column shapes are unchanged, so the Power BI (PBIP) import contract is preserved.
+`dbt build --select marts --full-refresh` rebuilds all identically if keys ever drift.
 
 dbt project root: `dbt/smart_city/`
 Profiles: `~/.dbt/profiles.yml` (host) + `dbt/smart_city/profiles.yml` (Docker/Airflow)

@@ -27,7 +27,7 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt intermediate --> dbt mart
 |---|---|
 | Ingestion | Airbyte (abctl / Kubernetes)
 | Landing DB | PostgreSQL 18 (local, port 5432)
-| Transformation | dbt-postgres (staging ephemeral parsing + intermediate tables + marts tables)
+| Transformation | dbt-postgres (staging ephemeral parsing + intermediate tables + marts: incremental facts + tables)
 | Orchestration | Apache Airflow (Docker, port 8080)
 | Reporting | Power BI (dashboards built on the `marts` layer)
 
@@ -110,7 +110,7 @@ docker compose up -d
 - **5 dbt staging models** (ephemeral — inline CTEs, no DB object), one per Airbyte source stream
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
-- **15 dbt marts models** — star schema (3 dims + 7 facts), the `mart_city_daily` OBT, and 4 analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity
+- **15 dbt marts models** — star schema (3 dims + 7 facts), the `mart_city_daily` OBT, and 4 analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity. The **8 append-only facts load incrementally** (`delete+insert`, mirroring the intermediate layer); the other 7 stay full-rebuild tables (see Marts below)
 - **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs **dbt deps** (install pinned `dbt_utils`) → dbt staging → dbt intermediate → dbt marts (build + test)
 - **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
@@ -151,10 +151,22 @@ Models the 5-day / 3-hour forecast (two timestamps: `forecast_at` = predicted ti
 |---|---|
 | `int_city_weather_forecast` | Incremental, append-only **issue history** — one row per prediction issuance; persists forecasts as issued for later accuracy scoring |
 
-### Marts (PostgreSQL `marts` schema — tables)
+### Marts (PostgreSQL `marts` schema — incremental facts + tables)
 Star schema + derived OBT + analytics marts. Daily facts and the OBT share the grain
 `(city, date_utc)`; star keys are `city_key` = `dbt_utils.generate_surrogate_key(['city'])` and
 `date_key = YYYYMMDD::int`, with `relationships` tests enforcing FK→dimension integrity.
+
+**Materialization is mixed.** The **8 append-only facts** load **incrementally** (`delete+insert`,
+mirroring the intermediate layer), so each hourly run only reprocesses recent rows instead of
+rebuilding all history: the 3 hourly facts (`city_hour_key`, 12h `observed_at` lookback), the 3
+daily facts (`city_date_key`, 2-day `date_utc` lookback — only today's row is still mutable),
+`fct_forecast_accuracy` (`forecast_key`), and `mart_pollution_alerts` (`alert_key`, measured
+history). The other **7 stay full-rebuild `table`s on purpose**: the 3 dims (tiny/static), the two
+rolling-window marts (`mart_city_daily`, `mart_temperature_trends` — a window needs the prior days
+as *input* rows, so an incremental batch would truncate it), and the two forward-looking snapshots
+(`mart_forecast_latest`, `mart_weather_alerts` — passed slots must drop out, which `delete+insert`
+can't express). Output is byte-identical to a full rebuild (`dbt build --select marts
+--full-refresh` reproduces it), so column shapes — and the Power BI import contract — are unchanged.
 | Model | Kind | Description |
 |---|---|---|
 | `dim_city` | dimension | One row per city, **derived** from data (no seed): city/country + coords + weather/traffic coverage flags |

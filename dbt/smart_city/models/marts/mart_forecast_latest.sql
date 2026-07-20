@@ -1,6 +1,11 @@
 -- Latest forward-looking forecast: the most recent prediction for each future slot.
 -- Dedupes the forecast issue-history to the newest issuance per (city, forecast_at),
 -- keeping only slots that are still in the future.
+--
+-- Stays materialized=table (NOT incremental): this is a forward-looking snapshot — each run
+-- slots that have passed must DISAPPEAR (they drop out of `forecast_at >= now()`). delete+insert
+-- only replaces matching keys, never removes rows that fell out of the filter, so an incremental
+-- build would leave stale past forecasts forever. Full rebuild is the correct semantics.
 
 with ranked as (
     select *,

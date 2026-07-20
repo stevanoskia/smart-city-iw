@@ -1,5 +1,10 @@
 -- Temperature trend + anomaly analytics: rolling baselines and day/week deltas
 -- per city, built on the daily weather fact. Closes spec area #1.
+--
+-- Stays materialized=table (NOT incremental): the 7d/30d rolling averages and lag(7)
+-- need the prior days as INPUT rows, so a recent-rows-only incremental batch would compute
+-- truncated (wrong) baselines/deltas at the boundary. Daily grain × ~10 cities is tiny —
+-- full rebuild is correct and cheap.
 
 with daily as (
     select city, date_utc, avg_temp_celsius, min_temp_celsius, max_temp_celsius

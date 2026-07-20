@@ -1,5 +1,15 @@
 -- Daily traffic fact: one row per (city, date_utc). Combines flow (congestion,
 -- speeds) with incident counts via a LEFT JOIN so flow-only days aren't dropped.
+--
+-- Incremental (delete+insert on city_date_key): only the current UTC day is mutable
+-- (its hourly observations still accumulate); past days are immutable. The 2-day
+-- lookback is applied to BOTH source CTEs and replaces today's rows by key.
+
+{{ config(
+    materialized='incremental',
+    unique_key='city_date_key',
+    incremental_strategy='delete+insert'
+) }}
 
 with daily_flow as (
     select
@@ -16,6 +26,9 @@ with daily_flow as (
         count(*) filter (where road_closure = true)    as road_closure_count,
         count(*)                                       as flow_observation_count
     from {{ ref('int_city_hourly_traffic_flow') }}
+    {% if is_incremental() %}
+    where date_utc >= (select max(date_utc) - interval '2 days' from {{ this }})
+    {% endif %}
     group by city, date_utc
 ),
 
@@ -27,6 +40,9 @@ daily_incidents as (
         count(distinct incident_id) filter (where magnitude_of_delay = 3) as major_incidents,
         round(avg(delay_sec)::numeric, 0)                                 as avg_delay_sec
     from {{ ref('int_city_hourly_traffic_incidents') }}
+    {% if is_incremental() %}
+    where date_utc >= (select max(date_utc) - interval '2 days' from {{ this }})
+    {% endif %}
     group by city, date_utc
 )
 

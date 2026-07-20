@@ -5,8 +5,20 @@
 -- WHO 24h/1h guideline ballpark figures — easy to retune later if the mentor wants
 -- stricter/looser bands.
 
+{{ config(
+    materialized='incremental',
+    unique_key='alert_key',
+    incremental_strategy='delete+insert'
+) }}
+
 with pol as (
+    -- Incremental (delete+insert on alert_key): built from measured, immutable hourly
+    -- readings, so past alerts never change. The 12h observed_at lookback recomputes only
+    -- recent hours and replaces their alerts by key (matches fct_pollution_hourly's window).
     select * from {{ ref('fct_pollution_hourly') }}
+    {% if is_incremental() %}
+    where observed_at > (select max(observed_at) - interval '12 hours' from {{ this }})
+    {% endif %}
 ),
 
 alerts as (
