@@ -35,6 +35,17 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 | AI-generated city summaries | Claude API reads `mart_city_daily` → daily narrative summaries (marts now available) |
 
 ### Recently Completed
+- ✅ **Airbyte sync: trigger + wait merged into one task per connection** (2026-07-20) — the
+  hourly DAG's `trigger_syncs` (push `job_id` to XCom) + `wait_syncs` (poll it) split was replaced
+  by a single `syncs.sync_*` task per connection that triggers **and** waits. The split made
+  retries useless: a failed sync only failed the *wait* task, whose retry re-polled the **same
+  already-failed `job_id`** from XCom — a dead job never recovers, so the retry could never pick up
+  a fix. This bit us on a network switch: after re-pointing the destination to the new LAN IP, the
+  stuck run kept re-checking the dead job instead of re-triggering; recovery needed a manual clear
+  of the trigger task. Merged, an Airflow retry re-triggers a *fresh* sync; `trigger_sync`'s 409
+  handling still attaches to an already-running job so a retry won't double-trigger. Parallelism
+  unchanged (the group still runs concurrently). DAG re-parses clean; tasks are now
+  `syncs.sync_openweather_all` / `syncs.sync_tomtom_all` → `dbt_staging` → `dbt_intermediate` → `dbt_marts`.
 - ✅ **`dbt deps` moved out of the hourly DAG → persistent named volume** (2026-07-20) — the per-run
   `dbt deps` task was removed from `smart_city_pipeline`. `dbt_utils` (1.4.1) now lives in a
   `dbt_packages` **Docker named volume** (declared in `airflow/docker-compose.yml`, layered over the
@@ -510,7 +521,7 @@ Set `AIRBYTE_CLIENT_ID` and `AIRBYTE_CLIENT_SECRET` in `.env`.
 > handler catches the 401 too — it now detects 401/403, clears the cached token so the next
 > `_headers()` re-authenticates, and retries (instead of spinning on the dead token until the
 > task's `execution_timeout` kills it — a 401 that looked like a slow sync). `wait_for_sync`'s
-> default `timeout` is `2100`s (35 min), just under the wait task's 40-min `execution_timeout`,
+> default `timeout` is `2100`s (35 min), under the `sync_*` task's 45-min `execution_timeout`,
 > so its own `TimeoutError` (which names the `job_id`) surfaces before Airflow's generic kill.
 
 ### Known quirks
@@ -545,14 +556,17 @@ UI: `localhost:8080` — login: `admin / admin`
 
 ### DAG: `smart_city_pipeline`
 - Schedule: `@hourly`
-- `max_active_runs=1` — **runs are serialized.** Worst-case duration (wait_syncs 40m +
+- `max_active_runs=1` — **runs are serialized.** Worst-case duration (syncs 45m +
   the three dbt steps 15m each) can exceed the hourly interval; without this the scheduler
   would start the next run while the current one is still writing, so two
   `dbt_intermediate`/`dbt_marts` tasks would `DELETE+INSERT` the same incremental Postgres
   tables concurrently (deadlocks / lost rows). `=1` queues the next run; `catchup=False`
   means a long run skips ahead rather than piling up.
-- Triggers all Airbyte syncs in parallel (one task per connection in `connection_ids.yml` — now 2: `openweather_all`, `tomtom_all`)
-- Waits for all syncs to complete
+- Syncs all Airbyte connections in parallel — one `syncs.sync_*` task per connection in
+  `connection_ids.yml` (now 2: `openweather_all`, `tomtom_all`) **triggers its sync and waits for
+  it in the same task**. Trigger + wait were merged (2026-07-20; was a `trigger_syncs`/`wait_syncs`
+  split that passed `job_id` via XCom) so an Airflow retry re-triggers a *fresh* sync instead of
+  re-polling an already-failed job — see the Recently Completed note above.
 - **No per-run `dbt deps` step** (removed 2026-07-20). `dbt_utils` (1.4.1) lives in the persistent
   `dbt_packages` **named volume** declared in `docker-compose.yml` (layered over the `../dbt` bind
   mount at the `dbt_packages/` subpath), populated **once** via a manual `dbt deps` and then durable
