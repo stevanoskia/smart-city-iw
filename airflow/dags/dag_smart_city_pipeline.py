@@ -4,10 +4,15 @@ Smart City Analytics Pipeline DAG
 Hourly ELT pipeline:
   1. Trigger all Airbyte syncs in parallel (one per connection in connection_ids.yml)
   2. Wait for all syncs to complete (XCom job IDs passed via context)
-  3. dbt deps — install pinned dbt packages (dbt_utils) from package-lock.yml
-  4. Compile dbt staging (stg_* are ephemeral — inline CTEs, no DB object)
-  5. Build + test dbt intermediate (PostgreSQL tables, hourly facts + forecast history)
-  6. Build + test dbt marts (star schema: dims + facts + OBT + analytics marts)
+  3. Compile dbt staging (stg_* are ephemeral — inline CTEs, no DB object)
+  4. Build + test dbt intermediate (PostgreSQL tables, hourly facts + forecast history)
+  5. Build + test dbt marts (star schema: dims + facts + OBT + analytics marts)
+
+dbt packages (dbt_utils) are NOT installed per-run. They live in the `dbt_packages`
+named volume (see docker-compose.yml), populated ONCE via a manual `dbt deps` and then
+persistent across restarts/rebuilds — so this DAG assumes they're present. If a run
+fails with "dbt_utils not found" (e.g. after `docker compose down -v` wiped the volume),
+re-run the one-time populate command in the README's Airflow section.
 
 Raw-data retention cleanup lives in the separate smart_city_maintenance DAG
 (@daily), decoupled so it runs regardless of any individual ELT run.
@@ -51,15 +56,6 @@ def dbt_cmd(select: str, target: str, command: str = "run") -> str:
         f"{DBT_BIN} {command} --select {select} --target {target} "
         f"--project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR} "
         f"--no-partial-parse"
-    )
-
-def dbt_deps_cmd() -> str:
-    # Install the pinned dbt packages (dbt_utils) into the mounted project's
-    # dbt_packages/ from the committed package-lock.yml, honoring the exact locked
-    # version (1.4.1). Idempotent — a fast no-op when already present.
-    return (
-        f"{DBT_BIN} deps "
-        f"--project-dir {DBT_PROJECT_DIR} --profiles-dir {DBT_PROFILES_DIR}"
     )
 
 # ── Wait task — pulls job_id from XCom via context ───────────────────────────
@@ -131,20 +127,10 @@ with DAG(
                 execution_timeout=timedelta(minutes=40),
             )
 
-    # ── Step 3: dbt deps (install pinned packages) ───────────────────────────
-    # Installs dbt_utils (pinned to 1.4.1 via package-lock.yml) into the mounted
-    # project's dbt_packages/ before any model runs. Required because dbt_packages/
-    # is gitignored AND the dbt project is volume-mounted — so the image can't bake
-    # the packages in (the runtime mount would shadow them). Running deps here makes
-    # the pipeline self-sufficient instead of relying on a manual host `dbt deps`.
-
-    dbt_deps = BashOperator(
-        task_id="dbt_deps",
-        bash_command=dbt_deps_cmd(),
-        execution_timeout=timedelta(minutes=5),
-    )
-
-    # ── Step 4: dbt staging (PostgreSQL) ─────────────────────────────────────
+    # ── Step 3: dbt staging (PostgreSQL) ─────────────────────────────────────
+    # dbt packages (dbt_utils) are NOT installed here — they live in the persistent
+    # `dbt_packages` named volume (see docker-compose.yml), populated once via a manual
+    # `dbt deps`. This keeps a network/registry call off the hourly critical path.
 
     dbt_staging = BashOperator(
         task_id="dbt_staging",
@@ -152,7 +138,7 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
-    # ── Step 5: dbt intermediate (PostgreSQL) — build + test ─────────────────
+    # ── Step 4: dbt intermediate (PostgreSQL) — build + test ─────────────────
     # `dbt build` runs the models AND their uniqueness/not_null tests, so a
     # duplicate (city, date_utc) fails the pipeline instead of landing silently.
 
@@ -162,7 +148,7 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
-    # ── Step 6: dbt marts (PostgreSQL) — build + test ────────────────────────
+    # ── Step 5: dbt marts (PostgreSQL) — build + test ────────────────────────
     # Star schema (dims + facts), the derived OBT (mart_city_daily), and the
     # analytics marts. `dbt build` runs the relationships/unique/accepted_values
     # tests too, so a broken FK→dimension fails the pipeline. dim_city is derived
@@ -177,4 +163,4 @@ with DAG(
 
     # ── Pipeline order ────────────────────────────────────────────────────────
 
-    trigger_group >> wait_group >> dbt_deps >> dbt_staging >> dbt_intermediate >> dbt_marts
+    trigger_group >> wait_group >> dbt_staging >> dbt_intermediate >> dbt_marts

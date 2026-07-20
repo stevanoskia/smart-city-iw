@@ -35,6 +35,17 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 | AI-generated city summaries | Claude API reads `mart_city_daily` → daily narrative summaries (marts now available) |
 
 ### Recently Completed
+- ✅ **`dbt deps` moved out of the hourly DAG → persistent named volume** (2026-07-20) — the per-run
+  `dbt deps` task was removed from `smart_city_pipeline`. `dbt_utils` (1.4.1) now lives in a
+  `dbt_packages` **Docker named volume** (declared in `airflow/docker-compose.yml`, layered over the
+  `../dbt` bind mount at the `dbt_packages/` subpath), **populated once** and durable across container
+  restarts/rebuilds. Rationale: `dbt_packages/` is gitignored + the project is bind-mounted, so it
+  can't be baked into the image (the mount would shadow it); a durable volume is the stable
+  alternative and takes a registry/network call off the hourly critical path. Trade-off vs. the old
+  always-safe per-run step: the volume must be **populated once manually** (and re-populated after a
+  `docker compose down -v` or a `packages.yml` change) — else the first model run fails "dbt_utils not
+  found". One-time command + guidance in the README's *Start Airflow* section and the `dbt_marts` DAG
+  notes below. The **host** `dbt deps` workflow (`~/.dbt`, venv313) is unchanged.
 - ✅ **Marts facts → incremental `delete+insert`** (2026-07-20) — the 8 **append-only** marts
   models were switched from full table rebuild to `materialized='incremental'`, mirroring the
   intermediate layer: the **3 hourly facts** (`fct_weather_hourly`/`fct_pollution_hourly`/
@@ -55,9 +66,9 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 - ✅ **Surrogate keys → `dbt_utils.generate_surrogate_key`** (2026-07-10) — all keys across the
   intermediate + marts layers migrated from hand-written `md5(a || '|' || b)` to
   `dbt_utils.generate_surrogate_key([...])` (NULL-safe, `-` separator, consistent). `dbt_utils`
-  added in `packages.yml`, pinned to **1.4.1** via `package-lock.yml`; the hourly DAG now runs a
-  **`dbt deps`** step first (dbt_packages/ is gitignored + the project is volume-mounted, so the
-  image can't bake it in). Historic rows in the incremental `intermediate` tables were rewritten
+  added in `packages.yml`, pinned to **1.4.1** via `package-lock.yml` (installed into the persistent
+  `dbt_packages` named volume — see the DAG-deps note below; originally a per-run `dbt deps` DAG step,
+  removed 2026-07-20). Historic rows in the incremental `intermediate` tables were rewritten
   **in place** (no history loss) by `macros/backfill_surrogate_keys.sql`, run via
   `dbt run-operation`; `dbt build` green (85 tests incl. all `relationships` FK tests). That macro
   **stays** — it's **idempotent** (each key is a pure function of columns already in the row, so
@@ -388,8 +399,9 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 > **Keep the Airflow container's dbt on the same version.** `airflow/Dockerfile` pins the container's
 > dbt to `dbt-core==1.11.11` / `dbt-postgres==1.8.2` to match the host — because dbt 1.9+ writes a
 > `name:` key into each `package-lock.yml` entry that older dbt can't parse. An older container dbt
-> (1.8.2) made the DAG's `dbt deps` step fail with *"packages.yml is malformed"* (exit 2) on the
-> host-generated lock. Host + container on the same version keeps the committed lock readable on both.
+> (1.8.2) made the container's `dbt deps` (the one-time volume populate) fail with *"packages.yml is
+> malformed"* (exit 2) on the host-generated lock. Host + container on the same version keeps the
+> committed lock readable on both.
 
 ---
 
@@ -541,9 +553,28 @@ UI: `localhost:8080` — login: `admin / admin`
   means a long run skips ahead rather than piling up.
 - Triggers all Airbyte syncs in parallel (one task per connection in `connection_ids.yml` — now 2: `openweather_all`, `tomtom_all`)
 - Waits for all syncs to complete
-- Runs `dbt deps` — installs pinned `dbt_utils` (1.4.1) into the mounted project's `dbt_packages/`
-  before any model runs. Required: `dbt_packages/` is gitignored and the project is volume-mounted,
-  so the image can't bake it in (the mount would shadow it). Idempotent — a no-op when present.
+- **No per-run `dbt deps` step** (removed 2026-07-20). `dbt_utils` (1.4.1) lives in the persistent
+  `dbt_packages` **named volume** declared in `docker-compose.yml` (layered over the `../dbt` bind
+  mount at the `dbt_packages/` subpath), populated **once** via a manual `dbt deps` and then durable
+  across restarts/rebuilds. `dbt_packages/` is gitignored + the project is bind-mounted, so the image
+  can't bake it in (the mount would shadow it) — the named volume is the stable alternative, and it
+  keeps a registry/network call off the hourly critical path. **One-time populate** (re-run the same
+  command after a `docker compose down -v` or any `packages.yml` change):
+  ```bash
+  docker compose run --rm --user root \
+    --entrypoint /home/airflow/dbt_venv/bin/dbt airflow-scheduler \
+    deps --project-dir /opt/airflow/dbt/smart_city --profiles-dir /opt/airflow/dbt/smart_city
+  ```
+  If the volume is empty (never populated / wiped by `-v`), the first model run fails with
+  "dbt_utils not found" — repopulate with the command above. Two non-obvious flags, learned
+  the hard way when this was set up: **`--entrypoint`** (the airflow image otherwise passes the
+  args to its `airflow` CLI → "invalid choice"), and **`--user root`** (a fresh named volume is
+  root-owned; root can create the install dir, and dbt's files come out world-readable so the DAG's
+  airflow user reads them fine). And the container installs into the **`dbt_packages/lib` subdir** of
+  the volume via `DBT_PACKAGES_PATH` (set in `docker-compose.yml` + `dbt_project.yml`'s
+  `packages-install-path`), because `dbt deps` rmtree's its own install path and **can't remove a
+  volume's mount root** (Errno 16 "Device or resource busy"). The **host** `dbt deps` is unaffected
+  (env var unset → default `dbt_packages`).
 - Runs `dbt run --select staging --target staging`
 - Runs `dbt build --select intermediate --target staging` (hourly facts + forecast history)
 - Runs `dbt build --select marts --target staging` (star schema + OBT + analytics, build+test)
