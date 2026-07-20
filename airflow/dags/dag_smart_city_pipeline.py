@@ -2,11 +2,11 @@
 Smart City Analytics Pipeline DAG
 
 Hourly ELT pipeline:
-  1. Trigger all Airbyte syncs in parallel (one per connection in connection_ids.yml)
-  2. Wait for all syncs to complete (XCom job IDs passed via context)
-  3. Compile dbt staging (stg_* are ephemeral — inline CTEs, no DB object)
-  4. Build + test dbt intermediate (PostgreSQL tables, hourly facts + forecast history)
-  5. Build + test dbt marts (star schema: dims + facts + OBT + analytics marts)
+  1. Sync all Airbyte connections in parallel — one task per connection triggers its
+     sync AND waits for it, so an Airflow retry re-triggers a fresh sync (not a dead job)
+  2. Compile dbt staging (stg_* are ephemeral — inline CTEs, no DB object)
+  3. Build + test dbt intermediate (PostgreSQL tables, hourly facts + forecast history)
+  4. Build + test dbt marts (star schema: dims + facts + OBT + analytics marts)
 
 dbt packages (dbt_utils) are NOT installed per-run. They live in the `dbt_packages`
 named volume (see docker-compose.yml), populated ONCE via a manual `dbt deps` and then
@@ -58,13 +58,18 @@ def dbt_cmd(select: str, target: str, command: str = "run") -> str:
         f"--no-partial-parse"
     )
 
-# ── Wait task — pulls job_id from XCom via context ───────────────────────────
+# ── Sync task — trigger + wait in ONE task so a retry re-triggers ─────────────
+# Trigger and wait used to be two tasks (trigger pushed the job_id to XCom, wait polled
+# it). That made retries useless: a failed sync only fails the *wait* task, whose retry
+# re-pulls the SAME job_id and re-polls a job that already failed — a dead job never
+# comes back, so it can never recover (e.g. after the destination is re-pointed to a new
+# LAN IP). Trigger + wait in one task means an Airflow retry re-triggers a *fresh* sync.
+# trigger_sync's 409 handling still attaches to an already-running job if a prior attempt
+# left one live, so a retry won't double-trigger.
 
-def wait_for_sync_xcom(trigger_task_id: str, **context) -> None:
-    job_id = context["ti"].xcom_pull(task_ids=trigger_task_id)
-    if not job_id:
-        raise ValueError(f"No job_id found in XCom from {trigger_task_id}")
-    wait_for_sync(str(job_id))
+def sync_connection(connection_id: str) -> None:
+    job_id = trigger_sync(connection_id)
+    wait_for_sync(job_id)
 
 # ── Alert callbacks ───────────────────────────────────────────────────────────
 # on_failure is imported from alert_utils and attached to every task via default_args.
@@ -94,7 +99,7 @@ with DAG(
     schedule_interval="@hourly",
     start_date=datetime(2026, 6, 1),
     catchup=False,
-    # Serialize runs: a run's worst-case duration (wait_syncs 40m + the three dbt
+    # Serialize runs: a run's worst-case duration (syncs 45m + the three dbt
     # steps 15m each) can exceed the hourly interval. Without this, the scheduler
     # would start the next run while the current one is still writing, so two
     # dbt_intermediate/dbt_marts tasks would DELETE+INSERT the same incremental
@@ -105,29 +110,21 @@ with DAG(
     tags=["smart_city", "airbyte", "dbt"],
 ) as dag:
 
-    # ── Step 1: Trigger all Airbyte syncs in parallel ────────────────────────
+    # ── Step 1: Sync all Airbyte connections in parallel (trigger + wait) ─────
+    # One task per connection triggers its sync and waits for it. All connections
+    # still sync concurrently (the group runs in parallel); merging trigger+wait only
+    # removes the XCom hop and makes a retry re-trigger instead of re-polling a dead job.
 
-    with TaskGroup("trigger_syncs") as trigger_group:
+    with TaskGroup("syncs") as sync_group:
         for name, conn_id in CONNECTION_IDS.items():
             PythonOperator(
-                task_id=f"trigger_{name}",
-                python_callable=trigger_sync,
+                task_id=f"sync_{name}",
+                python_callable=sync_connection,
                 op_args=[conn_id],
-                execution_timeout=timedelta(minutes=5),
+                execution_timeout=timedelta(minutes=45),  # trigger (secs) + wait (≤35m)
             )
 
-    # ── Step 2: Wait for all syncs (job IDs pulled from XCom via context) ────
-
-    with TaskGroup("wait_syncs") as wait_group:
-        for name in CONNECTION_IDS:
-            PythonOperator(
-                task_id=f"wait_{name}",
-                python_callable=wait_for_sync_xcom,
-                op_kwargs={"trigger_task_id": f"trigger_syncs.trigger_{name}"},
-                execution_timeout=timedelta(minutes=40),
-            )
-
-    # ── Step 3: dbt staging (PostgreSQL) ─────────────────────────────────────
+    # ── Step 2: dbt staging (PostgreSQL) ─────────────────────────────────────
     # dbt packages (dbt_utils) are NOT installed here — they live in the persistent
     # `dbt_packages` named volume (see docker-compose.yml), populated once via a manual
     # `dbt deps`. This keeps a network/registry call off the hourly critical path.
@@ -138,7 +135,7 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
-    # ── Step 4: dbt intermediate (PostgreSQL) — build + test ─────────────────
+    # ── Step 3: dbt intermediate (PostgreSQL) — build + test ─────────────────
     # `dbt build` runs the models AND their uniqueness/not_null tests, so a
     # duplicate (city, date_utc) fails the pipeline instead of landing silently.
 
@@ -148,7 +145,7 @@ with DAG(
         execution_timeout=timedelta(minutes=15),
     )
 
-    # ── Step 5: dbt marts (PostgreSQL) — build + test ────────────────────────
+    # ── Step 4: dbt marts (PostgreSQL) — build + test ────────────────────────
     # Star schema (dims + facts), the derived OBT (mart_city_daily), and the
     # analytics marts. `dbt build` runs the relationships/unique/accepted_values
     # tests too, so a broken FK→dimension fails the pipeline. dim_city is derived
@@ -163,4 +160,4 @@ with DAG(
 
     # ── Pipeline order ────────────────────────────────────────────────────────
 
-    trigger_group >> wait_group >> dbt_staging >> dbt_intermediate >> dbt_marts
+    sync_group >> dbt_staging >> dbt_intermediate >> dbt_marts
