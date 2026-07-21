@@ -99,7 +99,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 
 ---
 
-## Power BI Dashboard (in active build — 15 tables, clean 26-rel star, 49 measures)
+## Power BI Dashboard (in active build — 15 tables, clean 26-rel star, 52 measures)
 
 Live work on `C:\Users\Andrej\Documents\smart_city_dashboard.pbip` (Power BI **project**/PBIP,
 connected to PostgreSQL `marts`, Import mode). It lives **outside** this git repo.
@@ -107,6 +107,44 @@ connected to PostgreSQL `marts`, Import mode). It lives **outside** this git rep
 `docs/powerbi_dashboard.md` (gitignored). Requirements/spec + example images:
 `C:\Users\Andrej\Documents\smart-city-powerbi-skill\SKILL.md` and
 `C:\Users\Andrej\Desktop\smart_city_examples\image*.png`.
+
+### 🎨 Visual style = the example images (2026-07-21 restyle — in progress)
+The user found the v2 pages too plain; each page is now restyled to **mirror a specific example
+image** at `C:\Users\Andrej\Desktop\smart_city_examples\`. Those images are the **canonical style
+reference** for layout, card rhythm, and colour — treat them as the spec when editing any page.
+**One cohesive dark base** (`smart_city_theme.json`, unchanged bg `#0B1220`) + a **per-page accent**
+applied at the *visual* level (hero fill, bar/gauge/donut colours) — never a per-page background.
+
+| Page (file id) | Mirrors image | Accent | Hero gradient |
+|---|---|---|---|
+| General Overview (`a9c1084738f01311493f`) | **image (2)** | teal `#22D3EE` | cool-blue `#1E3A5F→#0B1220` |
+| Weather & Forecast (`b2000000000000000002`) | **image (4)** | warm orange `#F59E0B` | `#F59E0B→#7C2D12` |
+| Air Quality (`b3000000000000000003`) | **image (5)** | AQI ramp green→gold→red | — |
+| Weather + Pollution (**new**) | **image (7)** | magenta `#EC4899` + cyan `#22D3EE` | sky `#2563EB→#0B1220` |
+
+AQI ramp (matches what the `AQI Color` measure returns): `#2ECC71` `#A3D65C` `#F1C40F` `#E67E22`
+`#E74C3C`. Theme data-colors reordered to lead teal→magenta→amber→green so multi-series pollutant
+charts read on-brand. Cards softened to radius 18, fill `#131C33`.
+
+**Images (2) and (4) are the same combined weather+AQI dashboard** (2 dark, 4 orange) — so there is
+**no standalone "Weather+AQI" page**; image (4)'s look is folded onto the Weather page. Overview and
+Weather share the hero + metric-grid + AQI-donut vocabulary, differentiated by **palette** + emphasis
+(Overview = network/city-pills; Weather = 7-day forecast tiles + temp-anomaly).
+
+**Data we don't have → substitutions (keep the image's card rhythm, real numbers):**
+- Sunrise/Sunset card (img 2/4) → **"Data as of"** (`Latest Reading At`) + **Hi/Lo today** (`Max/Min Temp`).
+- UV Index card (img 2/4) → **Cloudiness %** (`Current Cloudiness %`).
+- Pedestrian/Car counters (img 7) → **Active Incidents** + **Avg Speed (km/h)** gradient cards.
+- PM1 (img 7 donut) → **PM2.5 + PM10** only.
+- AQI gauge stays **1–5** (never the images' 0–500), color-banded via `AQI Color`.
+
+**3 measures added for the restyle (2026-07-21, live via XMLA → model now 52):** `Latest Condition
+Icon` (weather emoji via `UNICHAR`, keyed off `Latest Condition` — powers hero-card glyph, no custom
+visual), `Visibility (km)` (per-city latest `visibility_m`/1000 — reads a flat ~10.0, low variance),
+`Prime Pollutant` (worst pollutant, each species normalized by its OpenWeather index-4 onset:
+PM2.5 50 / PM10 100 / NO2 150 / O3 140 / SO2 250 / CO 12400 µg/m³ — currently O3 everywhere, correct
+for clean summer air). Azure maps are **UI-added** (×2: Air-Quality + Weather+Pollution; Overview has
+**none** — image 2 has no map) per the report/canvas split below.
 
 ### How Claude edits Power BI (two surfaces — keep PBIP, not PBIX)
 - **PBIP is required** for the file-authoring half: the project is text — **TMDL** (model) + **PBIR**
