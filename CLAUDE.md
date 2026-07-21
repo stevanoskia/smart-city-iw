@@ -654,9 +654,13 @@ Failure/success notifications go to `ALERT_EMAIL` via `airflow.utils.email.send_
 configured entirely through `AIRFLOW__SMTP__*` env vars (no `airflow.cfg` edit) — Gmail SMTP with a
 16-char **App Password** (Google Account → Security → 2-Step Verification → App passwords), *not*
 the account login. Callbacks are guarded by `if ALERT_EMAIL:`, so leaving it unset disables email
-without breaking the DAGs. Each email carries a `Completed`/`Failed at` timestamp rendered in
-local time (`ALERT_TZ`, default `Europe/Skopje`) — clearer than the `run_id`, which is UTC + the
-data-interval start. On an eventual Airflow 3 upgrade, move the SMTP creds into an `smtp_default`
+without breaking the DAGs. Each email leads with the run's **actual** wall-clock window
+(`Started` → `Finished`/`Failed`, with duration) in local time (`ALERT_TZ`, default
+`Europe/Skopje`), then the Airflow **logical date** labelled `UI label` (the data-interval start
+the UI's *Last Run* shows, ~1h behind for `@hourly`) so it reconciles instead of reading as a
+contradiction, and finally the raw `run_id` as a small footer. Built by `_run_block_html` in
+`alert_utils.py`, shared by both callbacks (was a bare `run_id` + `Completed`/`Failed at` stamp —
+the raw `run_id` was unreadable). On an eventual Airflow 3 upgrade, move the SMTP creds into an `smtp_default`
 connection (env-var creds are deprecated there).
 
 **Sync-failure emails explain *why*.** A failed Airbyte sync used to email only `Airbyte job N

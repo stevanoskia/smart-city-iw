@@ -33,8 +33,75 @@ except Exception:
     _LOCAL_TZ = timezone.utc
 
 
-def _completed_now() -> str:
-    return datetime.now(_LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
+def _fmt(dt) -> str:
+    """A (UTC, tz-aware) datetime rendered in ALERT_TZ, e.g. '2026-07-20 22:16 CEST'."""
+    if dt is None:
+        return "—"
+    return dt.astimezone(_LOCAL_TZ).strftime("%Y-%m-%d %H:%M %Z")
+
+
+def _fmt_duration(start, end) -> str:
+    """Compact 'Hh Mm Ss' between two datetimes; '' if either is missing or negative."""
+    if not start or not end:
+        return ""
+    secs = int((end - start).total_seconds())
+    if secs < 0:
+        return ""
+    m, s = divmod(secs, 60)
+    h, m = divmod(m, 60)
+    if h:
+        return f"{h}h {m}m {s}s"
+    if m:
+        return f"{m}m {s}s"
+    return f"{s}s"
+
+
+# The Airflow "logical date" (= data-interval START) is what the UI's "Last Run" column
+# shows; for @hourly it's ~1h behind when the run actually executed, so on its own it reads
+# as a contradiction next to the completion time (this confused us on a live run). We still
+# surface it — it's how you find the run in the UI — but labelled and explained.
+_UI_LABEL_NOTE = (
+    'Airflow "logical date" = the data-interval start; it\'s what the UI\'s "Last Run" '
+    "column shows, ~1h behind the real run time for @hourly."
+)
+
+
+def _run_meta(context) -> dict:
+    """The run's identity, pulled from the callback context (guards missing keys)."""
+    dag_run = context.get("dag_run")
+    return {
+        "dag_id":   context["task_instance"].dag_id,
+        "run_type": getattr(dag_run, "run_type", None),
+        "started":  getattr(dag_run, "start_date", None),
+        "logical":  context.get("logical_date") or getattr(dag_run, "logical_date", None),
+        "run_id":   context.get("run_id") or getattr(dag_run, "run_id", "—"),
+    }
+
+
+def _run_block_html(context, end_label: str, ended_at, task_id: str | None = None) -> str:
+    """Shared run-identity block for both emails.
+
+    Leads with the actual wall-clock run window in ALERT_TZ (Started → <end_label>, with
+    duration) so the email answers "when did this run?" at a glance, then the labelled
+    logical date so the UI's "Last Run" value reconciles, and finally the raw run_id as a
+    small traceability footer (for grepping logs / the CLI) rather than the headline.
+    """
+    m = _run_meta(context)
+    dag_line = html.escape(m["dag_id"]) + (
+        f" · {html.escape(str(m['run_type']))} run" if m["run_type"] else ""
+    )
+    dur = _fmt_duration(m["started"], ended_at)
+    end_line = _fmt(ended_at) + (f"  ({dur})" if dur else "")
+    task_html = f"<p><b>Task:</b> {html.escape(task_id)}</p>" if task_id else ""
+    return (
+        f"<p><b>DAG:</b> {dag_line}</p>"
+        f"{task_html}"
+        f"<p><b>Started:</b> {_fmt(m['started'])}</p>"
+        f"<p><b>{html.escape(end_label)}:</b> {end_line}</p>"
+        f'<p><b>UI label:</b> {_fmt(m["logical"])} '
+        f'<span style="color:#888">({_UI_LABEL_NOTE})</span></p>'
+        f'<p style="color:#888"><b>Run id:</b> {html.escape(str(m["run_id"]))}</p>'
+    )
 
 
 def _error_html(error) -> str:
@@ -57,23 +124,19 @@ def on_failure(context) -> None:
     Emails which step died and why. For a failed Airbyte sync the exception carries the
     origin/type/message and a hint (see airbyte_utils), not just "status: failed".
     """
+    m       = _run_meta(context)
     task_id = context["task_instance"].task_id
-    dag_id  = context["task_instance"].dag_id
-    run_id  = context["run_id"]
     error   = context.get("exception", "unknown error")
     print(
-        f"FAILURE | DAG: {dag_id} | Task: {task_id} | Run: {run_id} | Error: {error}"
+        f"FAILURE | DAG: {m['dag_id']} | Task: {task_id} | Run: {m['run_id']} | Error: {error}"
     )
     if ALERT_EMAILS:
         send_email(
             to=ALERT_EMAILS,
-            subject=f"[Airflow] {dag_id} FAILED — {task_id}",
+            subject=f"[Airflow] {m['dag_id']} FAILED — {task_id}",
             html_content=(
-                f"<p><b>DAG:</b> {dag_id}</p>"
-                f"<p><b>Task:</b> {task_id}</p>"
-                f"<p><b>Run:</b> {run_id}</p>"
-                f"<p><b>Failed at:</b> {_completed_now()}</p>"
-                f"<p><b>Error:</b></p>{_error_html(error)}"
+                _run_block_html(context, "Failed", datetime.now(timezone.utc), task_id=task_id)
+                + f"<p><b>Error:</b></p>{_error_html(error)}"
             ),
         )
 
@@ -85,18 +148,15 @@ def make_success_callback(message: str):
     rather than firing per-task.
     """
     def notify_success(context) -> None:
-        dag_id = context["task_instance"].dag_id
-        run_id = context["run_id"]
-        print(f"SUCCESS | DAG: {dag_id} | Run: {run_id} | {message}")
+        m = _run_meta(context)
+        print(f"SUCCESS | DAG: {m['dag_id']} | Run: {m['run_id']} | {message}")
         if ALERT_EMAILS:
             send_email(
                 to=ALERT_EMAILS,
-                subject=f"[Airflow] {dag_id} SUCCESS",
+                subject=f"[Airflow] {m['dag_id']} SUCCESS",
                 html_content=(
-                    f"<p><b>DAG:</b> {dag_id}</p>"
-                    f"<p><b>Run:</b> {run_id}</p>"
-                    f"<p><b>Completed:</b> {_completed_now()}</p>"
-                    f"<p>{message}</p>"
+                    _run_block_html(context, "Finished", datetime.now(timezone.utc))
+                    + f"<p>{message}</p>"
                 ),
             )
 
