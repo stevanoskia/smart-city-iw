@@ -33,7 +33,7 @@ change.
 | `config.source_locations` | which cities each source ingests (+ TomTom bbox) | `is_active` |
 | `config.field_mappings` | **the contract**: `source_expr` → `target_column` (+ `data_type`) | `is_required`, `is_active` |
 | `config.validation_rules` | quality thresholds (min/max/accepted_values/…) | `severity`, `is_active` |
-| `config.validation_runs` | audit log of every validation check (pass **and** fail) | — |
+| `config.validation_runs` | audit log of every validation check (pass **and** fail); `resolved` flag + `config.open_validation_failures` view for triage | — |
 
 ### `field_mappings.source_expr` — a SQL expression, not just a JSON path
 The staging engine emits, per active row: **`source_expr [::data_type] as target_column`**. So
@@ -106,6 +106,11 @@ from config.streams where stream_name = 'air_pollution';
 
 -- Pause an entire source
 update config.sources set is_active = false where source_name = 'tomtom';
+
+-- Triage validation failures: see what's open, then mark handled (keeps the audit row)
+select * from config.open_validation_failures;                       -- unresolved failures, newest first
+select config.resolve_validation(12345, 'fixed bad coords for Ohrid'); -- one row, by run_id
+select config.resolve_failures('air_pollution', 'API outage, recovered'); -- all open for a stream
 ```
 
 `rule_type` ∈ `not_null · min · max · accepted_values · max_null_pct · min_row_count ·

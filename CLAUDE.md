@@ -64,9 +64,12 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
     field/threshold failed. Clean streams get a `certified` row. Also a cheap **config-sanity
     warning** (non-blocking, `status='config_warning'`): a `validation_rules` row whose
     `target_column` isn't a real field of the stream (a typo — it's free text, not an FK) would
-    silently never fire, so it's surfaced as a warning instead. Verified live (5 streams certified;
-    a forced `min_row_count` breach failed only that stream + logged + un-certified it; a typo'd
-    rule column warned without failing the run).
+    silently never fire, so it's surfaced as a warning instead. **Triage:** `validation_runs` has a
+    `resolved` flag + a `config.open_validation_failures` view (unresolved failures, newest first) +
+    `config.resolve_validation(run_id)` / `config.resolve_failures(stream)` helpers, so a handled
+    failure can be marked without deleting audit history. Verified live (5 streams certified; a
+    forced `min_row_count` breach failed only that stream + logged + un-certified it; a typo'd rule
+    column warned without failing the run; resolve flow tested).
   - **Config-driven Airbyte setup + auto-detect** — `setup_airbyte.py` reads sources/streams/cities
     from `config.*` (was YAML); `main()` (host) manages the destination + LAN IP, `reconcile()`
     (container-safe) skips it. New `reconcile_airbyte` DAG task (first, best-effort — import inside

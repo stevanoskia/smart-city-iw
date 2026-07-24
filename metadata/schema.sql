@@ -155,6 +155,57 @@ create index if not exists validation_runs_run_ts_idx on config.validation_runs 
 create index if not exists validation_runs_status_idx on config.validation_runs (status);
 create index if not exists validation_runs_stream_idx on config.validation_runs (stream_name);
 
+-- ── Failure triage: resolved flag + open-issues view ──────────────────────────
+-- Mark a logged failure as "handled" so an operational view stays clean, without
+-- deleting audit history. Only failure rows are meaningfully resolvable; ok/certified
+-- rows just carry resolved=false. Idempotent ADDs for pre-existing installs.
+alter table config.validation_runs add column if not exists resolved      boolean not null default false;
+alter table config.validation_runs add column if not exists resolved_at   timestamptz;
+alter table config.validation_runs add column if not exists resolved_note text;
+
+-- Keeps the "what's broken and not yet handled" query fast as the log grows.
+create index if not exists validation_runs_open_idx
+    on config.validation_runs (run_ts desc)
+    where not resolved and status <> 'ok' and status <> 'certified';
+
+-- The one query you'd actually run: open (unresolved) failures, newest first.
+create or replace view config.open_validation_failures as
+select run_id, run_ts, airflow_run_id, stream_name, target_column, check_type, status, detail
+from config.validation_runs
+where not resolved
+  and status in ('missing', 'null', 'below_threshold', 'config_warning')
+order by run_ts desc;
+
+-- Mark a single failure row handled.
+--   select config.resolve_validation(12345, 'fixed bad coords for Ohrid');
+create or replace function config.resolve_validation(p_run_id bigint, p_note text default null)
+returns void
+language plpgsql as $$
+begin
+    update config.validation_runs
+       set resolved = true, resolved_at = now(), resolved_note = p_note
+     where run_id = p_run_id;
+end;
+$$;
+
+-- Mark ALL currently-open failures for a stream handled (for a recurring issue you
+-- fixed). Returns how many rows were resolved.
+--   select config.resolve_failures('air_pollution', 'API outage, recovered');
+create or replace function config.resolve_failures(p_stream text, p_note text default null)
+returns integer
+language plpgsql as $$
+declare
+    v_n integer;
+begin
+    update config.validation_runs
+       set resolved = true, resolved_at = now(), resolved_note = p_note
+     where stream_name = p_stream and not resolved
+       and status in ('missing', 'null', 'below_threshold', 'config_warning');
+    get diagnostics v_n = row_count;
+    return v_n;
+end;
+$$;
+
 -- ── City helpers — convenience wrappers over locations + source_locations ──────
 -- Pure ergonomics: the two-table design is unchanged, these just do both inserts
 -- (with the id lookups) in one call so you can't do half of it by mistake.
