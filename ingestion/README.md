@@ -2,7 +2,9 @@
 
 Ingestion is handled by **Airbyte** using two **custom declarative connectors** (built in the
 Airbyte Connector Builder), loaded raw into PostgreSQL (`staging` schema — raw JSON). Setup is
-**config-driven**: edit YAML, run one script — no manual UI clicking to add cities.
+**config-driven**: sources / streams / cities live in the **`config` schema in Postgres**
+(`config.sources`, `config.streams`, `config.source_locations` — see `metadata/README.md`), and
+one script applies them to Airbyte. Adding a city is an `INSERT`, not UI clicking.
 
 Airbyte UI: http://localhost:8000 (deployed via `abctl`, runs in Kind/Kubernetes)
 
@@ -11,22 +13,26 @@ Airbyte UI: http://localhost:8000 (deployed via `abctl`, runs in Kind/Kubernetes
 ## How it fits together
 
 ```
-sources.yml + connections.yml  ──►  setup_airbyte.py  ──►  Airbyte (sources, destination, connections)
-   (cities, streams, dest)          (creates via API)              │
-                                                                   ▼
-                                                          connection_ids.yml ──► Airflow DAG
+config schema (Postgres)  ──►  setup_airbyte.py  ──►  Airbyte (sources, destination, connections)
+   sources/streams/            (main: host, or               │
+   source_locations            reconcile: container)          ▼
+                                                     connection_ids.yml ──► Airflow DAG
 ```
 
-- **`config/sources.yml`** — per provider: connector name, streams, and the **`locations` list**
-  (one object per city: coordinates; TomTom cities also have a bounding box).
-- **`config/connections.yml`** — the PostgreSQL destination + sync settings (`full_refresh_append`).
-- **`scripts/setup_airbyte.py`** — reads both, creates any missing sources / destination /
+- **`config` schema** — `config.sources` (connector name, `api_key_env`/`api_key_field`),
+  `config.streams`, `config.locations` + `config.source_locations` (one row per city; TomTom rows
+  carry the bounding box). DDL/seed in `metadata/`. This is the source of truth.
+- **destination** — the single PostgreSQL destination is a constant in `setup_airbyte.py`
+  (`smart_city_postgres` → `staging`); sync mode `full_refresh_append`.
+- **`scripts/setup_airbyte.py`** — reads `config.*`, creates/updates sources / destination /
   connections via the Airbyte API, and writes **`config/connection_ids.yml`** (the connection
-  UUIDs Airflow triggers). Idempotent, and re-running **pushes the current config** to resources
-  that already exist rather than skipping them — that's what applies a new city, or a new LAN IP
-  after a network change.
+  UUIDs Airflow triggers). Idempotent. Two entrypoints: **`main()`** (host — manages the
+  destination + this machine's LAN IP; run after a network switch) and **`reconcile()`**
+  (container-safe — skips the destination; the DAG's `reconcile_airbyte` task calls it each run).
 - **`connections/*.yaml`** — the custom connector definitions:
   `open_weather_free_2_5.yaml`, `tomtom_traffic.yaml`.
+- **`config/sources.yml` + `config/connections.yml`** — *retired*; kept only as the one-time input
+  for `metadata/seed_config.py`. After seeding, edit `config.*` with SQL, not these files.
 
 **One Airbyte source + connection per provider** — `openweather_all`, `tomtom_all`. Each connector
 is **partition-routed** (`ListPartitionRouter`) over its `locations` list, so a single connection
@@ -69,10 +75,13 @@ SELECT city, COUNT(*) FROM staging.traffic_incidents GROUP BY city;
 
 ## Adding a new city
 
-1. Add a `locations` entry under `openweather` and/or `tomtom` in `config/sources.yml`
-   (include the bounding box for TomTom).
-2. Re-run `python ingestion/scripts/setup_airbyte.py` — it updates the existing
-   `openweather_all` / `tomtom_all` source config with the new location.
+1. Call the helper — `select config.add_city('Zagreb', 45.8150, 15.9819);` for a weather-only city,
+   or pass a bounding box `select config.add_city('Zagreb', 45.8150, 15.9819, 45.75,15.85,45.88,16.05);`
+   to also enable TomTom traffic. (It does the `config.locations` + `config.source_locations` inserts
+   for you; raw SQL alternative in `metadata/README.md`.)
+2. It applies automatically on the next hourly run (the DAG's `reconcile_airbyte` task pushes the
+   updated source config to Airbyte), or run `python ingestion/scripts/setup_airbyte.py` on the
+   host to apply it immediately.
 
 No new connection, **no Airflow DAG re-parse** (the connection count is unchanged), and no connector
 or dbt changes — the connector partition-routes over the `locations` list, injects `city` via

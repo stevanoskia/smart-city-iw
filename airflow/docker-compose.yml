@@ -19,16 +19,23 @@ x-airflow-common: &airflow-common
     SMART_CITY_PG_DB: smart_city
     SMART_CITY_PG_USER: postgres
     SMART_CITY_PG_PASSWORD: ${POSTGRES_PASSWORD}
-    # Airbyte OAuth credentials (used by airbyte_utils.py in DAGs)
+    # Airbyte OAuth credentials (used by airbyte_utils.py + the reconcile_airbyte task)
     AIRBYTE_URL: 'http://host.docker.internal:8000'
     AIRBYTE_CLIENT_ID: ${AIRBYTE_CLIENT_ID}
     AIRBYTE_CLIENT_SECRET: ${AIRBYTE_CLIENT_SECRET}
+    # setup_airbyte.reconcile() (run by the reconcile_airbyte task) writes here — the
+    # mounted config dir, since the container's script path differs from the repo layout.
+    CONNECTION_IDS_FILE: /opt/airflow/ingestion_config/connection_ids.yml
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./plugins:/opt/airflow/plugins
     - ../dbt:/opt/airflow/dbt
     - ../ingestion/config:/opt/airflow/ingestion_config
+    # setup_airbyte.py so the reconcile_airbyte task can import reconcile() (auto-detect:
+    # apply new config.* sources/cities to Airbyte). env_file already gives the container
+    # the API keys + Airbyte creds; it connects to the config DB via SMART_CITY_PG_*.
+    - ../ingestion/scripts:/opt/airflow/ingestion_scripts
     # Named volume for dbt packages (dbt_utils), layered over the ../dbt bind mount at
     # just the dbt_packages/ subpath. dbt installs into the dbt_packages/lib subdir of it
     # (see DBT_PACKAGES_PATH above). Populated ONCE via a manual `dbt deps` (see README /
