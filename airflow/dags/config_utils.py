@@ -1,7 +1,7 @@
 """
 Config-driven data-contract validation for the Smart City pipeline.
 
-Reads the metadata `config` schema (see metadata/schema.sql) and validates the
+Reads the `config` schema (see config/schema.sql) and validates the
 latest raw batch each stream just synced into `staging.*`, BEFORE dbt runs — so
 bad/missing data never reaches the intermediate/marts layers.
 

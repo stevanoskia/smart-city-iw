@@ -1,4 +1,4 @@
-# `metadata/` — Config-Driven Pipeline (the `config` schema)
+# `config/` — Config-Driven Pipeline (the `config` schema)
 
 This folder holds the **single source of truth** for what the pipeline ingests and how it is
 validated: a `config` schema in the `smart_city` Postgres DB. The pipeline is a **generic engine**
@@ -63,12 +63,12 @@ Run from the repo root, using **venv313** (it has `psycopg2`/`pyyaml`/`python-do
 
 ```bash
 # 1. Create the schema + tables (idempotent)
-./venv313/Scripts/python.exe -c "import os,psycopg2;from pathlib import Path;from dotenv import load_dotenv;load_dotenv('.env');c=psycopg2.connect(host=os.getenv('POSTGRES_HOST'),port=int(os.getenv('POSTGRES_PORT','5432')),dbname=os.getenv('POSTGRES_DB'),user=os.getenv('POSTGRES_USER'),password=os.getenv('POSTGRES_PASSWORD'));c.autocommit=True;c.cursor().execute(Path('metadata/schema.sql').read_text(encoding='utf-8'))"
+./venv313/Scripts/python.exe -c "import os,psycopg2;from pathlib import Path;from dotenv import load_dotenv;load_dotenv('.env');c=psycopg2.connect(host=os.getenv('POSTGRES_HOST'),port=int(os.getenv('POSTGRES_PORT','5432')),dbname=os.getenv('POSTGRES_DB'),user=os.getenv('POSTGRES_USER'),password=os.getenv('POSTGRES_PASSWORD'));c.autocommit=True;c.cursor().execute(Path('config/schema.sql').read_text(encoding='utf-8'))"
 
-# (or, if you have psql:  psql "$DATABASE_URL" -f metadata/schema.sql)
+# (or, if you have psql:  psql "$DATABASE_URL" -f config/schema.sql)
 
 # 2. Load the rows from the legacy YAML + transcribed field mappings (idempotent)
-./venv313/Scripts/python.exe metadata/seed_config.py
+./venv313/Scripts/python.exe config/seed_config.py
 ```
 
 `seed_config.py` is the **one-time initial load**. Re-running is safe — it refreshes the
