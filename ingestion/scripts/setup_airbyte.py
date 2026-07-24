@@ -1,18 +1,24 @@
 """
-Idempotent Airbyte setup script.
+Idempotent, config-driven Airbyte setup script.
 
-Reads ingestion/config/sources.yml and connections.yml, then creates any missing
-sources, destinations, and connections via the Airbyte public API (v1).
-Safe to re-run — skips resources that already exist.
+Reads the sources / streams / cities from the metadata `config` schema in Postgres
+(config.sources, config.streams, config.source_locations — see metadata/schema.sql),
+then creates any missing sources, destinations, and connections via the Airbyte
+public API (v1). Safe to re-run — updates existing resources in place. Adding a city
+or a source is a plain INSERT into config.* (no YAML edit); re-run this to apply it.
 
 After running, writes ingestion/config/connection_ids.yml with the UUID of every
 connection. Airflow DAGs read this file to get the connection IDs they need.
 
-Usage:
-    python ingestion/scripts/setup_airbyte.py
+Two entrypoints:
+    main()       host — manages the destination (pushes this machine's LAN IP).
+                 Run this after a network switch.  `python ingestion/scripts/setup_airbyte.py`
+    reconcile()  container-safe (the Airflow `reconcile_airbyte` task) — does NOT
+                 touch the destination (LAN-IP detection is a host-only concern);
+                 reuses the existing destination and just applies config.* changes.
 
 Requirements:
-    pip install requests pyyaml python-dotenv
+    pip install requests pyyaml python-dotenv psycopg2-binary
 
 Auth:
     Requires AIRBYTE_CLIENT_ID and AIRBYTE_CLIENT_SECRET in .env.
@@ -23,9 +29,15 @@ import os
 import sys
 import socket
 import yaml
+import psycopg2
 import requests
 from pathlib import Path
-from dotenv import load_dotenv
+
+try:
+    from dotenv import load_dotenv
+except ImportError:  # not installed in the Airflow container — env is already populated there
+    def load_dotenv(*_args, **_kwargs):
+        return False
 
 # Windows consoles default to cp1252; force UTF-8 so status glyphs (✓ ~ +) don't crash.
 sys.stdout.reconfigure(encoding="utf-8")
@@ -34,9 +46,16 @@ sys.stdout.reconfigure(encoding="utf-8")
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_DIR = ROOT / "ingestion" / "config"
-SOURCES_FILE = CONFIG_DIR / "sources.yml"
-CONNECTIONS_FILE = CONFIG_DIR / "connections.yml"
-CONNECTION_IDS_FILE = CONFIG_DIR / "connection_ids.yml"
+# Overridable via env so the Airflow container (whose mount paths differ from the repo
+# layout) can point at the mounted config dir (/opt/airflow/ingestion_config).
+CONNECTION_IDS_FILE = Path(
+    os.getenv("CONNECTION_IDS_FILE", str(CONFIG_DIR / "connection_ids.yml"))
+)
+
+# The single Postgres destination (was ingestion/config/connections.yml). Fixed and
+# not per-source, so it stays a constant here rather than a config table. The host
+# resolves + pushes this machine's LAN IP into it (Airbyte pods can't reach localhost).
+DESTINATION = {"name": "smart_city_postgres", "schema": "staging", "ssl": False}
 
 # ── Load environment ──────────────────────────────────────────────────────────
 
@@ -196,8 +215,19 @@ def find_postgres_destination_definition() -> str:
     raise RuntimeError("PostgreSQL destination definition not found")
 
 
-def ensure_destination(workspace_id: str, cfg: dict, existing: dict) -> str:
-    name = cfg["destination"]["name"]
+def find_existing_destination(existing: dict, name: str) -> str:
+    """Return an existing destination's id, or fail with guidance (container path)."""
+    if name in existing:
+        return existing[name]["destinationId"]
+    raise RuntimeError(
+        f"Destination '{name}' does not exist yet. Run setup_airbyte.py on the HOST first — "
+        "the host manages the destination (it must hold this machine's LAN IP, which cannot "
+        "be detected from inside the Airflow container)."
+    )
+
+
+def ensure_destination(workspace_id: str, dest: dict, existing: dict) -> str:
+    name = dest["name"]
     pg_host = resolve_pg_host()
     dest_cfg = {
         "host": pg_host,
@@ -205,8 +235,8 @@ def ensure_destination(workspace_id: str, cfg: dict, existing: dict) -> str:
         "database": PG_DB,
         "username": PG_USER,
         "password": PG_PASS,
-        "schema": cfg["destination"]["schema"],
-        "ssl": cfg["destination"]["ssl"],
+        "schema": dest["schema"],
+        "ssl": dest["ssl"],
     }
 
     if name in existing:
@@ -331,13 +361,107 @@ def ensure_connection(workspace_id: str, source_id: str, destination_id: str,
     return result["connectionId"]
 
 
+# ── Config from the DB (single source of truth) ──────────────────────────────
+
+def pg_connect():
+    """Connect to the config DB. Prefer SMART_CITY_PG_* (set in the Airflow container,
+    where POSTGRES_HOST=localhost would be wrong); fall back to POSTGRES_* on the host."""
+    return psycopg2.connect(
+        host=os.getenv("SMART_CITY_PG_HOST") or os.getenv("POSTGRES_HOST", "localhost"),
+        port=int(os.getenv("SMART_CITY_PG_PORT") or os.getenv("POSTGRES_PORT", "5432")),
+        dbname=os.getenv("SMART_CITY_PG_DB") or os.getenv("POSTGRES_DB", "smart_city"),
+        user=os.getenv("SMART_CITY_PG_USER") or os.getenv("POSTGRES_USER", "postgres"),
+        password=os.getenv("SMART_CITY_PG_PASSWORD") or os.getenv("POSTGRES_PASSWORD"),
+    )
+
+
+def read_config_from_db() -> dict:
+    """Build the per-source config (connector, streams, cities) from config.* — the
+    same shape the script used to read from sources.yml. Only active rows."""
+    conn = pg_connect()
+    try:
+        cfg: dict = {}
+        with conn.cursor() as cur:
+            cur.execute(
+                "select source_id, source_name, connector_name, api_key_env, api_key_field "
+                "from config.sources where is_active order by source_name"
+            )
+            for source_id, source_name, connector_name, api_key_env, api_key_field in cur.fetchall():
+                with conn.cursor() as c2:
+                    c2.execute(
+                        """
+                        select l.city, l.latitude, l.longitude,
+                               sl.min_lat, sl.min_lon, sl.max_lat, sl.max_lon
+                        from config.source_locations sl
+                        join config.locations l on l.location_id = sl.location_id
+                        where sl.source_id = %s and sl.is_active and l.is_active
+                        order by l.city
+                        """,
+                        (source_id,),
+                    )
+                    locations = []
+                    for city, lat, lon, mnla, mnlo, mxla, mxlo in c2.fetchall():
+                        loc = {"city": city, "lat": float(lat), "lon": float(lon)}
+                        if mnla is not None:  # bbox present (TomTom); omit for weather
+                            loc.update(min_lat=float(mnla), min_lon=float(mnlo),
+                                       max_lat=float(mxla), max_lon=float(mxlo))
+                        locations.append(loc)
+                    c2.execute(
+                        "select stream_name from config.streams "
+                        "where source_id = %s and is_active order by stream_id",
+                        (source_id,),
+                    )
+                    streams = [r[0] for r in c2.fetchall()]
+                cfg[source_name] = {
+                    "connector_name": connector_name,
+                    "api_key_env": api_key_env,
+                    "api_key_field": api_key_field,
+                    "streams": streams,
+                    "locations": locations,
+                }
+        return cfg
+    finally:
+        conn.close()
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def main():
-    sources_cfg = yaml.safe_load(SOURCES_FILE.read_text())
-    conn_cfg    = yaml.safe_load(CONNECTIONS_FILE.read_text())
-    sync        = conn_cfg["sync"]
+def build_sources_and_connections(workspace_id, destination_id, sources_cfg,
+                                  existing_sources, existing_connections) -> dict:
+    """One source + one connection per active API, partition-routed over its cities."""
+    connection_ids = {}
+    for source_name, cfg in sources_cfg.items():
+        conn_name = f"{source_name}_all"
+        print(f"\n── {source_name} source ───────────────────────")
+        defn_id = find_custom_source_definition(workspace_id, cfg["connector_name"])
+        api_key = os.getenv(cfg["api_key_env"] or "")
+        if not api_key:
+            raise RuntimeError(
+                f"API key env var '{cfg['api_key_env']}' is not set for source '{source_name}'."
+            )
+        source_cfg = {cfg["api_key_field"]: api_key, "locations": cfg["locations"]}
+        source_id = ensure_source(
+            workspace_id, defn_id, conn_name, source_cfg, existing_sources
+        )
+        connection_ids[conn_name] = ensure_connection(
+            workspace_id, source_id, destination_id,
+            conn_name, cfg["streams"], None, existing_connections,
+        )
+    return connection_ids
 
+
+def write_connection_ids(connection_ids: dict) -> None:
+    print("\n── Connection IDs (written to connection_ids.yml) ──")
+    for name, cid in connection_ids.items():
+        print(f"  {name}: {cid}")
+    CONNECTION_IDS_FILE.write_text(
+        "# Auto-generated by setup_airbyte.py - do not edit manually\n"
+        + yaml.dump(connection_ids, default_flow_style=False),
+        encoding="utf-8",
+    )
+
+
+def _run(manage_destination: bool) -> dict:
     print("Connecting to Airbyte at", AIRBYTE_URL)
     workspace_id = get_workspace_id()
     print(f"Workspace: {workspace_id}\n")
@@ -346,60 +470,31 @@ def main():
     existing_destinations = list_destinations(workspace_id)
     existing_connections  = list_connections(workspace_id)
 
-    # Destination
     print("── Destination ─────────────────────────────")
-    destination_id = ensure_destination(workspace_id, conn_cfg, existing_destinations)
+    if manage_destination:
+        destination_id = ensure_destination(workspace_id, DESTINATION, existing_destinations)
+    else:
+        destination_id = find_existing_destination(existing_destinations, DESTINATION["name"])
+        print(f"  ~ Reusing existing destination '{DESTINATION['name']}' (host-only manages it)")
 
-    connection_ids = {}
-
-    # OpenWeather — one source/connection for all cities. The connector is
-    # partition-routed over `locations` (see ingestion/connections/*.yaml), so a
-    # single connection ingests every city instead of one connection per city.
-    print("\n── OpenWeather source ───────────────────────")
-    ow_cfg     = sources_cfg["openweather"]
-    ow_defn_id = find_custom_source_definition(workspace_id, ow_cfg["connector_name"])
-
-    ow_source_cfg = {
-        "appid":     OPENWEATHER_API_KEY,
-        "locations": ow_cfg["locations"],
-    }
-    ow_source_id = ensure_source(
-        workspace_id, ow_defn_id, "openweather_all", ow_source_cfg, existing_sources
+    sources_cfg = read_config_from_db()
+    connection_ids = build_sources_and_connections(
+        workspace_id, destination_id, sources_cfg, existing_sources, existing_connections
     )
-    connection_ids["openweather_all"] = ensure_connection(
-        workspace_id, ow_source_id, destination_id,
-        "openweather_all", ow_cfg["streams"], sync, existing_connections,
-    )
-
-    # TomTom — one source/connection for all cities (partition-routed).
-    print("\n── TomTom source ────────────────────────────")
-    tt_cfg     = sources_cfg["tomtom"]
-    tt_defn_id = find_custom_source_definition(workspace_id, tt_cfg["connector_name"])
-
-    tt_source_cfg = {
-        "api_key":   TOMTOM_API_KEY,
-        "locations": tt_cfg["locations"],
-    }
-    tt_source_id = ensure_source(
-        workspace_id, tt_defn_id, "tomtom_all", tt_source_cfg, existing_sources
-    )
-    connection_ids["tomtom_all"] = ensure_connection(
-        workspace_id, tt_source_id, destination_id,
-        "tomtom_all", tt_cfg["streams"], sync, existing_connections,
-    )
-
-    # Write connection IDs for Airflow
-    print("\n── Connection IDs (written to connection_ids.yml) ──")
-    for name, cid in connection_ids.items():
-        print(f"  {name}: {cid}")
-
-    CONNECTION_IDS_FILE.write_text(
-        "# Auto-generated by setup_airbyte.py - do not edit manually\n"
-        + yaml.dump(connection_ids, default_flow_style=False),
-        encoding="utf-8",
-    )
-
+    write_connection_ids(connection_ids)
     print("\nDone.")
+    return connection_ids
+
+
+def main() -> dict:
+    """Host entrypoint — manages the destination (pushes this machine's LAN IP)."""
+    return _run(manage_destination=True)
+
+
+def reconcile() -> dict:
+    """Container-safe entrypoint (Airflow reconcile task) — applies config.* changes
+    to Airbyte but does NOT touch the destination (LAN-IP detection is host-only)."""
+    return _run(manage_destination=False)
 
 
 if __name__ == "__main__":

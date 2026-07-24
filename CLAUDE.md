@@ -26,7 +26,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 ### Medium Priority (the marts now exist — these are unblocked)
 | Task | Notes |
 |---|---|
-| BI dashboard | Power BI — **in active build**. Model layer complete (**15 tables**, clean **26-rel** fact→dim star, **49 measures**, 2 calc columns); Pages 1 (Executive Overview, v2), 2 (Weather & Forecast), 3 (Air Quality) built. Remaining: Azure Map on Page 1, a Page-3 pollution-alerts table (`mart_pollution_alerts` is imported but unused), Pages 4–5, Sankeys. ⚠️ Cyclic-refresh blocker **recurs** after structural changes/restarts (relationship-autodetect resets) — see the RESET note + full-XMLA-refresh playbook in the Power BI section. Page-by-page plan in `docs/powerbi_dashboard_plan.md`. |
+| BI dashboard | Power BI — **6 pages built + restyled to the example images** (2026-07-21): Executive Overview, Weather & Forecast, Air Quality (now incl. the pollution-alerts table — `mart_pollution_alerts` finally consumed), Weather + Pollution, Traffic & Congestion, **City Livability** (KPIs incl. `Best/Worst City`, livability ranking, comfort-vs-7d trend, temp/air/traffic composition stacked bars, heat-graded snapshot table) — model 15 tables / 26-rel star / **70 measures**, dropdown slicers synced across pages, Bing maps on Traffic + Weather+Pollution (Azure Maps needs org sign-in — unavailable on personal account). Remaining (optional): Sankeys via `.pbiviz` file import. ⚠️ Cyclic-refresh blocker **recurs** after structural changes/restarts — see RESET note + full-XMLA-refresh playbook in the Power BI section. |
 | Noise / energy APIs | Additional smart city data sources |
 
 ### Bonus (not in original scope)
@@ -35,6 +35,52 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 | AI-generated city summaries | Claude API reads `mart_city_daily` → daily narrative summaries (marts now available) |
 
 ### Recently Completed
+- ✅ **Metadata-driven pipeline — config tables in Postgres** (2026-07-22) — pipeline
+  configuration moved out of scattered YAML + hardcoded SQL into a **`config` schema** in the
+  `smart_city` DB (the single source of truth), and the pipeline made a **generic, config-driven
+  engine**. Adding a source/city/field is now an **INSERT**, not a code change. Pieces:
+  - **`config` schema (7 tables)** — `config.sources` / `config.streams` / `config.locations` /
+    `config.source_locations` (What/Where/When), `config.field_mappings` (the contract:
+    `source_expr [::data_type] as target_column`, with `is_required` + `is_active` flags),
+    `config.validation_rules` (quality thresholds; `severity` error/warn), `config.validation_runs`
+    (audit log). DDL in **`metadata/schema.sql`**, loaded by **`metadata/seed_config.py`** (seeds
+    from the legacy YAML + the ~88 field mappings transcribed from the stg models). Full guide in
+    **`metadata/README.md`** (this dir IS shipped/committed, unlike `docs/`). SQL helper functions
+    in `schema.sql`: `config.add_city(city,lat,lon[,bbox])` (one call = locations +
+    source_locations inserts), `config.set_city_active(city,bool)`, `config.remove_city(city)`.
+  - **Config-driven staging (dbt "same engine")** — the 5 `stg_*.sql` are now one-liners
+    `{{ build_staging('<stream>') }}`; the `build_staging` + `get_field_mappings` macros
+    (`dbt/smart_city/macros/`) generate each SELECT from `config.field_mappings` at run time
+    (`run_query`, guarded on `execute`). **Verified byte-identical** to the old hand-written output
+    (gold-table EXCEPT compare on all 5 streams — cols + content diff (0,0)); full `dbt build` green
+    (102 checks). So the intermediate/marts/Power BI contract is untouched. `raw_id`/`extracted_at`
+    are emitted by the macro as a fixed header (Airbyte-managed, not in field_mappings).
+  - **Data-contract validation gate** — new `validate_contract` DAG task (between syncs and dbt,
+    `retries=0`) runs `config_utils.validate_streams`: Tier 1 stops the pipeline if a required field
+    is missing/all-NULL; Tier 2 evaluates `validation_rules` (min/max/accepted_values/max_null_pct/
+    min_row_count/freshness). Every check (pass+fail) is written to `config.validation_runs`
+    **committed before the raise**, and a failure raises a multi-line `AirflowException` that the
+    existing `on_failure` alert email renders — so you get an email listing exactly which
+    field/threshold failed. Clean streams get a `certified` row. Also a cheap **config-sanity
+    warning** (non-blocking, `status='config_warning'`): a `validation_rules` row whose
+    `target_column` isn't a real field of the stream (a typo — it's free text, not an FK) would
+    silently never fire, so it's surfaced as a warning instead. **Triage:** `validation_runs` has a
+    `resolved` flag + a `config.open_validation_failures` view (unresolved failures, newest first) +
+    `config.resolve_validation(run_id)` / `config.resolve_failures(stream)` helpers, so a handled
+    failure can be marked without deleting audit history. Verified live (5 streams certified; a
+    forced `min_row_count` breach failed only that stream + logged + un-certified it; a typo'd rule
+    column warned without failing the run; resolve flow tested).
+  - **Config-driven Airbyte setup + auto-detect** — `setup_airbyte.py` reads sources/streams/cities
+    from `config.*` (was YAML); `main()` (host) manages the destination + LAN IP, `reconcile()`
+    (container-safe) skips it. New `reconcile_airbyte` DAG task (first, best-effort — import inside
+    the task, never raises) applies new config to Airbyte each run. Needs the `../ingestion/scripts`
+    mount + `CONNECTION_IDS_FILE` env added to `docker-compose.yml`. ✅ **In-container reconcile
+    VERIFIED (2026-07-23)** — `setup_airbyte.reconcile()` runs clean inside the scheduler container:
+    reaches the config DB (`host.docker.internal`) + Airbyte, reuses the destination (skips LAN IP),
+    updates both sources from `config.*`, writes `connection_ids.yml`. Host `setup_airbyte.py` path
+    also verified (produces the same `connection_ids.yml`; DB config matches the old YAML exactly).
+  - **YAML retired** — `ingestion/config/sources.yml` + `connections.yml` remain only as the
+    one-time seed input; after seeding, edit `config.*` with SQL. See `metadata/README.md`.
 - ✅ **Airbyte sync: trigger + wait merged into one task per connection** (2026-07-20) — the
   hourly DAG's `trigger_syncs` (push `job_id` to XCom) + `wait_syncs` (poll it) split was replaced
   by a single `syncs.sync_*` task per connection that triggers **and** waits. The split made
@@ -99,7 +145,43 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 
 ---
 
-## Power BI Dashboard (in active build — 15 tables, clean 26-rel star, 52 measures)
+## Power BI Dashboard (in active build — 15 tables, clean 26-rel star, 79 measures, 7 pages)
+
+> **Page 7 — Forecast & Accuracy (2026-07-22, violet accent `#A78BFA`, `b7…0007`):** image-2-style
+> **day-tile strip** (matrix: columns = new `forecast_day` calc column "Wed 22"-style on
+> `mart_forecast_latest`, sorted via `sortByColumn: forecast_date_utc`; values = `Forecast Icon URL`
+> measure (dominant condition → OpenWeather PNG, ImageUrl) + Forecast Temp + Rain %) · 6 accuracy
+> KPI cards · **city × day forecast heat matrix** · **MAE by lead-time** columns
+> (`lead_time_bucket` given a hidden `lead_bucket_sort` calc column + `sortByColumn` — labels
+> `<6h, 6-24h, 1-3d, 3-5d` sorted wrong otherwise; ⚠️ the sort column MUST derive from
+> `lead_time_hours`, **never from the column it sorts** — `sortByColumn` + a formula reading the
+> sorted column = a REAL circular dependency that makes the whole PBIP fail to open with "Unable to
+> open file … circular dependency". Fixed on disk 2026-07-22; contrast the *bogus* autodetect
+> cyclic-refresh error, which this is not) · predicted-vs-actual **scatterChart**
+> (Category=city, X/Y = new `Avg Predicted/Actual Temp (C)` measures — scatterChart PBIR buckets
+> Category/X/Y verified working) · hit rates + sample-size by city. ⚠️ The 3 calc columns
+> (`forecast_day`, `lead_bucket_sort`) **materialize only after an in-Desktop Home → Refresh** —
+> first open shows them blank. Forecast data: rolling ~6 days ahead (5-day/3-hour API), all 10
+> cities, weekends included; live accuracy 2026-07-22: MAE 1.8 °C, within-2C 62%, rain hit 96%,
+> condition hit 73% on 3,451 scored.
+
+> **Full data dictionary + forecast measures (2026-07-22):** **100% descriptions** — all **76
+> measures** and **227 data columns** carry a `Description` (the Model-view Properties / Fields-pane
+> ⓘ tooltip), grounded in the dbt formulas (e.g. Comfort = 0.40 warmth + 0.40 clean-air + 0.20
+> free-flow; `congestion_score = 1 − currentSpeed/freeFlowSpeed`; `hours_poor_air` = hours AQI≥4).
+> Documents the `(period)` (slicer-aware) vs `Current */Latest *` (latest-date-pinned) distinction.
+> Added via **live XMLA** (benign model objects — no close/reopen, just Ctrl+S). Power BI has **no
+> native data-dictionary tab**, so a consolidated read is exported to
+> `docs/powerbi_data_dictionary.md` (name + definition + DAX; regen script = session scratchpad
+> `pbi_export_dictionary.ps1`, reads descriptions straight from the live model). ⚠️ Description
+> writes need name-matching for °/µ/³ measure names — normalize (strip those chars) rather than
+> embedding them in a PS5.1 script (mojibake); and `String.Replace(char,'')` is invalid — cast to
+> `[string]` for the empty-replacement overload. The 6 forecast-accuracy measures are now
+> **surfaced on Page 7** (see above); regenerate the dictionary export after adding measures. **`fct_forecast_accuracy` finally surfaced** with 6
+> measures on `mart_city_daily`: `Forecast Temp MAE (C)` / `Temp Bias (C)` / `Temp Within 2C %` /
+> `Rain Hit Rate %` / `Condition Hit Rate %` / `Forecasts Scored`. Live sanity (2026-07-22, 3,221
+> scored): MAE 1.79 °C, bias +0.39, within-2C 62%, rain 97%, condition 75%. No Forecast-Accuracy
+> *page* yet — measures are defined and ready to drag.
 
 Live work on `C:\Users\Andrej\Documents\smart_city_dashboard.pbip` (Power BI **project**/PBIP,
 connected to PostgreSQL `marts`, Import mode). It lives **outside** this git repo.
@@ -115,12 +197,27 @@ reference** for layout, card rhythm, and colour — treat them as the spec when 
 **One cohesive dark base** (`smart_city_theme.json`, unchanged bg `#0B1220`) + a **per-page accent**
 applied at the *visual* level (hero fill, bar/gauge/donut colours) — never a per-page background.
 
-| Page (file id) | Mirrors image | Accent | Hero gradient |
+| Page (file id) | Mirrors image | Accent | Hero panel fill |
 |---|---|---|---|
-| General Overview (`a9c1084738f01311493f`) | **image (2)** | teal `#22D3EE` | cool-blue `#1E3A5F→#0B1220` |
-| Weather & Forecast (`b2000000000000000002`) | **image (4)** | warm orange `#F59E0B` | `#F59E0B→#7C2D12` |
+| Executive Overview (`a9c1084738f01311493f`) | **image (2)** | teal `#22D3EE` | `#16324F` |
+| Weather & Forecast (`b2000000000000000002`) | **image (4)** | warm orange `#F59E0B` | `#C2610C` |
 | Air Quality (`b3000000000000000003`) | **image (5)** | AQI ramp green→gold→red | — |
-| Weather + Pollution (**new**) | **image (7)** | magenta `#EC4899` + cyan `#22D3EE` | sky `#2563EB→#0B1220` |
+| Weather + Pollution (`b4000000000000000004`) | **image (7)** | magenta `#EC4899` + cyan `#22D3EE` | `#173A6E` |
+| Traffic & Congestion (`b5000000000000000005`) | **image (6)** *adapted* | teal `#22D3EE` + rose `#FB7185` | — |
+
+**Hero pattern (2026-07-21 — the thing that finally made pages look like the images):** a hero is a
+**layered composition**, never a single multiRowCard (that renders measure names as labels + a cramped
+grid — the v3 "ugly" failure). Layers: `basicShape` rounded backdrop (fill above, `roundEdge` 18, title
+on the shape) → `tableEx` weather-icon image → big `card` `Latest Temp Display` (~40pt, labels off) →
+`card` `Latest Condition Display` (~15pt) → `card` `Latest Reading At` (10pt muted). All overlay cards
+transparent (background/border/shadow/title off). P4's hero adds Wind/Humidity/Pressure mini-cards.
+
+**Weather icon = OpenWeather PNG, not emoji (2026-07-21).** PBI's card visual cannot render emoji
+glyphs (shows an empty box; `UNICHAR` measures verified correct over XMLA — it's purely a renderer
+limit). The working approach: measure `Weather Icon URL` (condition → `openweathermap.org/img/wn/<code>@2x.png`,
+`dataCategory: ImageUrl`) shown in a headerless **tableEx** (header can't truly hide — it's
+**color-matched to the hero fill**; value fontSize drives the image row height). `Latest Condition Icon`
+(emoji) still exists but is unused by visuals.
 
 AQI ramp (matches what the `AQI Color` measure returns): `#2ECC71` `#A3D65C` `#F1C40F` `#E67E22`
 `#E74C3C`. Theme data-colors reordered to lead teal→magenta→amber→green so multi-series pollutant
@@ -138,13 +235,45 @@ Weather share the hero + metric-grid + AQI-donut vocabulary, differentiated by *
 - PM1 (img 7 donut) → **PM2.5 + PM10** only.
 - AQI gauge stays **1–5** (never the images' 0–500), color-banded via `AQI Color`.
 
-**3 measures added for the restyle (2026-07-21, live via XMLA → model now 52):** `Latest Condition
-Icon` (weather emoji via `UNICHAR`, keyed off `Latest Condition` — powers hero-card glyph, no custom
-visual), `Visibility (km)` (per-city latest `visibility_m`/1000 — reads a flat ~10.0, low variance),
-`Prime Pollutant` (worst pollutant, each species normalized by its OpenWeather index-4 onset:
-PM2.5 50 / PM10 100 / NO2 150 / O3 140 / SO2 250 / CO 12400 µg/m³ — currently O3 everywhere, correct
-for clean summer air). Azure maps are **UI-added** (×2: Air-Quality + Weather+Pollution; Overview has
-**none** — image 2 has no map) per the report/canvas split below.
+**Measures added for the restyle (2026-07-21 → model now 61):** via XMLA — `Latest Condition Icon`
+(emoji, superseded by the icon-URL approach above), `Visibility (km)` (per-city latest
+`visibility_m`/1000 — reads a flat ~10.0, low variance), `Prime Pollutant` (worst pollutant, each
+species normalized by its OpenWeather index-4 onset: PM2.5 50 / PM10 100 / NO2 150 / O3 140 /
+SO2 250 / CO 12400 µg/m³ — currently O3 everywhere, correct for clean summer air). Via TMDL (PBI
+closed): `Weather Icon URL`, `Latest Temp Display` ("23.6 °C"), `Latest Condition Display`
+(capitalized), and **6 period traffic measures** for Page 5 — `Congestion (period)`,
+`Avg Speed (period)`, `Free-Flow Speed (period)`, `Avg Delay (period)`, `Total Incidents`,
+`Total Closures` (plain aggregations that **respond to slicers**, unlike the date-pinned `Current *`
+family which does `ALL('marts dim_date')`; that's why Page 5's charts/KPIs use them).
+
+**Page 5 — Traffic & Congestion (image 6, honestly adapted, 2026-07-21):** image 6's street-level
+jam segments are **not reproducible** (we hold city points, no road geometry) → Azure Map with city
+bubbles instead; its day-part peak bars are **not viable** (06–15 UTC only). Built: 6 period-measure
+KPI cards, City + Month **dropdown** slicers, congestion-by-city bar, speed-vs-free-flow 2-measure
+bar, incidents **city × month heat matrix** (needed `sortByColumn: month` on
+`dim_date[month_name]` — added, else months sort alphabetically), incidents-by-city columns; map gap
+reserved top-right (x504,y136,752×312). Macedonian cities disappear from traffic charts naturally
+(LEFT-join → BLANK measures), so no page filter is needed; the slicer still lists all 10.
+
+**Interactivity (2026-07-21):** all city slicers are **Dropdown** mode and carry
+`syncGroup: citySync` (P3+P5's Month slicers: `monthSync`) — a city picked on one page follows to
+all pages. ⚠️ `syncGroup` is **NOT a root-level key** in the PBIR visualContainer schema (PBI
+stripped it on open with "additional property" warnings); it lives **inside the `visual` object**,
+and the working setup was done via **View → Sync slicers → Advanced options → group name** (PBI
+then wrote the correct JSON itself). P4 gained its first city slicer. Cross-highlighting is on
+everywhere (`drillFilterOtherVisuals: true`). ⚠️ **Theme needs a `slicer` section** — without
+`items`/`dropdown` styles the dropdown popup is PBI's default white with the theme's near-white
+text = unreadable; fixed in `smart_city_theme.json`. Dropdown slicers need **~90px height** (title
++ header + input box) — at 56px the input clips off and the slicer looks dead/unselectable.
+
+**Maps = classic Bing "Map" visual, NOT Azure Maps (2026-07-21).** The Azure map visual now
+requires a **work/school Microsoft sign-in** — personal Gmail is rejected outright, so on this
+machine Azure Maps is unusable. Substitute: the classic **Map** visual (needs File → Options →
+Security → "Use Map and Filled Map visuals" ticked; no sign-in). Wells: `dim_city[latitude]`/
+`[longitude]`, `city` → Legend, Size = `Congestion (period)` (Traffic) / `Current AQI (1-5)`
+(Weather+Pollution). Map styles → Dark theme. Same constraint applies to **AppSource custom
+visuals** (Sankey): in-app import needs sign-in; a `.pbiviz` **imported from file** (e.g.
+Microsoft's powerbi-visuals-sankey GitHub releases) works without.
 
 ### How Claude edits Power BI (two surfaces — keep PBIP, not PBIX)
 - **PBIP is required** for the file-authoring half: the project is text — **TMDL** (model) + **PBIR**
@@ -477,6 +606,7 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 
 | Schema | Tables | Owner |
 |---|---|---|
+| `config` | sources, streams, locations, source_locations, field_mappings, validation_rules, validation_runs | metadata-driven config (DDL `metadata/schema.sql`, seed `metadata/seed_config.py`) — single source of truth for ingestion + the data contract |
 | `staging` | current_weather, air_pollution, weather_forecast, traffic_flow, traffic_incidents (raw JSON) | Airbyte |
 | _(ephemeral, no DB object)_ | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (ephemeral CTEs — compile inline) |
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
@@ -537,14 +667,22 @@ python ingestion/scripts/setup_airbyte.py
 
 Outputs `ingestion/config/connection_ids.yml` with connection UUIDs for Airflow.
 
-**One source + connection per API**, not per city: `openweather_all` and `tomtom_all`.
-Each connector is partition-routed (`ListPartitionRouter`) over the `locations` array in
-`sources.yml` — one API request per city per stream, all inside one sync. The request params
-and the injected `city` column read the current partition (`stream_partition` / `stream_slice`)
-instead of flat single-city config. **Add a city** = add a `locations` entry in `sources.yml`
-and re-run the setup script (it updates the source config); no new connection, no DAG re-parse.
+Since 2026-07-22 `setup_airbyte.py` reads sources/streams/cities from the **`config` schema in
+Postgres** (`config.sources` / `config.streams` / `config.source_locations`), not YAML. Two
+entrypoints: `main()` (host — manages the Postgres destination + pushes this machine's LAN IP;
+run after a network switch) and `reconcile()` (container-safe — skips the destination, called by
+the DAG's `reconcile_airbyte` task).
 
-Config files: `ingestion/config/sources.yml`, `ingestion/config/connections.yml`
+**One source + connection per API**, not per city: `openweather_all` and `tomtom_all`.
+Each connector is partition-routed (`ListPartitionRouter`) over a `locations` array — one API
+request per city per stream, all inside one sync. **Add a city** = `select config.add_city('Zagreb',
+lat, lon [, bbox])` (helper does the `config.locations` + `config.source_locations` inserts; also
+`config.set_city_active(city, bool)` and `config.remove_city(city)` — see `metadata/README.md`),
+then the next `reconcile_airbyte` run (or `python ingestion/scripts/setup_airbyte.py` on the host)
+applies it; no new connection, no DAG re-parse. The old `sources.yml`/`connections.yml` remain only
+as the one-time seed input.
+
+Config source of truth: the `config` schema (`metadata/schema.sql` + `metadata/seed_config.py`)
 Connector YAMLs: `ingestion/connections/open_weather_free_2_5.yaml`, `ingestion/connections/tomtom_traffic.yaml`
 
 ### Auth
@@ -600,11 +738,20 @@ UI: `localhost:8080` — login: `admin / admin`
   `dbt_intermediate`/`dbt_marts` tasks would `DELETE+INSERT` the same incremental Postgres
   tables concurrently (deadlocks / lost rows). `=1` queues the next run; `catchup=False`
   means a long run skips ahead rather than piling up.
+- **First task `reconcile_airbyte` (auto-detect)** — runs `setup_airbyte.reconcile()` so new
+  sources/cities in `config.*` are applied to Airbyte before syncing. **Best-effort**: imports
+  inside the task (can't break DAG parsing) and never raises (can't block ingestion — a real
+  Airbyte outage surfaces on the sync tasks). Skips the destination (LAN-IP detection is host-only).
 - Syncs all Airbyte connections in parallel — one `syncs.sync_*` task per connection in
   `connection_ids.yml` (now 2: `openweather_all`, `tomtom_all`) **triggers its sync and waits for
   it in the same task**. Trigger + wait were merged (2026-07-20; was a `trigger_syncs`/`wait_syncs`
   split that passed `job_id` via XCom) so an Airflow retry re-triggers a *fresh* sync instead of
   re-polling an already-failed job — see the Recently Completed note above.
+- **`validate_contract` gate (after syncs, before dbt; `retries=0`)** — `config_utils.validate_streams`
+  checks the latest raw batch against `config.field_mappings` (required) + `config.validation_rules`.
+  Stops the pipeline (raises → `on_failure` email lists the failing field/threshold) on any
+  error-severity breach; logs every check to `config.validation_runs` (committed before the raise).
+  `warn`-severity breaches log but don't stop. So bad/missing data never reaches intermediate/marts.
 - **No per-run `dbt deps` step** (removed 2026-07-20). `dbt_utils` (1.4.1) lives in the persistent
   `dbt_packages` **named volume** declared in `docker-compose.yml` (layered over the `../dbt` bind
   mount at the `dbt_packages/` subpath), populated **once** via a manual `dbt deps` and then durable
@@ -627,7 +774,10 @@ UI: `localhost:8080` — login: `admin / admin`
   `packages-install-path`), because `dbt deps` rmtree's its own install path and **can't remove a
   volume's mount root** (Errno 16 "Device or resource busy"). The **host** `dbt deps` is unaffected
   (env var unset → default `dbt_packages`).
-- Runs `dbt run --select staging --target staging`
+- Runs `dbt run --select staging --target staging` — the `stg_*` are now **config-driven**:
+  each is `{{ build_staging('<stream>') }}`, generated from `config.field_mappings` at run time
+  (the `build_staging`/`get_field_mappings` macros). Output is byte-identical to the old
+  hand-written models (verified), so downstream is unaffected.
 - Runs `dbt build --select intermediate --target staging` (hourly facts + forecast history)
 - Runs `dbt build --select marts --target staging` (star schema + OBT + analytics, build+test)
 - **Email alerts:** `on_failure_callback` on every task (fires after retries — emails which
@@ -766,7 +916,8 @@ smart-city-iw/
 │   └── dags/
 │       ├── airbyte_utils.py     ← OAuth trigger/wait helpers + sync-failure diagnosis
 │       ├── alert_utils.py       ← shared failure/success email callbacks (both DAGs)
-│       ├── dag_smart_city_pipeline.py      ← hourly ELT
+│       ├── config_utils.py      ← config-schema reads + data-contract validation engine
+│       ├── dag_smart_city_pipeline.py      ← hourly ELT (reconcile → sync → validate → dbt)
 │       └── dag_smart_city_maintenance.py   ← daily raw cleanup
 ├── dbt/
 │   └── smart_city/              ← dbt project root (run dbt here)
@@ -774,9 +925,11 @@ smart-city-iw/
 │       ├── profiles.yml         ← Docker/Airflow profiles (container paths)
 │       ├── packages.yml         ← dbt package deps (dbt_utils); package-lock.yml pins 1.4.1
 │       ├── macros/              ← generate_schema_name.sql; backfill_surrogate_keys.sql
-│       │                          (idempotent key repair, run manually — never auto-runs)
+│       │                          (idempotent key repair, run manually — never auto-runs);
+│       │                          build_staging.sql + get_field_mappings.sql (config-driven stg_*)
 │       └── models/
-│           ├── staging/         ← 5 stg_* JSON-parsing models → ephemeral (inline CTEs, no DB object)
+│           ├── staging/         ← 5 stg_* → one-line {{ build_staging('<stream>') }}, generated
+│           │                       from config.field_mappings; ephemeral (inline CTEs, no DB object)
 │           ├── intermediate/    ← hourly facts (4) + forecast history (1) → tables
 │           └── marts/           ← 15 models: dims + facts (incl. hourly weather/pollution) + OBT + analytics → tables
 ├── docs/                        ← ⚠️ LOCAL-ONLY, gitignored. The repo ships only docs/.gitkeep —
@@ -790,6 +943,10 @@ smart-city-iw/
 │   ├── powerbi_dashboard_plan.md     ← Power BI page-by-page plan
 │   ├── deployment.md                 ← deployment notes
 │   └── branch-reconciliation.md      ← branch reconciliation notes
+├── metadata/                    ← ✅ SHIPPED (committed). Metadata-driven config schema:
+│   ├── schema.sql                    ← DDL for the config schema (7 tables) — idempotent
+│   ├── seed_config.py                ← one-time loader (YAML + transcribed field mappings)
+│   └── README.md                     ← create/seed/edit config; the config-driven lifecycle
 ├── venv313/                     ← Python 3.13 venv (use this one)
 ├── venv/                        ← Python 3.8 venv (legacy, do not use)
 ├── requirements.txt
