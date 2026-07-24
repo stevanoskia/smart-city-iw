@@ -2,7 +2,7 @@
 Idempotent, config-driven Airbyte setup script.
 
 Reads the sources / streams / cities from the metadata `config` schema in Postgres
-(config.sources, config.streams, config.source_locations — see metadata/schema.sql),
+(config.sources, config.streams, config.source_locations — see config/schema.sql),
 then creates any missing sources, destinations, and connections via the Airbyte
 public API (v1). Safe to re-run — updates existing resources in place. Adding a city
 or a source is a plain INSERT into config.* (no YAML edit); re-run this to apply it.

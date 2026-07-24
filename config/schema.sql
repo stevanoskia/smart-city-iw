@@ -7,9 +7,9 @@
 --
 -- Idempotent: safe to re-run (create ... if not exists, drop-then-create triggers).
 -- Checked into git so a rebuilt machine can recreate the schema; the row data is
--- (re)loaded by metadata/seed_config.py.
+-- (re)loaded by config/seed_config.py.
 --
---   psql "host=localhost dbname=smart_city user=postgres" -f metadata/schema.sql
+--   psql "host=localhost dbname=smart_city user=postgres" -f config/schema.sql
 -- ============================================================================
 
 create schema if not exists config;
@@ -109,6 +109,15 @@ create table if not exists config.field_mappings (
 drop trigger if exists field_mappings_touch on config.field_mappings;
 create trigger field_mappings_touch before update on config.field_mappings
     for each row execute function config.set_updated_at();
+
+-- Guard: a required field may not be deactivated. A key/grain column (city,
+-- observed_at, incident_id) is is_required=true; disabling it would drop the column
+-- from the generated staging SELECT and blow up dbt_intermediate later with a cryptic
+-- "column does not exist". This stops that at edit time — to retire a required field,
+-- clear is_required first (a deliberate two-step). Idempotent drop-then-add.
+alter table config.field_mappings drop constraint if exists field_mappings_required_active_chk;
+alter table config.field_mappings add constraint field_mappings_required_active_chk
+    check (not (is_required and not is_active));
 
 -- ── validation_rules — quality thresholds (STEP 03 "Define Rules") ────────────
 -- target_column NULL = a stream-level rule (min_row_count, freshness_minutes).

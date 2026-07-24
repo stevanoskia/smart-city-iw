@@ -43,9 +43,9 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
     `config.source_locations` (What/Where/When), `config.field_mappings` (the contract:
     `source_expr [::data_type] as target_column`, with `is_required` + `is_active` flags),
     `config.validation_rules` (quality thresholds; `severity` error/warn), `config.validation_runs`
-    (audit log). DDL in **`metadata/schema.sql`**, loaded by **`metadata/seed_config.py`** (seeds
+    (audit log). DDL in **`config/schema.sql`**, loaded by **`config/seed_config.py`** (seeds
     from the legacy YAML + the ~88 field mappings transcribed from the stg models). Full guide in
-    **`metadata/README.md`** (this dir IS shipped/committed, unlike `docs/`). SQL helper functions
+    **`config/README.md`** (this dir IS shipped/committed, unlike `docs/`). SQL helper functions
     in `schema.sql`: `config.add_city(city,lat,lon[,bbox])` (one call = locations +
     source_locations inserts), `config.set_city_active(city,bool)`, `config.remove_city(city)`.
   - **Config-driven staging (dbt "same engine")** — the 5 `stg_*.sql` are now one-liners
@@ -80,7 +80,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
     updates both sources from `config.*`, writes `connection_ids.yml`. Host `setup_airbyte.py` path
     also verified (produces the same `connection_ids.yml`; DB config matches the old YAML exactly).
   - **YAML retired** — `ingestion/config/sources.yml` + `connections.yml` remain only as the
-    one-time seed input; after seeding, edit `config.*` with SQL. See `metadata/README.md`.
+    one-time seed input; after seeding, edit `config.*` with SQL. See `config/README.md`.
 - ✅ **Airbyte sync: trigger + wait merged into one task per connection** (2026-07-20) — the
   hourly DAG's `trigger_syncs` (push `job_id` to XCom) + `wait_syncs` (poll it) split was replaced
   by a single `syncs.sync_*` task per connection that triggers **and** waits. The split made
@@ -606,7 +606,7 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 
 | Schema | Tables | Owner |
 |---|---|---|
-| `config` | sources, streams, locations, source_locations, field_mappings, validation_rules, validation_runs | metadata-driven config (DDL `metadata/schema.sql`, seed `metadata/seed_config.py`) — single source of truth for ingestion + the data contract |
+| `config` | sources, streams, locations, source_locations, field_mappings, validation_rules, validation_runs | metadata-driven config (DDL `config/schema.sql`, seed `config/seed_config.py`) — single source of truth for ingestion + the data contract |
 | `staging` | current_weather, air_pollution, weather_forecast, traffic_flow, traffic_incidents (raw JSON) | Airbyte |
 | _(ephemeral, no DB object)_ | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (ephemeral CTEs — compile inline) |
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
@@ -677,12 +677,12 @@ the DAG's `reconcile_airbyte` task).
 Each connector is partition-routed (`ListPartitionRouter`) over a `locations` array — one API
 request per city per stream, all inside one sync. **Add a city** = `select config.add_city('Zagreb',
 lat, lon [, bbox])` (helper does the `config.locations` + `config.source_locations` inserts; also
-`config.set_city_active(city, bool)` and `config.remove_city(city)` — see `metadata/README.md`),
+`config.set_city_active(city, bool)` and `config.remove_city(city)` — see `config/README.md`),
 then the next `reconcile_airbyte` run (or `python ingestion/scripts/setup_airbyte.py` on the host)
 applies it; no new connection, no DAG re-parse. The old `sources.yml`/`connections.yml` remain only
 as the one-time seed input.
 
-Config source of truth: the `config` schema (`metadata/schema.sql` + `metadata/seed_config.py`)
+Config source of truth: the `config` schema (`config/schema.sql` + `config/seed_config.py`)
 Connector YAMLs: `ingestion/connections/open_weather_free_2_5.yaml`, `ingestion/connections/tomtom_traffic.yaml`
 
 ### Auth
@@ -943,7 +943,8 @@ smart-city-iw/
 │   ├── powerbi_dashboard_plan.md     ← Power BI page-by-page plan
 │   ├── deployment.md                 ← deployment notes
 │   └── branch-reconciliation.md      ← branch reconciliation notes
-├── metadata/                    ← ✅ SHIPPED (committed). Metadata-driven config schema:
+├── config/                     ← ✅ SHIPPED (committed). Metadata-driven config schema
+│   │                              (defines the `config` schema; distinct from `ingestion/config/`):
 │   ├── schema.sql                    ← DDL for the config schema (7 tables) — idempotent
 │   ├── seed_config.py                ← one-time loader (YAML + transcribed field mappings)
 │   └── README.md                     ← create/seed/edit config; the config-driven lifecycle
