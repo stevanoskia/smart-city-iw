@@ -67,7 +67,13 @@ Run from the repo root, using **venv313** (it has `psycopg2`/`pyyaml`/`python-do
 
 # (or, if you have psql:  psql "$DATABASE_URL" -f config/schema.sql)
 
-# 2. Load the rows from the legacy YAML + transcribed field mappings (idempotent)
+# 2. Retrofit any older DB up to the current schema (idempotent; no-op on a fresh DB).
+#    schema.sql holds the current state; migrations.sql catches up DBs made from an older one.
+./venv313/Scripts/python.exe -c "import os,psycopg2;from pathlib import Path;from dotenv import load_dotenv;load_dotenv('.env');c=psycopg2.connect(host=os.getenv('POSTGRES_HOST'),port=int(os.getenv('POSTGRES_PORT','5432')),dbname=os.getenv('POSTGRES_DB'),user=os.getenv('POSTGRES_USER'),password=os.getenv('POSTGRES_PASSWORD'));c.autocommit=True;c.cursor().execute(Path('config/migrations.sql').read_text(encoding='utf-8'))"
+
+# (or, if you have psql:  psql "$DATABASE_URL" -f config/migrations.sql)
+
+# 3. Load the rows from the legacy YAML + transcribed field mappings (idempotent)
 ./venv313/Scripts/python.exe config/seed_config.py
 ```
 

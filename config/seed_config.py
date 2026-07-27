@@ -13,7 +13,8 @@ Idempotent (ON CONFLICT upserts). Re-running refreshes the *definition* columns
 (source_expr, data_type, ordinal, descriptions, thresholds) but PRESERVES the
 operational flags (is_active / is_required) so a live toggle survives a re-seed.
 
-    Run AFTER config/schema.sql, with venv313 (has psycopg2 via dbt-postgres):
+    Run AFTER config/schema.sql (and config/migrations.sql, which retrofits older
+    DBs — a no-op on a fresh one), with venv313 (has psycopg2 via dbt-postgres):
         python config/seed_config.py
 
 Requires POSTGRES_HOST/PORT/DB/USER/PASSWORD in .env (same as setup_airbyte.py).
