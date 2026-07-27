@@ -43,8 +43,10 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
     `config.source_locations` (What/Where/When), `config.field_mappings` (the contract:
     `source_expr [::data_type] as target_column`, with `is_required` + `is_active` flags),
     `config.validation_rules` (quality thresholds; `severity` error/warn), `config.validation_runs`
-    (audit log). DDL in **`config/schema.sql`**, loaded by **`config/seed_config.py`** (seeds
-    from the legacy YAML + the ~88 field mappings transcribed from the stg models). Full guide in
+    (audit log). Current-state DDL in **`config/schema.sql`** (idempotent retrofits for older DBs
+    live in **`config/migrations.sql`** — a no-op on a fresh DB), loaded by **`config/seed_config.py`**
+    (seeds from the legacy YAML + the ~88 field mappings transcribed from the stg models). Run order:
+    `schema.sql` → `migrations.sql` → `seed_config.py`. Full guide in
     **`config/README.md`** (this dir IS shipped/committed, unlike `docs/`). SQL helper functions
     in `schema.sql`: `config.add_city(city,lat,lon[,bbox])` (one call = locations +
     source_locations inserts), `config.set_city_active(city,bool)`, `config.remove_city(city)`.
@@ -945,7 +947,8 @@ smart-city-iw/
 │   └── branch-reconciliation.md      ← branch reconciliation notes
 ├── config/                     ← ✅ SHIPPED (committed). Metadata-driven config schema
 │   │                              (defines the `config` schema; distinct from `ingestion/config/`):
-│   ├── schema.sql                    ← DDL for the config schema (7 tables) — idempotent
+│   ├── schema.sql                    ← DDL for the config schema (7 tables) — current-state, idempotent
+│   ├── migrations.sql                ← idempotent retrofits for pre-existing DBs (run after schema.sql; no-op on fresh)
 │   ├── seed_config.py                ← one-time loader (YAML + transcribed field mappings)
 │   └── README.md                     ← create/seed/edit config; the config-driven lifecycle
 ├── venv313/                     ← Python 3.13 venv (use this one)

@@ -34,10 +34,8 @@ create table if not exists config.sources (
     created_at     timestamptz not null default now(),
     updated_at     timestamptz not null default now()
 );
--- Idempotent add for DBs created before api_key_field existed.
-alter table config.sources add column if not exists api_key_field text;
-drop trigger if exists sources_touch on config.sources;
-create trigger sources_touch before update on config.sources
+-- Retrofit for DBs created before api_key_field existed → config/migrations.sql.
+create or replace trigger sources_touch before update on config.sources
     for each row execute function config.set_updated_at();
 
 -- ── streams — one row per stream per source (WHERE it lands, sync mode) ───────
@@ -53,8 +51,7 @@ create table if not exists config.streams (
     updated_at    timestamptz not null default now(),
     unique (source_id, stream_name)
 );
-drop trigger if exists streams_touch on config.streams;
-create trigger streams_touch before update on config.streams
+create or replace trigger streams_touch before update on config.streams
     for each row execute function config.set_updated_at();
 
 -- ── locations — one row per city ─────────────────────────────────────────────
@@ -66,8 +63,7 @@ create table if not exists config.locations (
     is_active   boolean not null default true,
     updated_at  timestamptz not null default now()
 );
-drop trigger if exists locations_touch on config.locations;
-create trigger locations_touch before update on config.locations
+create or replace trigger locations_touch before update on config.locations
     for each row execute function config.set_updated_at();
 
 -- ── source_locations — which cities each source ingests (+ per-source params) ─
@@ -84,8 +80,7 @@ create table if not exists config.source_locations (
     updated_at  timestamptz not null default now(),
     primary key (source_id, location_id)
 );
-drop trigger if exists source_locations_touch on config.source_locations;
-create trigger source_locations_touch before update on config.source_locations
+create or replace trigger source_locations_touch before update on config.source_locations
     for each row execute function config.set_updated_at();
 
 -- ── field_mappings — THE contract: expected field → typed column (HOW) ────────
@@ -104,20 +99,17 @@ create table if not exists config.field_mappings (
     ordinal       integer not null default 0,            -- output column order
     description   text,
     updated_at    timestamptz not null default now(),
-    unique (stream_id, target_column)
+    unique (stream_id, target_column),
+    -- Guard: a required field may not be deactivated. A key/grain column (city,
+    -- observed_at, incident_id) is is_required=true; disabling it would drop the column
+    -- from the generated staging SELECT and blow up dbt_intermediate later with a cryptic
+    -- "column does not exist". This stops that at edit time — to retire a required field,
+    -- clear is_required first (a deliberate two-step). The same guard is applied to
+    -- pre-existing tables (which won't pick up this inline constraint) by config/migrations.sql.
+    constraint field_mappings_required_active_chk check (not (is_required and not is_active))
 );
-drop trigger if exists field_mappings_touch on config.field_mappings;
-create trigger field_mappings_touch before update on config.field_mappings
+create or replace trigger field_mappings_touch before update on config.field_mappings
     for each row execute function config.set_updated_at();
-
--- Guard: a required field may not be deactivated. A key/grain column (city,
--- observed_at, incident_id) is is_required=true; disabling it would drop the column
--- from the generated staging SELECT and blow up dbt_intermediate later with a cryptic
--- "column does not exist". This stops that at edit time — to retire a required field,
--- clear is_required first (a deliberate two-step). Idempotent drop-then-add.
-alter table config.field_mappings drop constraint if exists field_mappings_required_active_chk;
-alter table config.field_mappings add constraint field_mappings_required_active_chk
-    check (not (is_required and not is_active));
 
 -- ── validation_rules — quality thresholds (STEP 03 "Define Rules") ────────────
 -- target_column NULL = a stream-level rule (min_row_count, freshness_minutes).
@@ -141,8 +133,7 @@ create table if not exists config.validation_rules (
     -- keeping the seed loader's ON CONFLICT upsert idempotent for stream-level rules.
     unique nulls not distinct (stream_id, target_column, rule_type)
 );
-drop trigger if exists validation_rules_touch on config.validation_rules;
-create trigger validation_rules_touch before update on config.validation_rules
+create or replace trigger validation_rules_touch before update on config.validation_rules
     for each row execute function config.set_updated_at();
 
 -- ── validation_runs — audit log + certification (STEP 05 "Monitor & Validate") ─
@@ -158,19 +149,18 @@ create table if not exists config.validation_runs (
     status         text not null,                        -- ok|missing|null|below_threshold|certified|config_warning
     rows_checked   integer,
     null_count     integer,
-    detail         text
+    detail         text,
+    -- Failure triage: mark a logged failure as "handled" so an operational view stays
+    -- clean, without deleting audit history. Only failure rows are meaningfully
+    -- resolvable; ok/certified rows just carry resolved=false. Pre-existing installs get
+    -- these columns retrofitted by config/migrations.sql.
+    resolved       boolean not null default false,
+    resolved_at    timestamptz,
+    resolved_note  text
 );
 create index if not exists validation_runs_run_ts_idx on config.validation_runs (run_ts desc);
 create index if not exists validation_runs_status_idx on config.validation_runs (status);
 create index if not exists validation_runs_stream_idx on config.validation_runs (stream_name);
-
--- ── Failure triage: resolved flag + open-issues view ──────────────────────────
--- Mark a logged failure as "handled" so an operational view stays clean, without
--- deleting audit history. Only failure rows are meaningfully resolvable; ok/certified
--- rows just carry resolved=false. Idempotent ADDs for pre-existing installs.
-alter table config.validation_runs add column if not exists resolved      boolean not null default false;
-alter table config.validation_runs add column if not exists resolved_at   timestamptz;
-alter table config.validation_runs add column if not exists resolved_note text;
 
 -- Keeps the "what's broken and not yet handled" query fast as the log grows.
 create index if not exists validation_runs_open_idx
