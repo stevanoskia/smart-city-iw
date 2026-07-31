@@ -241,6 +241,9 @@ docs/powerbi_dashboard.md
 docs/powerbi_dashboard_plan.md
 docs/powerbi_data_dictionary.md
 
+# AI city-summaries design/implementation plan — kept local
+docs/ai_city_summaries_plan.md
+
 # Airbyte — auto-generated, environment-specific
 ingestion/config/connection_ids.yml
 
@@ -255,3 +258,7 @@ airflow/logs/
 
 # Database backup dumps (e.g. pre-migration pg_dump snapshots)
 *.dump
+
+# AI city-summaries scratch — context packs (fetch) + generated summaries (Claude Code)
+ai/_inputs/
+ai/_outputs/
