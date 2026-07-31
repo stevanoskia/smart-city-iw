@@ -184,7 +184,9 @@ def classify_alerts(row: dict, pollution: list, upcoming: list) -> tuple[str, st
     if row.get("comfort_index_label") == "Poor":
         return "Warning", "Poor comfort index"
 
-    return "Normal", ""
+    # Explicit text rather than an empty string: a blank cell on the Power BI page
+    # reads as "something failed to load", whereas "No alerts" reads as a finding.
+    return "Normal", "No alerts"
 
 
 def resolve_date(cur, requested: str | None) -> date:

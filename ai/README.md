@@ -122,6 +122,12 @@ each output row, so the model has no way to alter it.
 | **Warning** | Any `Warning` alert row; or `aqi_alert`; or `hours_poor_air > 0`; or `max_aqi ≥ 4`; or High/Severe congestion; or a Poor comfort index |
 | **Normal** | None of the above |
 
+`alert_headline` is the short reason behind the level ("Severe extreme heat",
+"High PM2.5 (measured)"), and is **`"No alerts"` on a Normal day — never blank**. An
+empty cell on the report reads as a load failure; explicit text reads as a finding.
+A table visual cannot drop a column based on its data, so the column is always
+present and this is what keeps it looking deliberate on a quiet day.
+
 **Length scales with severity** — ~60 words Normal, ~90 Warning, ~110 Severe. A fixed
 budget would force the model to drop content on exactly the days that matter, and the
 first thing it drops is the alert. `_validate()` warns (never fails) past a soft
