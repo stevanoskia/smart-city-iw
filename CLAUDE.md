@@ -33,8 +33,64 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 | Task | Notes |
 |---|---|
 | AI-generated city summaries | Claude API reads `mart_city_daily` → daily narrative summaries (marts now available) |
+| ✅ ML prediction pipelines | **Built + hardened 2026-08-05** — 6 models → `ml_predictions` schema, `@daily` `smart_city_ml` DAG. See Recently Completed + `ml/README.md`. |
 
 ### Recently Completed
+- ✅ **ML prediction pipelines — rebuilt on a leak-free, baseline-gated core** (2026-08-05) —
+  the six forecasting ideas from the project brief now run as a scheduled `@daily` DAG
+  (`smart_city_ml`) writing into a new **`ml_predictions`** schema. This reworks the first ML
+  commit (PR #32), which could not run and whose reported accuracy was not measuring forecasting.
+  Shipped guide: **`ml/README.md`** (committed, unlike `docs/`).
+  - **Two blockers fixed.** (1) The `ml_predictions` schema **had no DDL anywhere in the repo** —
+    all five `predict.py` scripts inserted into tables that did not exist, so none had ever run.
+    Now **`ml/schema.sql`** (idempotent, applied automatically on train/predict). (2) The DB port
+    defaulted to **5434**; this project runs Postgres on **5432**. It was wrong in five copies of
+    the same `get_engine()` — now one `ml/common.py`, mirroring `ai/common.py`'s host-vs-container
+    env handling. `requirements.txt` was also missing pandas/dotenv/psycopg2.
+  - **Target leakage — the substantive fix.** Lags and targets were both built with
+    `merge_asof(direction="nearest")`, which matches the closest row on **either side** of the
+    wanted time. Measured on live data: **28%** of AQI rows and **26%** of temperature rows had
+    `lag_1h` equal to the current value (a "lag" sourced from the present or future), and — worse —
+    **48%** of traffic rows and **38%** of city-score rows had **`target` == the current value**,
+    because a ±1h tolerance on a 1h horizon matches the row itself. Those models were being trained
+    to return the number they were handed. `ml/featurelib.py` now uses `direction="backward"` for
+    lags (never forward) and, for targets, returns the **matched timestamp** and discards any match
+    closer than half the horizon.
+  - **Evaluation was `train_test_split(random_state=42)` on a time series** — a random shuffle lets
+    the model interpolate between hours it has already seen. Re-scored chronologically, it had
+    understated error by **59%** (AQI) and **25%** (temperature). `ml/evaluate.py` now splits on a
+    timestamp and scores every model against a **naive persistence baseline**; `train.py` **exits
+    non-zero** when a model loses to it. Under the original leaky setup **3 of 4 regressors were
+    worse than assuming no change** while printing good-looking numbers.
+  - **Current honest skill** (2026-08-05, ~7 weeks / 10 cities): `rain` AUC **0.957** vs 0.5
+    (+91.5%), `temperature` MAE **1.46 °C** vs 2.61 (+44.0%), `traffic` **+7.4%** — all beat
+    persistence. **`aqi` (−24.4%) and `city_score` (−8.9%) genuinely do not**, and that is
+    reported, not hidden: both already model the *delta* from the current value
+    (`Pipeline.predict_delta`), and the remaining gap is a data-volume problem, not a tuning one.
+    Queryable via `ml_predictions.model_health`; every run is logged to `model_registry`.
+  - **Rain probability (#4 in the brief) was missing entirely** — now built as an XGBoost
+    classifier. Scored on **ROC AUC, not accuracy**, because rain is ~4% of observed hours (always
+    predicting "dry" is 96% accurate and useless); training applies `scale_pos_weight`.
+  - **Anomaly model reworked to be city-relative.** It fed raw pm2_5/pm10/aqi to IsolationForest,
+    so it mostly learned *which cities are dirty* — a permanently polluted city looks anomalous
+    every hour while a real spike in a clean city never stands out. Now robust z-scores against
+    each city's own trailing 7-day median/IQR, **shifted one row** so a spike is not part of the
+    baseline it is measured against. Also scores a trailing window rather than only the newest row
+    per city (an anomaly log holding one row per city can't answer "when did Skopje spike?").
+  - **Coverage constraint honoured.** With 10 of 24 hours permanently empty, lag lookups need
+    tolerances — which is what made `direction="nearest"` so damaging. Rows with missing lags are
+    now **kept**, since XGBoost learns a default branch for NaN; requiring every lag discarded ~75%
+    of the data (fixing that alone took temperature from failing to **+44%** skill).
+  - **Structure + orchestration.** Five near-identical `features/train/predict` triples collapsed
+    into one shared core + six declarative `Pipeline` entries — that duplication is why one
+    evaluation bug appeared in all five at once. The 3.4 MB of committed `.joblib` binaries are
+    gone (build artifacts → `ml/_models/`, gitignored; the DAG retrains each run, which at ~1,700
+    rows is cheaper than distributing artifacts). ML deps go in a **separate `ml_venv`** in the
+    Airflow image and the DAG **shells out** to it — airflow 2.9.3 pins pandas/numpy, the same
+    tug-of-war that forced dbt into its own venv. Needs `docker compose build` + the
+    `../ml:/opt/airflow/ml` mount.
+  - **Verified live end-to-end (2026-08-05):** all 6 pipelines train and score against the real
+    warehouse; 53 rows written across 6 tables; re-run confirmed **idempotent** (still 53).
 - ✅ **Metadata-driven pipeline — config tables in Postgres** (2026-07-22) — pipeline
   configuration moved out of scattered YAML + hardcoded SQL into a **`config` schema** in the
   `smart_city` DB (the single source of truth), and the pipeline made a **generic, config-driven
@@ -614,6 +670,7 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
 | `intermediate` (forecast) | int_city_weather_forecast | dbt (incremental issue history) |
 | `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt (8 incremental `delete+insert` facts + 7 tables — see Marts materialization) |
+| `ml_predictions` | aqi_forecast, temperature_forecast, traffic_forecast, rain_forecast, city_score_forecast, pollution_anomaly, model_registry (+ views `model_health`, `latest_predictions`) | **Not dbt** — ML forecasts written by `ml/predict.py` via the `@daily` `smart_city_ml` DAG. DDL in `ml/schema.sql`. |
 
 **Hourly facts grain & keys:** one row per clock hour. Each model dedupes its staging source on the
 stream's business key — `(city, date_trunc('hour', observed_at))` for weather/pollution/flow (key
@@ -797,6 +854,26 @@ UI: `localhost:8080` — login: `admin / admin`
 - **Email alerts:** same pattern — failure email on the cleanup task, success email confirming
   the daily prune ran clean.
 
+### DAG: `smart_city_ml`
+- Schedule: `@daily` — `train` → `predict` → `report`.
+- **Runs in its own `ml_venv`, invoked as a subprocess** (`/home/airflow/ml_venv/bin/python`),
+  exactly like the dbt tasks call `dbt_venv`'s binary. airflow 2.9.3 pins pandas/numpy and
+  scikit-learn/xgboost want their own — the same dependency tug-of-war that forced dbt into a
+  separate venv. `_run()` captures the child's output and puts its tail into the raised
+  `AirflowException`, so the alert email still says what broke instead of just "exit 1".
+- **Retrains every run.** Models are build artifacts (`ml/_models/`, gitignored); at ~1,700 rows
+  training takes seconds, so retraining beats distributing `.joblib` files and the models never
+  drift from a stale snapshot. Split into weekly-train + daily-predict if that ever costs real time.
+- **Kept out of the hourly pipeline** — horizons are 1h–1d and `city_score` is daily-grain, so
+  hourly runs would rewrite the same forecasts 24×/day off partial data.
+- **A model losing to its naive baseline does NOT fail the DAG** (passes
+  `--allow-worse-than-baseline`). "24h PM2.5 is hard on 7 weeks of gappy data" is a property of the
+  data, not an incident; a daily email about it would train everyone to ignore alerts. Skill is
+  surfaced via `ml_predictions.model_health`, and the `report` task logs the standings so a genuine
+  regression stays visible. `predict` **does** fail if it wrote 0 rows (forecasts silently stale).
+- `max_active_runs=1` — two runs would fit the same models and upsert the same keys.
+- Needs the `../ml:/opt/airflow/ml` mount **and** a `docker compose build` (for `ml_venv`).
+
 ### Email alerts (both DAGs)
 Both DAGs share `airflow/dags/alert_utils.py` — `on_failure` (attached to every task via
 `default_args`) and `make_success_callback(message)` (attached to the DAG's **last** task only, so
@@ -920,7 +997,8 @@ smart-city-iw/
 │       ├── alert_utils.py       ← shared failure/success email callbacks (both DAGs)
 │       ├── config_utils.py      ← config-schema reads + data-contract validation engine
 │       ├── dag_smart_city_pipeline.py      ← hourly ELT (reconcile → sync → validate → dbt)
-│       └── dag_smart_city_maintenance.py   ← daily raw cleanup
+│       ├── dag_smart_city_maintenance.py   ← daily raw cleanup
+│       └── dag_smart_city_ml.py           ← daily ML train → predict → report
 ├── dbt/
 │   └── smart_city/              ← dbt project root (run dbt here)
 │       ├── dbt_project.yml
@@ -951,6 +1029,16 @@ smart-city-iw/
 │   ├── migrations.sql                ← idempotent retrofits for pre-existing DBs (run after schema.sql; no-op on fresh)
 │   ├── seed_config.py                ← one-time loader (YAML + transcribed field mappings)
 │   └── README.md                     ← create/seed/edit config; the config-driven lifecycle
+├── ml/                          ← ✅ SHIPPED (committed). ML prediction pipelines —
+│   │                              scheduled daily by the smart_city_ml DAG:
+│   ├── README.md                     ← the shipped guide (models, skill table, constraints)
+│   ├── schema.sql                    ← ml_predictions DDL (idempotent, auto-applied)
+│   ├── common.py                     ← DB conn (host/container), model IO, stable city encoding
+│   ├── featurelib.py                 ← leak-free lags (backward) + guarded future targets
+│   ├── evaluate.py                   ← chronological split + naive-baseline skill gate
+│   ├── pipelines.py                  ← the 6 pipelines declared as data
+│   ├── train.py / predict.py         ← the two CLIs (generic over pipelines.py)
+│   └── _models/                      ← gitignored build artifacts (*.joblib)
 ├── venv313/                     ← Python 3.13 venv (use this one)
 ├── venv/                        ← Python 3.8 venv (legacy, do not use)
 ├── requirements.txt

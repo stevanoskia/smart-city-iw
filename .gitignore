@@ -256,3 +256,6 @@ airflow/logs/
 # Database backup dumps (e.g. pre-migration pg_dump snapshots)
 *.dump
 dbt-env/
+
+# Trained ML models are build artifacts — rebuilt by ml/train.py
+ml/_models/

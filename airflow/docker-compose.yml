@@ -36,6 +36,10 @@ x-airflow-common: &airflow-common
     # apply new config.* sources/cities to Airbyte). env_file already gives the container
     # the API keys + Airbyte creds; it connects to the config DB via SMART_CITY_PG_*.
     - ../ingestion/scripts:/opt/airflow/ingestion_scripts
+    # ml/ package so the smart_city_ml DAG can import train/predict directly (real
+    # tracebacks in the alert email rather than an exit code). Writable on purpose:
+    # train.py saves models into ml/_models/, which is gitignored build output.
+    - ../ml:/opt/airflow/ml
     # Named volume for dbt packages (dbt_utils), layered over the ../dbt bind mount at
     # just the dbt_packages/ subpath. dbt installs into the dbt_packages/lib subdir of it
     # (see DBT_PACKAGES_PATH above). Populated ONCE via a manual `dbt deps` (see README /
