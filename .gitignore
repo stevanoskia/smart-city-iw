@@ -255,3 +255,4 @@ airflow/logs/
 
 # Database backup dumps (e.g. pre-migration pg_dump snapshots)
 *.dump
+dbt-env/
