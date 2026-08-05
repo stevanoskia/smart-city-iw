@@ -203,13 +203,44 @@ Airflow retries are idempotent.
 Two helper views:
 
 - **`model_health`** — latest training result per model (the skill table above).
-- **`latest_predictions`** — all five forecast tables unioned into one long feed
-  (`model_name, city, predicted_for, predicted_value, unit, horizon`), convenient
-  for a single Power BI import instead of five.
+- **`all_predictions`** — all five forecast tables unioned into one long feed
+  (`model_name, city, city_key, date_key, predicted_for, predicted_value, unit,
+  horizon, model_version, scored_at`). Full history, not just the newest row: a
+  dashboard can narrow to the latest with a measure, but cannot recover history it
+  never imported.
 
 `scored_at` (when the prediction was made) is kept alongside `predicted_for`
 (what it is about), which is what makes after-the-fact accuracy scoring possible —
 the same split `marts.fct_forecast_accuracy` uses for OpenWeather's forecasts.
+
+### Star keys
+
+Every output table carries `city_key` and `date_key`, so these join `dim_city` /
+`dim_date` on the same keys as every other fact rather than on a text column.
+
+`city_key` is **copied from `dim_city` by a join inside the insert**, never
+recomputed. dbt builds it with `dbt_utils.generate_surrogate_key(['city'])`, which
+currently reduces to plain `md5(city)` — but only incidentally, through that
+package's null-placeholder and separator conventions. Reproducing the hash here
+would couple this code to dbt_utils internals and drift silently on an upgrade.
+The join is deliberately *inner*, so a city missing from `dim_city` is dropped and
+reported rather than written with a fabricated key. `date_key` is different — it is
+`YYYYMMDD::int`, a format rather than a hash, so it is computed directly.
+
+Rows written before these columns existed are repaired by an idempotent backfill in
+`schema.sql`, which runs on every train/predict and matches nothing once done.
+
+### Power BI
+
+Import **`all_predictions` only** — one table, not six. Importing all six base
+tables would put six new `city` columns into the model, which is exactly the shape
+that trips Power BI's relationship autodetect into a bogus "cyclic reference"
+error (see the Power BI section of `CLAUDE.md`).
+
+Relate **`city_key` → `dim_city`**. Leave **`date_key` unrelated**, matching how
+`mart_forecast_latest` is deliberately not linked to `dim_date`: these rows point at
+*future* dates, and a date filter pinned to the latest actual reading would blank
+every forecast on the page.
 
 ---
 

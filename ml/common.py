@@ -19,8 +19,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 ML_DIR = Path(__file__).resolve().parent
 
-# Trained models are BUILD ARTIFACTS, not source — gitignored, rebuilt by train.py.
-# (The original PR committed 3.4 MB of .joblib into git.)
+# Trained models are BUILD ARTIFACTS
 MODELS_DIR = ML_DIR / "_models"
 
 SCHEMA_FILE = ML_DIR / "schema.sql"

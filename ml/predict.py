@@ -43,21 +43,54 @@ def _features(pipe: Pipeline, bundle: dict) -> pd.DataFrame:
 
 
 def _write(table: str, columns: list[str], rows: list[tuple], conflict: list[str],
-           update: list[str]) -> int:
+           update: list[str], ts_col: str = "predicted_for") -> int:
+    """Upsert rows, resolving the star keys from dim_city in the same statement.
+
+    `city_key` is JOINED IN, never computed here. dbt builds it with
+    dbt_utils.generate_surrogate_key(['city']); reproducing that hash in Python
+    would silently couple this file to the package's null-placeholder and
+    separator conventions and drift on an upgrade. The dimension is the authority,
+    so a row can't be written with a fabricated key. `date_key` is YYYYMMDD::int —
+    a format, not a hash — so it is derived inline from the row's own timestamp.
+
+    The join is deliberately INNER: dim_city is derived from the same warehouse
+    that feeds these models, so a city missing from it is a real anomaly, not a
+    routine case, and must not pass silently. Hence the rowcount check below.
+    """
     from psycopg2.extras import execute_values
 
     if not rows:
         return 0
+
     sets = ", ".join(f"{c} = excluded.{c}" for c in update)
+    insert_cols = ["city_key", "date_key"] + columns
+    select_cols = ", ".join(f"v.{c}" for c in columns)
     sql = (
-        f"insert into ml_predictions.{table} ({', '.join(columns)}) values %s "
-        f"on conflict ({', '.join(conflict)}) do update set {sets}, scored_at = now()"
+        f"insert into ml_predictions.{table} ({', '.join(insert_cols)}) "
+        f"select d.city_key, to_char(v.{ts_col}, 'YYYYMMDD')::int, {select_cols} "
+        f"from (values %s) as v ({', '.join(columns)}) "
+        f"join marts.dim_city d on d.city = v.city "
+        f"on conflict ({', '.join(conflict)}) do update set {sets}, "
+        f"city_key = excluded.city_key, date_key = excluded.date_key, scored_at = now()"
     )
+
     with common.get_conn() as conn:
         with conn.cursor() as cur:
             execute_values(cur, sql, rows)
+            written = cur.rowcount
         conn.commit()
-    return len(rows)
+
+    # Report what was actually written, not what was offered — with an inner join
+    # those can differ, and a silently shrinking count is how bad data hides.
+    if written < len(rows):
+        offered = {r[0] for r in rows}
+        with common.get_conn() as conn, conn.cursor() as cur:
+            cur.execute("select city from marts.dim_city")
+            known = {r[0] for r in cur.fetchall()}
+        missing = sorted(offered - known)
+        print(f"  WARNING: {len(rows) - written} row(s) dropped — not in marts.dim_city: "
+              f"{', '.join(missing) or '(unknown)'}")
+    return written
 
 
 def predict_forecast(pipe: Pipeline, bundle: dict) -> int:
@@ -159,6 +192,7 @@ def predict_anomaly(pipe: Pipeline, bundle: dict, days: int) -> int:
         conflict=["city", "observed_at"],
         update=["pm2_5_ug_m3", "pm10_ug_m3", "aqi", "anomaly_score",
                 "is_anomaly", "model_version"],
+        ts_col="observed_at",  # measured, not forecast — no predicted_for column
     )
     flagged = int(recent["_flag"].sum())
     print(f"  scored {n} observations over {days}d; {flagged} flagged as anomalies")
