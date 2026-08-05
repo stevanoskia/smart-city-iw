@@ -62,12 +62,14 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
     timestamp and scores every model against a **naive persistence baseline**; `train.py` **exits
     non-zero** when a model loses to it. Under the original leaky setup **3 of 4 regressors were
     worse than assuming no change** while printing good-looking numbers.
-  - **Current honest skill** (2026-08-05, ~7 weeks / 10 cities): `rain` AUC **0.957** vs 0.5
-    (+91.5%), `temperature` MAE **1.46 °C** vs 2.61 (+44.0%), `traffic` **+7.4%** — all beat
-    persistence. **`aqi` (−24.4%) and `city_score` (−8.9%) genuinely do not**, and that is
+  - **Current honest skill** (snapshot 2026-08-05, ~7 weeks / 10 cities): `rain` AUC **0.964**
+    vs 0.5 (+92.7%), `temperature` MAE **1.49 °C** vs 2.59 (+42.6%), `traffic` **+7.4%** — all beat
+    persistence. **`aqi` (−27.6%) and `city_score` (−8.1%) genuinely do not**, and that is
     reported, not hidden: both already model the *delta* from the current value
     (`Pipeline.predict_delta`), and the remaining gap is a data-volume problem, not a tuning one.
-    Queryable via `ml_predictions.model_health`; every run is logged to `model_registry`.
+    ⚠️ **These magnitudes move on every retrain** (the DAG refits daily on a fresh holdout) — read
+    them from `ml_predictions.model_health`, never from a doc; `model_registry` keeps the history.
+    *Which* models pass has been stable across runs.
   - **Rain probability (#4 in the brief) was missing entirely** — now built as an XGBoost
     classifier. Scored on **ROC AUC, not accuracy**, because rain is ~4% of observed hours (always
     predicting "dry" is 96% accurate and useless); training applies `scale_pos_weight`.
@@ -90,7 +92,9 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
     tug-of-war that forced dbt into its own venv. Needs `docker compose build` + the
     `../ml:/opt/airflow/ml` mount.
   - **Verified live end-to-end (2026-08-05):** all 6 pipelines train and score against the real
-    warehouse; 53 rows written across 6 tables; re-run confirmed **idempotent** (still 53).
+    warehouse; re-runs confirmed **idempotent** (upsert on natural keys, row counts unchanged).
+    Also verified **in-container**: `airflow dags test smart_city_ml 2026-08-04` green in ~18s,
+    all 3 tasks SUCCESS, with the two below-baseline models correctly *not* failing the DAG.
 - ✅ **AI summaries — alerts, severity colour coding + intraday detail** (2026-07-31) — the
   summaries now carry **alerts** and an hour-level angle, and each row is classified for the
   Power BI page's colour coding. **Data side done + verified; the Power BI page edit is
@@ -117,7 +121,8 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
   - **Intraday peaks** (`warmest_hour_utc`, `worst_aqi_hour_utc`, `worst_congestion_hour_utc`
     + `hours_observed`) go into the pack, so the prose can say "air was worst at 13:00".
     ⚠️ **Bounded by the hourly-coverage constraint** (see that section): measured live —
-    hours **1–5 and 15–19 have ZERO rows, ever**; the bulk is 07–14 UTC. The spec therefore
+    hours **1–5 and 16–19 have ZERO rows, ever** (weather also has none at 15); the bulk
+    is 07–14 UTC. The spec therefore
     requires peaks be framed **"of the hours recorded"** and **forbids** night/evening/
     overnight/rush-hour/"24 hours" claims. `hours_observed` is passed in to enforce that.
     This is also why there is **no hourly narrative grain** — a per-hour summary would
@@ -624,11 +629,12 @@ there is **no evening or overnight data at all**:
 | `fct_pollution_hourly` | 15 / 24 | 07h–14h |
 | `fct_traffic_hourly` | 15 / 24 | 07h–14h |
 
-**Re-measured 2026-07-31** (the old table said 9–10 hours / 06h–15h — stale, but the
-conclusion is unchanged and if anything firmer). Hours **1–5 and 15–19 have ZERO rows,
-ever**; hours 0 and 20–23 hold only 4–10 rows each across all history — one or two stray
-late nights, not coverage. Per-day capture is 3–12 distinct hours, typically 6–9. So
-**10 of 24 hours are permanently empty**, which is why the AI summaries frame every
+**Re-measured 2026-08-05.** Hours **1–5 and 16–19 have ZERO rows, ever** — 9 of 24 —
+and `int_city_hourly_weather` additionally has none at 15, so **9–10 hours are permanently
+empty depending on the stream** (an earlier note said a flat "1–5 and 15–19 / 10 hours";
+hour 15 does carry rows for pollution and traffic). Hours 0 and 20–23 hold only 4–10 rows
+each across all history — one or two stray late nights, not coverage. Per-day capture is
+3–12 distinct hours, typically 6–9. The conclusion is unchanged, which is why the AI summaries frame every
 intraday peak as *"of the hours recorded"* and are forbidden from mentioning
 night/evening/overnight/rush-hour, and why there is no hourly *narrative* grain.
 
