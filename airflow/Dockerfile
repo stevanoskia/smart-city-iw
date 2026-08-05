@@ -29,3 +29,20 @@ RUN python -m venv /home/airflow/dbt_venv && \
     /home/airflow/dbt_venv/bin/pip install --no-cache-dir \
         "dbt-core==1.11.11" \
         "dbt-postgres==1.8.2"
+
+# The ML stack gets its OWN virtualenv for exactly the same reason as dbt above.
+# airflow 2.9.3 pins pandas and numpy; scikit-learn and xgboost want their own
+# ranges, and installing them into Airflow's env restarts the same tug-of-war.
+# The smart_city_ml DAG therefore invokes /home/airflow/ml_venv/bin/python as a
+# subprocess (mirroring how the dbt tasks call dbt_venv's binary) rather than
+# importing the pipelines into the scheduler process.
+# Kept in sync with ml/requirements.txt — update both together.
+RUN python -m venv /home/airflow/ml_venv && \
+    /home/airflow/ml_venv/bin/pip install --no-cache-dir \
+        "pandas>=2.2" \
+        "numpy>=1.26" \
+        "scikit-learn==1.5.2" \
+        "xgboost==2.1.1" \
+        "joblib==1.4.2" \
+        "sqlalchemy>=2.0.36" \
+        "psycopg2-binary>=2.9.9"

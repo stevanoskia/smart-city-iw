@@ -1,4 +1,12 @@
-xgboost==2.1.1
+# ML pipelines (ml/). Install into a dedicated venv, NOT venv313 — that one holds
+# the pinned dbt toolchain and this repo keeps those dependency sets apart.
+#
+#   python -m venv .venv-ml && .venv-ml/Scripts/pip install -r ml/requirements.txt
+pandas>=2.2
+numpy>=1.26
 scikit-learn==1.5.2
+xgboost==2.1.1
 joblib==1.4.2
 sqlalchemy>=2.0.36
+psycopg2-binary>=2.9.9
+python-dotenv>=1.0

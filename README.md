@@ -21,6 +21,7 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt intermediate --> dbt mart
                    +-----------------------------------------------------------
                        Airflow: smart_city_pipeline (@hourly ELT)
                                 smart_city_maintenance (@daily raw cleanup)
+                                smart_city_ai_summary (@daily AI summaries)
 ```
 
 | Layer | Tool |
@@ -112,7 +113,7 @@ docker compose run --rm --user root \
   deps --project-dir /opt/airflow/dbt/smart_city --profiles-dir /opt/airflow/dbt/smart_city
 
 # UI: localhost:8080  (admin / admin)
-# Enable DAGs: smart_city_pipeline, smart_city_maintenance
+# Enable DAGs: smart_city_pipeline, smart_city_maintenance, smart_city_ai_summary
 ```
 > The dbt project is bind-mounted **and** `dbt_packages/` is gitignored, so the packages
 > can't be baked into the image (the mount would shadow them). The `dbt_packages` named
@@ -134,7 +135,8 @@ docker compose run --rm --user root \
 - **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test). dbt packages (`dbt_utils`) live in a persistent `dbt_packages` **named volume** — populated once (see the one-time command in [Start Airflow](#6-start-airflow)), not reinstalled per run
 - **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
-- **Email alerts** — both DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled. Shared by both DAGs via `airflow/dags/alert_utils.py`
+- **Airflow DAG** `smart_city_ai_summary` (@daily) — generates the AI city summaries with the Gemini API and upserts them into `marts.mart_city_summary` (see [AI city summaries](#ai-city-summaries-bonus)). Summarizes the previous complete UTC day; skips (rather than fails) on a day the pipeline never ran
+- **Email alerts** — the DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled. Shared by all three DAGs via `airflow/dags/alert_utils.py`
 - **Sync failures explain themselves** — a failed Airbyte sync reports `failureOrigin` / `failureType` and the underlying message (read from the job's `failureSummary`), plus a plain-English hint for common causes: Postgres unreachable after a network change, a rejected API key, a rate limit. Stacktraces stay in the task log
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API and **pushes config on re-run** (so a changed LAN IP re-points the destination); add cities via config, no UI
 
@@ -288,7 +290,8 @@ smart-city-iw/
 │       ├── airbyte_utils.py                 <- OAuth trigger/wait helpers + failure diagnosis
 │       ├── alert_utils.py                   <- shared failure/success email callbacks
 │       ├── dag_smart_city_pipeline.py       <- hourly ELT DAG
-│       └── dag_smart_city_maintenance.py    <- daily raw-cleanup DAG
+│       ├── dag_smart_city_maintenance.py    <- daily raw-cleanup DAG
+│       └── dag_smart_city_ai_summary.py     <- daily AI city-summary DAG (Gemini)
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
 │   ├── packages.yml     <- dbt package deps (dbt_utils); package-lock.yml pins 1.4.1
 │   ├── macros/          <- incl. backfill_surrogate_keys.sql (one-off key migration)
@@ -296,6 +299,49 @@ smart-city-iw/
 │       ├── staging/      -> ephemeral (5 stg_* parsers, no DB object)
 │       ├── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
 │       └── marts/         -> PostgreSQL (15 tables: dims + facts + OBT + analytics)
+├── ai/                  <- AI city summaries (Gemini API, scheduled daily) — see ai/README.md
+│   ├── fetch_inputs.py  <- Step A: read mart_city_daily + alerts -> context pack
+│   ├── summary_spec.md  <- the generation rules (single source of truth, both paths)
+│   ├── generate_summaries.py <- Step B: the Gemini call -> summary rows
+│   ├── PROMPT.md        <- Step B fallback: same step in a Claude Code session (no API key)
+│   └── load_summaries.py<- Step C: upsert -> marts.mart_city_summary
 ├── venv313/             <- Python 3.13 venv (always use this)
 └── .env                 <- secrets (not committed)
 ```
+
+## AI city summaries (bonus)
+
+Daily, per-city natural-language environmental summaries, generated with the **Gemini API**
+(Google AI Studio — the free tier covers it at one call per day) and written to
+`marts.mart_city_summary`, FK'd into the star and surfaced on a Power BI page.
+
+Three steps, of which only the middle one calls a model — both ends are deterministic SQL, so a
+bad generation is re-runnable without touching the warehouse:
+
+```
+fetch_inputs.py  ->  generate_summaries.py  ->  load_summaries.py
+   (Postgres)            (Gemini API)            (Postgres upsert)
+```
+
+**It runs itself.** The `smart_city_ai_summary` Airflow DAG (`@daily`) runs all three. It
+summarizes **yesterday** — a complete UTC day whose row is final — and if the machine was off at
+midnight the scheduler picks that same day up when it next starts, so days aren't skipped. A day
+the pipeline never ran makes the run **skip**, not fail.
+
+Set `GEMINI_API_KEY` in `.env` (get one at <https://aistudio.google.com/api-keys>). To run it by
+hand:
+
+```bash
+./venv313/Scripts/python.exe ai/fetch_inputs.py        # or --date YYYY-MM-DD
+./venv313/Scripts/python.exe ai/generate_summaries.py  # --dry-run to skip the API call
+./venv313/Scripts/python.exe ai/load_summaries.py
+```
+
+Each summary is grounded strictly in the marts — air quality, temperature, traffic, a livability
+verdict, then any upcoming weather alert — and never invents a value; weather-only cities get an
+explicit "no traffic data" clause. Rows carry an `alert_level` (`Severe`/`Warning`/`Normal`)
+computed in Python, not by the model, which drives the report's red/amber colour coding, and the
+paragraph length scales with it (~60/90/110 words).
+
+**No API key?** A Claude Code session can do the generation step instead (see `ai/PROMPT.md`);
+both paths read the same rules in `ai/summary_spec.md`. Full detail in **`ai/README.md`**.
