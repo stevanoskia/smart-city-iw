@@ -51,7 +51,8 @@ class Pipeline:
 
     # XGBoost learns a default branch direction for missing values, so a row with
     # some lags unavailable is still usable training data. Given the coverage gaps
-    # in this dataset (10 of 24 hours never observed), insisting every lag be
+    # in this dataset (9-10 of 24 hours never observed, depending on stream),
+    # insisting every lag be
     # present threw away ~75% of the rows. sklearn's IsolationForest cannot take
     # NaN, so the anomaly pipeline sets this False and drops instead.
     handles_nan: bool = True

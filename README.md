@@ -22,6 +22,7 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt intermediate --> dbt mart
                        Airflow: smart_city_pipeline (@hourly ELT)
                                 smart_city_maintenance (@daily raw cleanup)
                                 smart_city_ai_summary (@daily AI summaries)
+                                smart_city_ml (@daily ML forecasts)
 ```
 
 | Layer | Tool |
@@ -30,6 +31,7 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt intermediate --> dbt mart
 | Landing DB | PostgreSQL 18 (local, port 5432)
 | Transformation | dbt-postgres (staging ephemeral parsing + intermediate tables + marts: incremental facts + tables)
 | Orchestration | Apache Airflow (Docker, port 8080)
+| ML | scikit-learn / XGBoost (forecasts + anomaly detection -> `ml_predictions` schema)
 | Reporting | Power BI (dashboards built on the `marts` layer)
 
 ---
@@ -113,7 +115,8 @@ docker compose run --rm --user root \
   deps --project-dir /opt/airflow/dbt/smart_city --profiles-dir /opt/airflow/dbt/smart_city
 
 # UI: localhost:8080  (admin / admin)
-# Enable DAGs: smart_city_pipeline, smart_city_maintenance, smart_city_ai_summary
+# Enable DAGs: smart_city_pipeline, smart_city_maintenance, smart_city_ai_summary,
+#              smart_city_ml
 ```
 > The dbt project is bind-mounted **and** `dbt_packages/` is gitignored, so the packages
 > can't be baked into the image (the mount would shadow them). The `dbt_packages` named
@@ -136,6 +139,7 @@ docker compose run --rm --user root \
 - **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
 - **Airflow DAG** `smart_city_ai_summary` (@daily) — generates the AI city summaries with the Gemini API and upserts them into `marts.mart_city_summary` (see [AI city summaries](#ai-city-summaries-bonus)). Summarizes the previous complete UTC day; skips (rather than fails) on a day the pipeline never ran
+- **Airflow DAG** `smart_city_ml` (@daily) — retrains the six prediction models and writes their forecasts into the `ml_predictions` schema (see [ML predictions](#ml-predictions-bonus)). Runs in its own `ml_venv` inside the image, so the ML libraries never collide with Airflow's pandas/numpy pins
 - **Email alerts** — the DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled. Shared by all three DAGs via `airflow/dags/alert_utils.py`
 - **Sync failures explain themselves** — a failed Airbyte sync reports `failureOrigin` / `failureType` and the underlying message (read from the job's `failureSummary`), plus a plain-English hint for common causes: Postgres unreachable after a network change, a rejected API key, a rate limit. Stacktraces stay in the task log
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API and **pushes config on re-run** (so a changed LAN IP re-points the destination); add cities via config, no UI
@@ -291,7 +295,8 @@ smart-city-iw/
 │       ├── alert_utils.py                   <- shared failure/success email callbacks
 │       ├── dag_smart_city_pipeline.py       <- hourly ELT DAG
 │       ├── dag_smart_city_maintenance.py    <- daily raw-cleanup DAG
-│       └── dag_smart_city_ai_summary.py     <- daily AI city-summary DAG (Gemini)
+│       ├── dag_smart_city_ai_summary.py     <- daily AI city-summary DAG (Gemini)
+│       └── dag_smart_city_ml.py             <- daily ML train -> predict -> report
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
 │   ├── packages.yml     <- dbt package deps (dbt_utils); package-lock.yml pins 1.4.1
 │   ├── macros/          <- incl. backfill_surrogate_keys.sql (one-off key migration)
@@ -305,6 +310,12 @@ smart-city-iw/
 │   ├── generate_summaries.py <- Step B: the Gemini call -> summary rows
 │   ├── PROMPT.md        <- Step B fallback: same step in a Claude Code session (no API key)
 │   └── load_summaries.py<- Step C: upsert -> marts.mart_city_summary
+├── ml/                  <- ML prediction pipelines (scheduled daily) — see ml/README.md
+│   ├── schema.sql       <- ml_predictions DDL (idempotent, applied automatically)
+│   ├── featurelib.py    <- leak-free lag/target construction
+│   ├── evaluate.py      <- chronological split + naive-baseline skill gate
+│   ├── pipelines.py     <- the 6 models declared as data
+│   └── train.py / predict.py  <- the two CLIs (generic over pipelines.py)
 ├── venv313/             <- Python 3.13 venv (always use this)
 └── .env                 <- secrets (not committed)
 ```
@@ -345,3 +356,48 @@ paragraph length scales with it (~60/90/110 words).
 
 **No API key?** A Claude Code session can do the generation step instead (see `ai/PROMPT.md`);
 both paths read the same rules in `ai/summary_spec.md`. Full detail in **`ai/README.md`**.
+
+---
+
+## ML predictions (bonus)
+
+Six models over the warehouse, written into the **`ml_predictions`** schema and scheduled by the
+`smart_city_ml` DAG (`@daily`: `train` -> `predict` -> `report`).
+
+| Pipeline | Predicts | Horizon | Model |
+|---|---|---|---|
+| `aqi` | PM2.5 concentration | 24h | XGBoost regressor |
+| `temperature` | Air temperature | 3h | XGBoost regressor |
+| `traffic` | Congestion score | 1h | XGBoost regressor |
+| `rain` | Probability of rain | 3h | XGBoost classifier |
+| `city_score` | Comfort index | 1 day | XGBoost regressor |
+| `anomaly` | Pollution spikes | — | IsolationForest |
+
+Two rules are enforced in code rather than left to discipline:
+
+- **A feature may never see the future.** Lags are built with `merge_asof(direction="backward")`,
+  and targets carry the timestamp they matched so anything closer than half the horizon is thrown
+  away — a "1h-ahead forecast" can never resolve to the current row.
+- **Evaluation is chronological and always against a baseline.** The split cuts on a timestamp, and
+  every model is scored against persistence ("nothing changes") or a coin flip. `train.py` exits
+  non-zero if a model loses to its baseline, so a forecast worse than assuming no change can't ship
+  quietly.
+
+Skill is recorded on every training run — the numbers move as data accumulates, so read them from
+the database rather than from any document:
+
+```sql
+select * from ml_predictions.model_health order by skill desc;
+```
+
+As of 2026-08-05, `rain`, `temperature` and `traffic` beat their baselines; `aqi` and `city_score`
+do not, and are reported that way rather than tuned until the holdout passes. Run by hand with:
+
+```bash
+python -m venv .venv-ml && .venv-ml/Scripts/pip install -r ml/requirements.txt
+.venv-ml/Scripts/python ml/train.py      # --list, --model <name>
+.venv-ml/Scripts/python ml/predict.py
+```
+
+Use a dedicated venv, not `venv313` — that one holds the pinned dbt toolchain. Full detail,
+including the coverage constraints that shape these models, in **`ml/README.md`**.

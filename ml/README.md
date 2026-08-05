@@ -96,22 +96,27 @@ should not ship quietly.
 
 ## Current model skill
 
-Measured on the live warehouse, 2026-08-05 (~7 weeks of history, 10 cities):
+**These numbers move.** The DAG retrains daily, so every run re-scores on a fresh holdout and the
+figures shift as history accumulates. Treat the table below as a dated snapshot and the database as
+the source of truth:
+
+```sql
+select * from ml_predictions.model_health order by skill desc;   -- latest per model
+select * from ml_predictions.model_registry order by trained_at; -- skill over time
+```
+
+Snapshot from the live warehouse, 2026-08-05 (~7 weeks of history, 10 cities):
 
 | Pipeline | Metric | Model | Baseline | Skill | Verdict |
 |---|---|---|---|---|---|
-| `rain` | ROC AUC | 0.957 | 0.500 | **+91.5%** | ✅ strong |
-| `temperature` | MAE | 1.46 °C | 2.61 °C | **+44.0%** | ✅ strong |
-| `traffic` | MAE | 0.109 | 0.118 | **+7.4%** | ✅ modest |
-| `aqi` | MAE | 3.95 µg/m³ | 3.17 µg/m³ | −24.4% | ❌ below baseline |
-| `city_score` | MAE | 0.040 | 0.037 | −8.9% | ❌ below baseline |
-| `anomaly` | — | 3.1% flagged | — | — | unsupervised |
+| `rain` | ROC AUC | 0.964 | 0.500 | **+92.7%** | ✅ strong |
+| `temperature` | MAE | 1.49 °C | 2.59 °C | **+42.6%** | ✅ strong |
+| `traffic` | MAE | 0.110 | 0.119 | **+7.4%** | ✅ modest |
+| `aqi` | MAE | 4.05 µg/m³ | 3.17 µg/m³ | −27.6% | ❌ below baseline |
+| `city_score` | MAE | 0.040 | 0.037 | −8.1% | ❌ below baseline |
+| `anomaly` | — | ~3% flagged | — | — | unsupervised |
 
-Re-check any time with:
-
-```sql
-select * from ml_predictions.model_health order by skill desc;
-```
+Which models pass has been stable across runs; only the magnitudes move.
 
 **`aqi` and `city_score` genuinely lose to persistence, and that is reported
 rather than hidden.** Both already model the *change* from the current value
@@ -128,7 +133,7 @@ are still written and labelled; treat them as weak.
 **Hourly coverage is partial** (see the constraint documented in `CLAUDE.md`).
 Airflow only runs while the dev machine is on, so of 24 UTC hours:
 
-- hours **01–05 and 16–19 have zero rows, ever**
+- hours **01–05 and 16–19 have zero rows, ever** — 9 of 24; weather also has none at 15
 - the bulk of observations sit in **07–14 UTC**
 
 Consequences baked into the code:
