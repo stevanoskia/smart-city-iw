@@ -32,7 +32,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 ### Bonus (not in original scope)
 | Task | Notes |
 |---|---|
-| AI-generated city summaries | Claude API reads `mart_city_daily` → daily narrative summaries (marts now available) |
+| ✅ AI-generated city summaries | **Built 2026-07-29**, **automated on Gemini 2026-07-31** — now an unattended `@daily` Airflow DAG (`smart_city_ai_summary`). See Recently Completed + `ai/README.md`. |
 | ✅ ML prediction pipelines | **Built + hardened 2026-08-05** — 6 models → `ml_predictions` schema, `@daily` `smart_city_ml` DAG. See Recently Completed + `ml/README.md`. |
 
 ### Recently Completed
@@ -91,6 +91,185 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
     `../ml:/opt/airflow/ml` mount.
   - **Verified live end-to-end (2026-08-05):** all 6 pipelines train and score against the real
     warehouse; 53 rows written across 6 tables; re-run confirmed **idempotent** (still 53).
+- ✅ **AI summaries — alerts, severity colour coding + intraday detail** (2026-07-31) — the
+  summaries now carry **alerts** and an hour-level angle, and each row is classified for the
+  Power BI page's colour coding. **Data side done + verified; the Power BI page edit is
+  pending (needs Desktop CLOSED).**
+  - **`mart_city_summary` gained `alert_level` + `alert_headline`** (idempotent `add column
+    if not exists` in `fetch_inputs.DDL`). `alert_level` ∈ `Severe`/`Warning`/`Normal`,
+    computed by **`classify_alerts()` in Python — never by the model**: the page's colour
+    must be reproducible and must agree with the paragraph, and if the model decided it the
+    colour would depend on its wording. `_validate()` copies it from the pack onto each
+    output row, so the model cannot alter it. Triggers: `Severe` = any `severity='Severe'`
+    alert row; `Warning` = any `Warning` row, or `aqi_alert`, or `hours_poor_air>0`, or
+    `max_aqi>=4`, or High/Severe congestion, or Poor comfort.
+  - **Two alert blocks, kept separate on purpose** — `mart_pollution_alerts` is **measured**
+    (fact about the day); `mart_weather_alerts` is **forecast**, so only rows with
+    `date_key > target` are included, as a closing "looking ahead" clause explicitly labelled
+    a forecast. A past-dated forecast alert says nothing in a retrospective summary. The
+    forecast rows are collapsed to one per (city, type, severity) — the raw table repeats a
+    heatwave once per 3-hour slot (~29 near-identical rows), and `slots` is documented as
+    forecast windows, **not** separate events.
+  - **Length now scales with severity** — ~60 words Normal / ~90 Warning / ~110 Severe, and a
+    `Severe` day **must open with the alert**. A fixed 60-word budget forced the model to drop
+    content on exactly the days that matter. `_validate()` warns (never fails) past a soft
+    ceiling, to catch prompt drift.
+  - **Intraday peaks** (`warmest_hour_utc`, `worst_aqi_hour_utc`, `worst_congestion_hour_utc`
+    + `hours_observed`) go into the pack, so the prose can say "air was worst at 13:00".
+    ⚠️ **Bounded by the hourly-coverage constraint** (see that section): measured live —
+    hours **1–5 and 15–19 have ZERO rows, ever**; the bulk is 07–14 UTC. The spec therefore
+    requires peaks be framed **"of the hours recorded"** and **forbids** night/evening/
+    overnight/rush-hour/"24 hours" claims. `hours_observed` is passed in to enforce that.
+    This is also why there is **no hourly narrative grain** — a per-hour summary would
+    advertise a slicer that is 40%+ permanently blank.
+  - **Verified live (2026-07-31):** all 3 loaded days reclassified (per day ~1 Severe /
+    5–7 Warning / 2–4 Normal), 0 NULL levels, 0 orphaned FKs. Grounding hand-checked again on
+    the new fields — peak hours, Skopje's measured 08:55 PM2.5 alert, Belgrade's Severe heat
+    window (3 slots from 04 Aug 12:00), every delta — all exact. Word counts landed 64–91,
+    inside every ceiling.
+  - ✅ **Power BI colour coding authored (2026-07-31, PBI closed)** — checkpoint zipped first
+    (`Documents/pbip_checkpoint_20260731_131653.zip`). Changes:
+    - **TMDL** — `alert_level` + `alert_headline` added to `marts mart_city_summary` (both
+      described); model now **81 measures** with 3 new ones on `mart_city_daily` (the single
+      measure home): **`Summary Alert Color`** (`SELECTEDVALUE(alert_level)` → Severe
+      `#E74C3C` / Warning `#F1C40F` / Normal `#E6EDF7` — the theme's own `bad` / `neutral` /
+      `foreground` tokens, so it stays on-brand), plus `Severe Alert Days` /
+      `Warning Alert Days` (defined, not yet on a visual — drag onto cards if wanted).
+    - **PBIR** — page 8's `tableEx` (`e8000000000000000201`) gained an `alert_headline`
+      column *between* `date_utc` and `summary_text` (the scannable flag reads before the
+      paragraph explaining it), and per-column conditional formatting: `values[]` entries
+      with `selector.metadata` = the column's queryRef and `fontColor` bound to the measure,
+      on **all four** columns (`city` / `date_utc` / `alert_headline` / `summary_text`) — a
+      table visual has **no "colour the whole row" switch**, so every column needs its own
+      rule or the row reads half-flagged. The default (selector-less) entry keeps
+      `fontSize`/`wordWrap`. Totals row switched off (meaningless on four text columns).
+      ✅ **The tableEx totals property is `totals`, NOT `show`** — confirmed empirically:
+      `objects.total` was written with *both* candidates, and on the next Desktop save PBI
+      **dropped `show` and kept `totals`**, leaving
+      `total: [{properties: {totals: {expr: {Literal: {Value: "false"}}}}}]`. (It is
+      undocumented — theme JSON docs only cover `columnTotal`/`rowTotal` on matrices.)
+      **Generalisable trick:** when a PBIR property name is unknown, write every plausible
+      candidate, save in Desktop, then read the file back — PBI discards the unrecognised
+      ones and normalises the survivor, so the file itself tells you the right name.
+    - **Sorting** — a header click in Desktop persists as `query.sortDefinition`
+      (`{sort: [{field: {Column: {...}}, direction: "Descending"}]}`). Page 8 sorts
+      `date_utc` **Descending** so the newest day is always on top; within a day PBI falls
+      back to city alphabetical, so no secondary sort key was needed.
+    - ⚠️ **Deliberately NO `sortByColumn` for `alert_level`.** The obvious "sort Severe first"
+      trick is a hidden `alert_sort = SWITCH(alert_level, ...)` calc column — which is
+      *exactly* the circular dependency documented in the Page-7 note (a sort column whose
+      formula reads the column it sorts) that made the whole PBIP fail to open. If severity
+      ordering is ever wanted, add a **real integer column in Postgres**, never a calc column.
+    - ⚠️ **PBIR conditional formatting needs a `dataViewWildcard` in the selector** — cost one
+      round trip. A `values[]` entry with only `"selector": {"metadata": "<queryRef>"}` is
+      **silently DISCARDED** on open: no error, no warning, the column renders in the default
+      colour. The rule only applies with the `data` wildcard as well:
+      `"selector": {"data": [{"dataViewWildcard": {"matchingOption": 1}}], "metadata": "<queryRef>"}`.
+      Same failure class as the `syncGroup` incident (hand-written PBIR key in the wrong shape
+      → dropped quietly). **Diagnostic that isolated it:** live DAX over XMLA proved the
+      measure returned the right hex per city, so the model was exonerated and only the report
+      binding was left; the working shape was then copied from the heat-graded `tableEx` on
+      page 6 (`e6000000000000000304`). **Lesson: before hand-authoring any PBIR object, find an
+      existing working instance in this same report and match its shape exactly.**
+    - Note the 4 pre-existing measure-driven formats all use **`FillRule`** (gradients over
+      numeric measures); the 3 new ones are the report's first **direct `Measure`** colour
+      expressions (a measure returning a hex string = "Format by field value"). If that form
+      ever proves not to render, the proven fallback is a numeric rank measure + `FillRule`
+      with **explicit** min/mid/max values (auto-scaled endpoints would mis-colour a day where
+      only two of the three levels are present).
+    - Validated on disk: all report JSON parses, 339 lineageTags with **0 duplicates / 0
+      malformed**, each new object present exactly once.
+    - ⏳ **Needs one action in Desktop: open + Refresh** — the new columns exist in the model
+      but hold no data until the `mart_city_summary` table is refreshed, so the colours read
+      neutral until then. This is a **structural change**, so the first Desktop refresh may
+      re-trip the autodetect cyclic-reference — run the full-XMLA-refresh playbook (Power BI
+      section) if it does.
+- ✅ **AI city summaries — automated on the Gemini API** (2026-07-31) — the summaries are now
+  **scheduled and unattended**, closing the one trade-off of the 2026-07-29 build (it was a
+  *triggered* Claude Code step, never a nightly cron). The generation step moved to the **Gemini
+  API** (Google AI Studio key, free tier); the Claude Code path is **kept as a manual fallback**.
+  Everything else — the context pack, the upsert, the grounding rules, `mart_city_summary`, the
+  Power BI page — is unchanged, so the Power BI contract is untouched.
+  - **`ai/generate_summaries.py`** (NEW, the only piece that calls a model) — one `generateContent`
+    POST for **all** cities, with `responseSchema` structured output, `temperature 0.2`, and
+    thinking off (`thinkingBudget: 0` — this is short grounded writing; thinking tokens were the
+    bulk of the latency). Uses **plain `requests`, not the google-genai SDK**: `requests` is already
+    in venv313 *and* the Airflow image, and adding an SDK to the Airflow env risks the same
+    dependency tug-of-war that forced dbt into its own venv. Retries 429/5xx with backoff.
+  - **One call for all 10 cities**, not one per city (cheaper, far under the per-minute free-tier
+    limit). The risk that a single response silently drops a city is covered by `_validate()`:
+    every input `city_date_key` must come back **exactly once**, unaltered, with non-empty text —
+    otherwise it raises and Airflow retries.
+  - **`ai/summary_spec.md`** (NEW) — the generation rules extracted into **one provider-agnostic
+    file**, sent to Gemini verbatim as the system instruction *and* pointed at by `ai/PROMPT.md`.
+    Both paths read the same spec, so the two can't drift. **Edit rules there, never in a caller.**
+  - **`ai/common.py`** (NEW) — shared `get_conn()` that reads `POSTGRES_*` (host) **or**
+    `SMART_CITY_PG_*` (container), so the same modules run in both; `fetch_inputs`/`load_summaries`
+    were refactored into importable functions (`build_pack()` / `upsert()`) with their CLIs intact.
+  - **DAG `smart_city_ai_summary`** (`@daily`, `airflow/dags/dag_smart_city_ai_summary.py`) —
+    `fetch_pack → generate → load`, **importing** the modules (real tracebacks in the alert email,
+    not an opaque exit code), pack + rows passed via XCom (~9.5 KB). Kept **out of** the hourly
+    pipeline on purpose: daily grain, so hourly runs would be 24 calls rewriting one paragraph off
+    partial-day data. **Summarizes yesterday** (`@daily` + `catchup=False` → `ds` = the complete UTC
+    day the interval covers, whose `mart_city_daily` row is final); if the dev machine was off at
+    midnight the scheduler runs that same interval when it next comes up, so a laptop-hosted Airflow
+    doesn't skip days. **No marts rows for that date → the run SKIPS, not fails** (a day the ELT
+    never ran isn't an error worth an alert). Backfill one day via *Trigger DAG w/ config*
+    `{"date": "2026-07-29"}`. Same `alert_utils` failure/success emails as the other DAGs.
+  - **Wiring:** `../ai:/opt/airflow/ai` mount + `GEMINI_MODEL` in `airflow/docker-compose.yml`
+    (`GEMINI_API_KEY` arrives via the existing `env_file: ../.env`); Gemini vars documented in
+    `.env.example`. ⚠️ The mount needs a **`docker compose up -d`** to take effect.
+  - `mart_city_summary.model` records which path wrote each row (`gemini-3.6-flash` vs
+    `claude-code`). Shipped guide: **`ai/README.md`** (committed, unlike `docs/`).
+  - ⚠️ **Two Gemini API traps hit during the build** (both cost a 404/400 with a useless
+    message — documented in `ai/README.md`): (1) **`gemini-2.5-flash` is retired for keys
+    created after ~2026** — `404 "no longer available to new users"` **even though
+    ListModels still lists it**, so the model list is not an access list; default is now
+    the pinned **`gemini-3.6-flash`** (pinned over the `gemini-flash-latest` alias so a
+    model swap is an explicit decision). (2) **Thinking config is model-family-specific** —
+    Gemini 3+ takes `thinkingLevel` (LOW/MEDIUM/HIGH), 1.x/2.x take numeric
+    `thinkingBudget`, and each family rejects the other's field with a bare
+    `400 INVALID_ARGUMENT` naming no field. `_thinking_config()` picks by model name and
+    `generate()` retries once *without* thinking config if it's still rejected, so a
+    future rename degrades gracefully instead of killing the daily run.
+  - **Verified live end-to-end (2026-07-31):** host CLI + the full DAG in-container
+    (`airflow dags test … 2026-07-30`) green in ~9s, 10/10 upserted, **0 orphaned FKs**,
+    one API call (5.8k prompt / 1.8k output tokens). **Grounding hand-checked against the
+    context pack: every AQI, PM2.5 delta, peak temp, comfort score, incident count and
+    label matched exactly — no invented values** — and all 4 MK cities emitted the
+    "no traffic data" clause. Skip path verified (`2020-01-05` → task SKIPPED, no alert).
+    DAG **unpaused**.
+- ✅ **AI-generated city summaries — Claude Code / subscription path** (2026-07-29) — the bonus
+  "AI-Generated Smart City Summary" feature, built to run on a **Claude subscription via Claude
+  Code, NOT the Anthropic API** (no `ANTHROPIC_API_KEY`, no `anthropic` SDK, no per-token billing).
+  The "model call" is a Claude Code session that reads the data and writes the narratives. Produces
+  one ~60-word grounded paragraph per `(city, date_utc)` into a new **`marts.mart_city_summary`**
+  table (air quality → temperature → traffic → livability verdict; weather-only MK cities get a
+  "no traffic data" clause instead of invented congestion). Three pieces in the **`ai/` dir**
+  (all committed except the scratch):
+  - **`ai/fetch_inputs.py`** (deterministic, no API) — creates `mart_city_summary` (idempotent DDL),
+    reads today + prior day from `mart_city_daily`, writes a context pack to `ai/_inputs/<date>.json`.
+  - **`ai/PROMPT.md`** — the generation spec a Claude Code session follows, emitting
+    `ai/_outputs/<date>.json` (a list of `{city_date_key, city, date_utc, summary_text}`).
+  - **`ai/load_summaries.py`** (deterministic, no API) — upserts the outputs into `mart_city_summary`
+    (`ON CONFLICT (city_date_key)`), **re-deriving `city_key`/`date_key` from `mart_city_daily`** via
+    a join so the star FKs are authoritative (never trusts hand-copied keys).
+  - `ai/_inputs/` + `ai/_outputs/` are **gitignored scratch**. Run order: `fetch_inputs.py` →
+    generate in a Claude Code session (per `PROMPT.md`) → `load_summaries.py`. Verified live: 10
+    cities loaded for 2026-07-29, 0 orphaned FKs, UTF-8 (`µg/m³`, `°C`, em-dash) intact.
+  - **Power BI:** `mart_city_summary` **imported into the PBIP model** (TMDL table +
+    `city_key → dim_city` / `date_key → dim_date` relationships — star 26 → **28**). ⚠️ First
+    Desktop refresh after this structural add may re-trip the autodetect cyclic-reference — run the
+    full-XMLA-refresh playbook (Power BI section). A dedicated **"AI City Summaries" report page**
+    (id `b8000000000000000008`, 8th page) was authored via PBIR files: synced city slicer (`citySync`)
+    + a `date_utc` dropdown slicer + a wide word-wrapped `tableEx` (city / date_utc / summary_text).
+    Optional future polish: a `Latest Summary` measure pinned to `[Latest Date]` (model edit, live
+    via XMLA) so a card always shows the newest day without picking a date.
+  - ~~**Trade-off:** not a fully unattended nightly cron; it's a **triggered** step.~~ **Superseded
+    2026-07-31** — the Gemini path above makes it a scheduled `@daily` DAG. This path survives as
+    the **manual fallback** (no API key needed): generate per `ai/PROMPT.md`, then
+    `python ai/load_summaries.py --model "claude-code"`. Full design/rationale in
+    `docs/ai_city_summaries_plan.md` (local-only, gitignored).
 - ✅ **Metadata-driven pipeline — config tables in Postgres** (2026-07-22) — pipeline
   configuration moved out of scattered YAML + hardcoded SQL into a **`config` schema** in the
   `smart_city` DB (the single source of truth), and the pipeline made a **generic, config-driven
@@ -439,11 +618,19 @@ Desktop once more. The star holds at **26 relationships, all fact→dim**.
 The hourly facts only cover **06:00–15:00 UTC** — Airflow runs only while the dev machine is on, so
 there is **no evening or overnight data at all**:
 
-| Table | Distinct hours | Window |
+| Table | Distinct hours | Bulk of rows |
 |---|---|---|
-| `fct_weather_hourly` | 9 / 24 | 06h–14h |
-| `fct_pollution_hourly` | 10 / 24 | 06h–15h |
-| `fct_traffic_hourly` | 9 / 24 | 06h–14h |
+| `fct_weather_hourly` | 14 / 24 | 07h–14h |
+| `fct_pollution_hourly` | 15 / 24 | 07h–14h |
+| `fct_traffic_hourly` | 15 / 24 | 07h–14h |
+
+**Re-measured 2026-07-31** (the old table said 9–10 hours / 06h–15h — stale, but the
+conclusion is unchanged and if anything firmer). Hours **1–5 and 15–19 have ZERO rows,
+ever**; hours 0 and 20–23 hold only 4–10 rows each across all history — one or two stray
+late nights, not coverage. Per-day capture is 3–12 distinct hours, typically 6–9. So
+**10 of 24 hours are permanently empty**, which is why the AI summaries frame every
+intraday peak as *"of the hours recorded"* and are forbidden from mentioning
+night/evening/overnight/rush-hour, and why there is no hourly *narrative* grain.
 
 **Consequence:** peak-hour / time-of-day analysis is **not viable** and must not be shipped — a
 `day_part` chart would render Morning+Afternoon only, with Night/Evening empty, which reads as a
@@ -670,6 +857,7 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
 | `intermediate` (forecast) | int_city_weather_forecast | dbt (incremental issue history) |
 | `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt (8 incremental `delete+insert` facts + 7 tables — see Marts materialization) |
+| `marts` (AI) | mart_city_summary | **Not dbt** — AI-generated daily narratives, written by `ai/load_summaries.py` (Gemini via the `@daily` `smart_city_ai_summary` DAG; Claude Code as manual fallback — the `model` column says which). FK `city_date_key`/`city_key`/`date_key` into the star. |
 | `ml_predictions` | aqi_forecast, temperature_forecast, traffic_forecast, rain_forecast, city_score_forecast, pollution_anomaly, model_registry (+ views `model_health`, `latest_predictions`) | **Not dbt** — ML forecasts written by `ml/predict.py` via the `@daily` `smart_city_ml` DAG. DDL in `ml/schema.sql`. |
 
 **Hourly facts grain & keys:** one row per clock hour. Each model dedupes its staging source on the
@@ -854,6 +1042,21 @@ UI: `localhost:8080` — login: `admin / admin`
 - **Email alerts:** same pattern — failure email on the cleanup task, success email confirming
   the daily prune ran clean.
 
+### DAG: `smart_city_ai_summary`
+- Schedule: `@daily` — `fetch_pack` → `generate` → `load` (the three `ai/` steps, **imported**
+  as modules so failures surface as real tracebacks in the task log + alert email).
+- **Only `generate` calls a model** (Gemini `generateContent`, one POST for all 10 cities). Both
+  ends are deterministic SQL, so a bad generation is re-runnable without touching the warehouse.
+- **Summarizes yesterday**: `@daily` + `catchup=False` ⇒ `ds` is the complete UTC day the interval
+  covers, whose `mart_city_daily` row is final. If the dev machine was off at midnight, the
+  scheduler runs that same interval when it next comes up (no skipped days on a laptop host).
+- **Skips (not fails) when there are no marts rows for the date** — a day the ELT never ran isn't
+  an error worth an alert email. `AirflowSkipException` from `fetch_pack`.
+- `max_active_runs=1` — two runs would upsert the same `city_date_key`s concurrently and burn
+  double the API quota for the same output.
+- Backfill a single day: *Trigger DAG w/ config* → `{"date": "2026-07-29"}`.
+- Needs the `../ai` mount + `GEMINI_MODEL` in `docker-compose.yml` (`GEMINI_API_KEY` comes through
+  the existing `env_file: ../.env`). Same `alert_utils` failure/success emails as the other DAGs.
 ### DAG: `smart_city_ml`
 - Schedule: `@daily` — `train` → `predict` → `report`.
 - **Runs in its own `ml_venv`, invoked as a subprocess** (`/home/airflow/ml_venv/bin/python`),
@@ -911,6 +1114,8 @@ error in `<pre>` + `html.escape` (`_error_html`) because the detail is multi-lin
 | `AIRBYTE_URL` | `http://host.docker.internal:8000` |
 | `AIRBYTE_CLIENT_ID` | Airbyte OAuth client ID |
 | `AIRBYTE_CLIENT_SECRET` | Airbyte OAuth client secret |
+| `GEMINI_API_KEY` | Google AI Studio key — the model call in the daily `smart_city_ai_summary` DAG (via `env_file: ../.env`) |
+| `GEMINI_MODEL` | Gemini model for the summaries (default `gemini-3.6-flash`; **not** 2.5-flash — retired for new keys) |
 | `ALERT_EMAIL` | Recipient(s) for pipeline failure/success emails — comma-separate for several (unset = email disabled) |
 | `ALERT_TZ` | Optional — tz for the email "Completed"/"Failed at" stamp (default `Europe/Skopje`, UTC fallback) |
 | `AIRFLOW__SMTP__SMTP_HOST` … `_MAIL_FROM` | SMTP config (Gmail + App Password); see Environment Variables |
@@ -950,6 +1155,13 @@ AIRFLOW__SMTP__SMTP_SSL=False
 AIRFLOW__SMTP__SMTP_USER=<your gmail>
 AIRFLOW__SMTP__SMTP_PASSWORD=<16-char Gmail App Password>
 AIRFLOW__SMTP__SMTP_MAIL_FROM=<your gmail>
+
+# Gemini — the model call behind the daily AI city summaries (smart_city_ai_summary DAG)
+GEMINI_API_KEY=<from https://aistudio.google.com/api-keys>
+GEMINI_MODEL=gemini-3.6-flash        # optional — NOT gemini-2.5-flash (retired for new keys)
+GEMINI_THINKING_LEVEL=LOW            # optional — Gemini 3+ (LOW/MEDIUM/HIGH)
+GEMINI_THINKING_BUDGET=0             # optional — Gemini 1.x/2.x only (0 = thinking off)
+GEMINI_MAX_OUTPUT_TOKENS=8192        # optional
 ```
 
 ---
@@ -998,7 +1210,8 @@ smart-city-iw/
 │       ├── config_utils.py      ← config-schema reads + data-contract validation engine
 │       ├── dag_smart_city_pipeline.py      ← hourly ELT (reconcile → sync → validate → dbt)
 │       ├── dag_smart_city_maintenance.py   ← daily raw cleanup
-│       └── dag_smart_city_ml.py           ← daily ML train → predict → report
+│       ├── dag_smart_city_ai_summary.py    ← daily AI city summaries (Gemini): fetch → generate → load
+│       └── dag_smart_city_ml.py            ← daily ML train → predict → report
 ├── dbt/
 │   └── smart_city/              ← dbt project root (run dbt here)
 │       ├── dbt_project.yml
@@ -1029,6 +1242,16 @@ smart-city-iw/
 │   ├── migrations.sql                ← idempotent retrofits for pre-existing DBs (run after schema.sql; no-op on fresh)
 │   ├── seed_config.py                ← one-time loader (YAML + transcribed field mappings)
 │   └── README.md                     ← create/seed/edit config; the config-driven lifecycle
+├── ai/                          ← ✅ SHIPPED (committed). AI city summaries — scheduled daily by
+│   │                              the smart_city_ai_summary DAG (Gemini API):
+│   ├── README.md                     ← the shipped guide (pipeline, scheduling, config, rationale)
+│   ├── common.py                     ← shared get_conn() (POSTGRES_* on host / SMART_CITY_PG_* in container)
+│   ├── fetch_inputs.py               ← Step A: DDL + read mart_city_daily → context pack (build_pack())
+│   ├── summary_spec.md               ← the generation rules — SINGLE source of truth, both paths read it
+│   ├── generate_summaries.py         ← Step B: the Gemini call (requests, structured output) → rows
+│   ├── PROMPT.md                     ← Step B fallback: same step in a Claude Code session (no API key)
+│   ├── load_summaries.py             ← Step C: upsert rows → marts.mart_city_summary (upsert())
+│   └── _inputs/ , _outputs/          ← gitignored scratch (context packs + generated summaries)
 ├── ml/                          ← ✅ SHIPPED (committed). ML prediction pipelines —
 │   │                              scheduled daily by the smart_city_ml DAG:
 │   ├── README.md                     ← the shipped guide (models, skill table, constraints)
