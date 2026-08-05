@@ -36,6 +36,43 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 | ✅ ML prediction pipelines | **Built + hardened 2026-08-05** — 6 models → `ml_predictions` schema, `@daily` `smart_city_ml` DAG. See Recently Completed + `ml/README.md`. |
 
 ### Recently Completed
+- ✅ **`fct_traffic_incidents` — incident-grain fact; "Total Incidents" was 2.4× too high**
+  (2026-08-05) — the Power BI card read **141K**; the real figure is **60,641**. Two stacked
+  causes, both worth remembering:
+  - **Summing a per-day distinct count gives incident-DAYS.** `Total Incidents` was
+    `SUM(fct_traffic_daily[total_incidents])`, and that column is `count(distinct incident_id)`
+    *per city-day*. 28.8% of incidents span >1 day (avg 1.57, max 6) → 1.5× overstatement.
+    The dbt model was correct at its grain; nothing existed at *incident* grain to count.
+  - ⚠️ **TomTom ROTATES `incident_id` roughly weekly.** The id embeds a `TTI-<uuid>` prefix
+    that is a **batch identifier, not an incident identifier**: each uuid covers a distinct,
+    non-overlapping date range (Jun 17–23, Jun 24–29, Jul 1–3, Jul 7–13 …) and **no id ever
+    appears under two uuids**. The same physical roadworks is re-issued a new id every week —
+    one Barcelona incident on Gran Via absorbed **111 different ids** over 24 days. So even
+    `DISTINCTCOUNT(incident_id)` (96,872) over-counts. **Identity must come from location,
+    never from TomTom's id.**
+  - **Grain = `(city, road_from, road_to, feature_type)` + a session number.** Location alone
+    would merge a June jam and an August jam on the same stretch, so it is sessionised.
+  - ⚠️ **Sessions break on missed COLLECTION days, not calendar days.** Only **~58% of calendar
+    days were collected** (Airflow runs while the laptop is on), so a wall-clock gap rule starts
+    a new incident every time the *pipeline* was down — it swung the count 85K→42K on threshold
+    alone. Each city gets a `dense_rank()` index of days it actually collected, and a session
+    breaks only when the location is absent on a day we genuinely looked. Threshold is
+    `var('incident_session_gap_days', 1)`.
+  - `started_at` is carried but **not** used for identity or `date_key`: unstable (up to 20
+    distinct values for one id) and 18.5% of incidents began before we first saw them (earliest
+    2020). `date_key` = first observation, keeping rows inside the observation window.
+  - **`materialized='table'`** on purpose — session boundaries are a window over each location's
+    full history, so an incremental batch would compute them wrong at the boundary (same
+    rationale as `mart_city_daily` / `mart_temperature_trends`).
+  - **Power BI:** table imported (star **30 → 32**), `Total Incidents` **renamed to
+    `Incident-days`** (kept — it is a valid disruption measure, just misnamed) and three new
+    measures added: `Distinct Incidents`, `Major Incidents`, `Avg Incident Duration (days)`.
+    The KPI card + the city×month heat matrix were repointed — including the matrix's
+    **`FillRule` input and its selector `metadata`**, which a projection-only edit would have
+    missed and silently broken the gradient.
+  - **Verified:** `dbt build` green (model + 4 tests), 60,641 rows exactly matching the
+    prototype, 0 orphaned FKs, rebuild byte-identical (checksum unchanged), and
+    `SUM(days_observed)` = 132,695 ≤ the old 144,842 as the reconciliation predicted.
 - ✅ **ML prediction pipelines — rebuilt on a leak-free, baseline-gated core** (2026-08-05) —
   the six forecasting ideas from the project brief now run as a scheduled `@daily` DAG
   (`smart_city_ml`) writing into a new **`ml_predictions`** schema. This reworks the first ML
@@ -862,7 +899,7 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 | _(ephemeral, no DB object)_ | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (ephemeral CTEs — compile inline) |
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
 | `intermediate` (forecast) | int_city_weather_forecast | dbt (incremental issue history) |
-| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt (8 incremental `delete+insert` facts + 7 tables — see Marts materialization) |
+| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_incidents, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt (8 incremental `delete+insert` facts + 7 tables — see Marts materialization) |
 | `marts` (AI) | mart_city_summary | **Not dbt** — AI-generated daily narratives, written by `ai/load_summaries.py` (Gemini via the `@daily` `smart_city_ai_summary` DAG; Claude Code as manual fallback — the `model` column says which). FK `city_date_key`/`city_key`/`date_key` into the star. |
 | `ml_predictions` | aqi_forecast, temperature_forecast, traffic_forecast, rain_forecast, city_score_forecast, pollution_anomaly, model_registry (+ views `model_health`, `all_predictions`) | **Not dbt** — ML forecasts written by `ml/predict.py` via the `@daily` `smart_city_ml` DAG. DDL in `ml/schema.sql`. Every table carries `city_key`/`date_key` into the star — `city_key` **joined from `dim_city`**, never re-hashed (only dbt calls `generate_surrogate_key`); `date_key` is `YYYYMMDD::int`, computed. **Power BI: import the `all_predictions` view only** (six tables sharing `city` would re-trip the autodetect cyclic error) and relate `city_key` → `dim_city`, leaving `date_key` unrelated like `mart_forecast_latest` — forecasts point at future dates a date filter would blank. |
 
