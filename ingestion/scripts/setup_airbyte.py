@@ -2,7 +2,7 @@
 Idempotent, config-driven Airbyte setup script.
 
 Reads the sources / streams / cities from the metadata `config` schema in Postgres
-(config.sources, config.streams, config.source_locations — see config/schema.sql),
+(config.sources, config.streams, config.source_locations — see metadata/README.md),
 then creates any missing sources, destinations, and connections via the Airbyte
 public API (v1). Safe to re-run — updates existing resources in place. Adding a city
 or a source is a plain INSERT into config.* (no YAML edit); re-run this to apply it.
@@ -273,8 +273,8 @@ def ensure_source(workspace_id: str, defn_id: str, source_name: str,
                   source_cfg: dict, existing: dict) -> str:
     if source_name in existing:
         source_id = existing[source_name]["sourceId"]
-        # Push the latest config so edits to sources.yml (e.g. new cities in the
-        # `locations` list) update the existing source instead of being skipped.
+        # Push the latest config so edits in config.* (e.g. a new city added with
+        # config.add_city) update the existing source instead of being skipped.
         api(
             "POST", "sources/update",
             json={

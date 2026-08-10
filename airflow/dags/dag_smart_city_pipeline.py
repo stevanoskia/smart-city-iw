@@ -97,9 +97,11 @@ def run_reconcile_airbyte(**context) -> None:
 # trigger_sync's 409 handling still attaches to an already-running job if a prior attempt
 # left one live, so a retry won't double-trigger.
 
-def sync_connection(connection_id: str) -> None:
+def sync_connection(connection_id: str, source_name: str | None = None, **context) -> None:
     job_id = trigger_sync(connection_id)
-    wait_for_sync(job_id)
+    # source_name + run_id let wait_for_sync record any failure in config.load_errors
+    # (best effort — it never raises, so this can't turn a sync failure into a different one).
+    wait_for_sync(job_id, source_name=source_name, airflow_run_id=context.get("run_id"))
 
 # ── Data-contract validation gate (STEP 05: Monitor & Validate) ───────────────
 # Reads the metadata config (config.field_mappings required + config.validation_rules)
@@ -183,7 +185,7 @@ with DAG(
             PythonOperator(
                 task_id=f"sync_{name}",
                 python_callable=sync_connection,
-                op_args=[conn_id],
+                op_args=[conn_id, name],
                 execution_timeout=timedelta(minutes=45),  # trigger (secs) + wait (≤35m)
             )
 

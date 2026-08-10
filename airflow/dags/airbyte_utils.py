@@ -177,12 +177,85 @@ def _describe_failures(failures: list[dict]) -> str:
     return "\n".join(lines)
 
 
-def wait_for_sync(job_id: str, timeout: int = 2100, poll_interval: int = 30) -> None:
+def _log_load_errors(
+    job_id: str,
+    source_name: str | None,
+    airflow_run_id: str | None,
+    failures: list[dict],
+    status: str,
+) -> None:
+    """Persist sync failures to config.load_errors. Best effort — NEVER raises.
+
+    Why the blanket except: this runs on the failure path, where a real error is
+    already in flight. If the config DB is unreachable (which is itself a plausible
+    cause of the sync failing), an exception here would replace the actual Airbyte
+    error with a psycopg2 one and lose the diagnosis — the opposite of the point.
+
+    Grain caveat, deliberate: Airbyte reports failures at the JOB level, not per
+    partition, so `city` is essentially always NULL and `stream_name` is set only
+    when Airbyte attaches a stream descriptor. This table honestly answers "which
+    source broke, when, and why" — not "which city", which the API doesn't tell us.
+    A job with no failure detail at all still gets one row; a silent failure is
+    exactly the kind we most want a record of.
+    """
+    if not source_name:
+        return
+    try:
+        from config_utils import get_conn  # local import: keeps module import cheap + safe
+
+        rows = [
+            (
+                airflow_run_id,
+                source_name,
+                ((f.get("streamDescriptor") or {}).get("name")),
+                None,  # city — not attributable from a job-level failure record
+                int(job_id),
+                f.get("failureOrigin"),
+                f.get("failureType"),
+                (f.get("externalMessage") or f.get("internalMessage") or "").strip() or None,
+            )
+            for f in failures
+        ] or [
+            (airflow_run_id, source_name, None, None, int(job_id), None, None,
+             f"Job ended with status: {status} (no failure detail returned)")
+        ]
+
+        conn = get_conn(autocommit=True)
+        try:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """
+                    insert into config.load_errors
+                        (airflow_run_id, source_name, stream_name, city, job_id,
+                         failure_origin, failure_type, message)
+                    values (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    rows,
+                )
+            print(f"  Logged {len(rows)} row(s) to config.load_errors for job {job_id}")
+        finally:
+            conn.close()
+    except Exception as e:                                     # noqa: BLE001 — see docstring
+        print(f"  (could not log to config.load_errors: {e})")
+
+
+def wait_for_sync(
+    job_id: str,
+    timeout: int = 2100,
+    poll_interval: int = 30,
+    source_name: str | None = None,
+    airflow_run_id: str | None = None,
+) -> None:
     """Poll Airbyte until the job completes. Raises on failure or timeout.
 
     Default timeout (2100s / 35 min) is kept just under the wait task's
     execution_timeout (40 min) so this function's own TimeoutError — which names
     the job_id — surfaces before Airflow's generic 'task timed out' kill.
+
+    Pass source_name (and ideally airflow_run_id) to also record any failure in
+    config.load_errors, so "which source failed to ingest last Tuesday?" is a SQL
+    question rather than an archaeology dig through Airbyte job logs. Omitting them
+    keeps the old behaviour exactly (raise only) — the logging is purely additive.
     """
     global _token
     if job_id == "skip":
@@ -232,6 +305,7 @@ def wait_for_sync(job_id: str, timeout: int = 2100, poll_interval: int = 30) -> 
                         f"  --- stacktrace ({f.get('failureOrigin', 'unknown')}) ---\n"
                         f"{f['stacktrace']}"
                     )
+            _log_load_errors(job_id, source_name, airflow_run_id, failures, status)
             detail = _describe_failures(failures)
             message = f"Airbyte job {job_id} ended with status: {status}"
             if detail:

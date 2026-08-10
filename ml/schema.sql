@@ -1,7 +1,8 @@
 -- ============================================================================
 -- ml_predictions schema — output tables for the ML pipelines in ml/
 --
--- Idempotent: safe to re-run. Mirrors the convention used by config/schema.sql.
+-- Idempotent: safe to re-run. (The `config` schema is DB-owned and has no DDL file;
+-- this one stays in the repo because ml/common.py applies it automatically.)
 --
 -- Every prediction table is keyed on (city, what-is-being-predicted) so a re-run
 -- of predict.py for the same slot UPDATES in place rather than appending a second
