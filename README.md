@@ -76,15 +76,33 @@ abctl local install
 abctl local credentials
 ```
 
-### 4. Configure Airbyte connections
+### 4. Restore the `config` schema — **required before anything else runs**
+The pipeline is config-driven: what to ingest, how every field is parsed, and the quality rules
+all live in a `config` schema **in the database, not in this repo**. It is host state, like `.env`
+and `pg_hba.conf` — a clone does not contain it, and nothing recreates it automatically.
+
+```bash
+# Restore structure + rows from the newest backup (see metadata/README.md)
+psql -h localhost -p 5432 -U postgres -d smart_city \
+  -f "/c/Users/Andrej/Documents/smart_city_config_backups/config_<date>.sql"
+
+# Verify: expect 8 tables, 88 field mappings
+psql -d smart_city -c "select count(*) from config.field_mappings;"
+```
+> Skip this and `dbt run --select staging` fails — the `build_staging` macro reads
+> `config.field_mappings` at run time to generate each staging model. With no backup, rebuild the
+> schema by hand from the table reference in **`metadata/README.md`**.
+
+### 5. Configure Airbyte connections
 ```bash
 # Add AIRBYTE_CLIENT_ID, AIRBYTE_CLIENT_SECRET, AIRBYTE_WORKSPACE_ID to .env
 # (get client_id / client_secret from Airbyte UI → User → Applications)
+# Reads sources/streams/cities from config.* — so step 4 must be done first.
 python ingestion/scripts/setup_airbyte.py
 # Creates ingestion/config/connection_ids.yml
 ```
 
-### 5. Run dbt manually
+### 6. Run dbt manually
 ```bash
 cd dbt/smart_city
 dbt deps                                           # install pinned dbt_utils (from package-lock.yml)
@@ -95,7 +113,7 @@ dbt build --select marts        --target staging   # star schema + OBT + analyti
 > `dbt deps` is required once (and after any `packages.yml` change) — it installs `dbt_utils`,
 > which every model's surrogate keys (`dbt_utils.generate_surrogate_key`) depend on.
 
-### 6. Start Airflow
+### 7. Start Airflow
 ```bash
 cd airflow
 # First time only — initialises the Airflow DB and creates the admin user
@@ -134,13 +152,13 @@ docker compose run --rm --user root \
 - **5 dbt staging models** (ephemeral — inline CTEs, no DB object), one per Airbyte source stream
 - **4 dbt intermediate hourly facts** (incremental tables) — deduped to one row per clock hour; preserve time-of-day + history independent of raw pruning
 - **1 dbt forecast model** — `int_city_weather_forecast`, incremental issue history (every prediction as issued, for later accuracy scoring)
-- **15 dbt marts models** — star schema (3 dims + 7 facts), the `mart_city_daily` OBT, and 4 analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity. The **8 append-only facts load incrementally** (`delete+insert`, mirroring the intermediate layer); the other 7 stay full-rebuild tables (see Marts below)
-- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test). dbt packages (`dbt_utils`) live in a persistent `dbt_packages` **named volume** — populated once (see the one-time command in [Start Airflow](#6-start-airflow)), not reinstalled per run
+- **16 dbt marts models** — star schema (3 dims + 8 facts), the `mart_city_daily` OBT, and 4 analytics marts; `relationships`/`unique`/`accepted_values` tests enforce FK→dimension integrity. The **8 append-only facts load incrementally** (`delete+insert`, mirroring the intermediate layer); the other 8 stay full-rebuild tables (see Marts below)
+- **Airflow DAG** `smart_city_pipeline` (@hourly) — triggers 2 Airbyte syncs in parallel (one partition-routed connection per API), then runs dbt staging → dbt intermediate → dbt marts (build + test). dbt packages (`dbt_utils`) live in a persistent `dbt_packages` **named volume** — populated once (see the one-time command in [Start Airflow](#7-start-airflow)), not reinstalled per run
 - **Surrogate keys** — all keys (`city_key`, `city_hour_key`, `city_date_key`, `forecast_key`, …) are generated with **`dbt_utils.generate_surrogate_key`** (NULL-safe, consistent), pinned to `dbt_utils` 1.4.1 via `package-lock.yml`
 - **Airflow DAG** `smart_city_maintenance` (@daily) — prunes old `staging` (raw JSON) rows per retention policy
 - **Airflow DAG** `smart_city_ai_summary` (@daily) — generates the AI city summaries with the Gemini API and upserts them into `marts.mart_city_summary` (see [AI city summaries](#ai-city-summaries-bonus)). Summarizes the previous complete UTC day; skips (rather than fails) on a day the pipeline never ran
 - **Airflow DAG** `smart_city_ml` (@daily) — retrains the six prediction models and writes their forecasts into the `ml_predictions` schema (see [ML predictions](#ml-predictions-bonus)). Runs in its own `ml_venv` inside the image, so the ML libraries never collide with Airflow's pandas/numpy pins
-- **Email alerts** — the DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled. Shared by all three DAGs via `airflow/dags/alert_utils.py`
+- **Email alerts** — the DAGs email `ALERT_EMAIL` on task failure (which step + error) and on success (whole-pipeline / daily-cleanup done), via Gmail SMTP configured through `AIRFLOW__SMTP__*` env vars (App Password). Guarded by `ALERT_EMAIL`, so unset = disabled. Shared by all four DAGs via `airflow/dags/alert_utils.py`
 - **Sync failures explain themselves** — a failed Airbyte sync reports `failureOrigin` / `failureType` and the underlying message (read from the job's `failureSummary`), plus a plain-English hint for common causes: Postgres unreachable after a network change, a rejected API key, a rate limit. Stacktraces stay in the task log
 - **Airbyte setup script** — `ingestion/scripts/setup_airbyte.py` creates one partition-routed source/connection per API and **pushes config on re-run** (so a changed LAN IP re-points the destination); add cities via config, no UI
 
@@ -187,11 +205,11 @@ mirroring the intermediate layer), so each hourly run only reprocesses recent ro
 rebuilding all history: the 3 hourly facts (`city_hour_key`, 12h `observed_at` lookback), the 3
 daily facts (`city_date_key`, 2-day `date_utc` lookback — only today's row is still mutable),
 `fct_forecast_accuracy` (`forecast_key`), and `mart_pollution_alerts` (`alert_key`, measured
-history). The other **7 stay full-rebuild `table`s on purpose**: the 3 dims (tiny/static), the two
-rolling-window marts (`mart_city_daily`, `mart_temperature_trends` — a window needs the prior days
-as *input* rows, so an incremental batch would truncate it), and the two forward-looking snapshots
-(`mart_forecast_latest`, `mart_weather_alerts` — passed slots must drop out, which `delete+insert`
-can't express). Output is byte-identical to a full rebuild (`dbt build --select marts
+history). The other **8 stay full-rebuild `table`s on purpose**: the 3 dims (tiny/static), the three
+window-function models (`mart_city_daily`, `mart_temperature_trends`, `fct_traffic_incidents` — a
+window needs the prior rows as *input*, so an incremental batch would compute it wrong at the
+boundary), and the two forward-looking snapshots (`mart_forecast_latest`, `mart_weather_alerts` —
+passed slots must drop out, which `delete+insert` can't express). Output is byte-identical to a full rebuild (`dbt build --select marts
 --full-refresh` reproduces it), so column shapes — and the Power BI import contract — are unchanged.
 | Model | Kind | Description |
 |---|---|---|
@@ -204,6 +222,7 @@ can't express). Output is byte-identical to a full rebuild (`dbt build --select 
 | `fct_weather_hourly` | fact | Hourly weather per city — the real point-in-time reading (also carries `visibility_m`, `wind_gust_ms`, `weather_description`) |
 | `fct_pollution_hourly` | fact | Hourly AQI + pollutant concentrations per city |
 | `fct_traffic_hourly` | fact | Per-hour flow + incidents per city |
+| `fct_traffic_incidents` | fact | **One row per distinct incident**, not per incident-day. TomTom rotates `incident_id` weekly (the id embeds a *batch* identifier — one Barcelona roadworks absorbed 111 ids in 24 days), so identity comes from location, sessionised on `(city, road_from, road_to, feature_type)`. Sessions break on **missed collection days**, not calendar days — only ~58% of days were collected, so a wall-clock rule invents a new incident every time the pipeline was down |
 | `fct_forecast_accuracy` | fact | Prediction-vs-actual scoring from the forecast issue history |
 | `mart_city_daily` | OBT | One wide row per `(city, date_utc)` — weather + pollution + traffic LEFT-joined (weather-only cities get NULL traffic) |
 | `mart_forecast_latest` | analytics | Latest issued forecast per city / future slot |
@@ -212,24 +231,52 @@ can't express). Output is byte-identical to a full rebuild (`dbt build --select 
 | `mart_pollution_alerts` | analytics | Air-quality threshold breaches per `(city, observed_at, alert_type)` — **measured, not forecast** (AQI 4–5 = OpenWeather's Poor/Very Poor; PM2.5/PM10/NO2 on WHO guideline ballparks) |
 
 > ⚠️ **The hourly facts are not diurnal curves.** Airflow only runs while the dev machine is on, so
-> they cover roughly 07:00–15:00 UTC with **no evening or overnight data**. Peak-hour / time-of-day
-> analysis is not viable on them — an empty Night/Evening reads as a finding when it's really a
-> sampling artifact. Their honest use is point-in-time "latest reading" semantics.
+> they cover roughly 06:00–15:00 UTC with **no evening or overnight data** — hours 01–05 and 16–19
+> have zero rows, ever (re-measured 2026-08-05), and a typical day captures 6–9 distinct hours.
+> Peak-hour / time-of-day analysis is not viable on them — an empty Night/Evening reads as a finding
+> when it's really a sampling artifact. Their honest use is point-in-time "latest reading" semantics.
 
 ### Reporting — Power BI
 Business reporting is done in **Power BI** (`smart_city_dashboard.pbip` — a PBIP *project*, so the
 model is text TMDL and the report is PBIR JSON; it lives outside this repo), connected to the
 PostgreSQL `marts` schema (Import mode).
 
-*In active build.* The model layer is **complete** — clean star (fact→dim only), 42 measures + 2
-calculated columns. Three pages are built: an overview page of KPI cards (still on the first-pass
-layout, pending a re-layout and rename to "Executive Overview"), **Weather & Forecast**, and
-**Air Quality**. Remaining: Traffic & Congestion, City Livability, Sankeys, and Azure Maps.
+The model layer is **complete** — a clean star (fact→dim only, no fact-to-fact links), ~17 imported
+tables, 80+ measures and 3 calculated columns, all measures homed on `mart_city_daily`. **Eight
+pages** are built and restyled: Executive Overview, Weather & Forecast, Air Quality, Weather +
+Pollution, Traffic & Congestion, City Livability, Forecast & Accuracy, and AI City Summaries. City
+and month slicers are dropdowns synced across pages. Remaining (optional): Sankey visuals via
+`.pbiviz` file import.
 
-> The refresh previously failed with *"A cyclic reference was encountered"* — **fixed**. Two
-> separate per-file settings each cause that same misleading error, and neither lives in git:
-> **Auto date/time** and **Autodetect new relationships after data is loaded**
-> (File → Options → Current File → Data Load). Both must be **off**; the model itself was fine.
+> ⚠️ **The *"A cyclic reference was encountered"* refresh error recurs** — it is not permanently
+> fixed. **Four** per-file settings each cause that same misleading error and none lives in git, so
+> they don't survive a rebuild or a device restart: **Auto date/time**, plus all three under
+> Relationships (**Autodetect new relationships**, **Update or delete relationships when
+> refreshing**, **Import relationships from data sources on first load**) — File → Options →
+> Current File → Data Load, all **off**.
+>
+> The model itself is almost always fine: the three hourly facts share a `city_hour_key` column, and
+> after a refresh Power BI's autodetect wires the fact tables *to each other*, closing a loop. It
+> never happens over XMLA (external refresh doesn't run Desktop's autodetect), which is what proves
+> the model is sound. Expect it after any structural change; clear it with a full-model XMLA refresh
+> followed by one more Desktop refresh.
+
+---
+
+---
+
+## Host state — what a clone does *not* contain
+
+Five things live only on the machine. A rebuilt environment needs each one restored by hand, and
+four of them fail loudly while the first fails confusingly.
+
+| What | Restore how |
+|---|---|
+| **`config` schema** | `psql -f` the newest `pg_dump --schema=config` backup — **before** the first dbt run (see [step 4](#4-restore-the-config-schema--required-before-anything-else-runs)) |
+| **`.env`** | Copy `.env.example`, fill in API keys, DB password, Airbyte + Gemini credentials |
+| **`pg_hba.conf`** | Needs `host all all samenet scram-sha-256` so Airbyte's pods can reach Postgres |
+| **`dbt_packages` volume** | The one-time `docker compose run … deps` in [step 7](#7-start-airflow) |
+| **Power BI Data Load settings** | Four checkboxes, per-file — see the Reporting section above |
 
 ---
 
@@ -301,11 +348,13 @@ smart-city-iw/
 │       └── dag_smart_city_ml.py             <- daily ML train -> predict -> report
 ├── dbt/smart_city/      <- dbt project root (run all dbt commands here)
 │   ├── packages.yml     <- dbt package deps (dbt_utils); package-lock.yml pins 1.4.1
-│   ├── macros/          <- incl. backfill_surrogate_keys.sql (one-off key migration)
+│   ├── macros/          <- build_staging.sql + get_field_mappings.sql (generate the stg_*
+│   │                       models from config.field_mappings at run time);
+│   │                       backfill_surrogate_keys.sql (one-off key migration)
 │   └── models/
 │       ├── staging/      -> ephemeral (5 stg_* parsers, no DB object)
 │       ├── intermediate/ -> PostgreSQL (4 hourly facts + 1 forecast issue history)
-│       └── marts/         -> PostgreSQL (15 tables: dims + facts + OBT + analytics)
+│       └── marts/         -> PostgreSQL (16 models: 3 dims + 8 facts + OBT + 4 analytics)
 ├── ai/                  <- AI city summaries (Gemini API, scheduled daily) — see ai/README.md
 │   ├── fetch_inputs.py  <- Step A: read mart_city_daily + alerts -> context pack
 │   ├── summary_spec.md  <- the generation rules (single source of truth, both paths)
