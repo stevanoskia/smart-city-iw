@@ -26,7 +26,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 ### Medium Priority (the marts now exist — these are unblocked)
 | Task | Notes |
 |---|---|
-| BI dashboard | Power BI — **6 pages built + restyled to the example images** (2026-07-21): Executive Overview, Weather & Forecast, Air Quality (now incl. the pollution-alerts table — `mart_pollution_alerts` finally consumed), Weather + Pollution, Traffic & Congestion, **City Livability** (KPIs incl. `Best/Worst City`, livability ranking, comfort-vs-7d trend, temp/air/traffic composition stacked bars, heat-graded snapshot table) — model 15 tables / 26-rel star / **70 measures**, dropdown slicers synced across pages, Bing maps on Traffic + Weather+Pollution (Azure Maps needs org sign-in — unavailable on personal account). Remaining (optional): Sankeys via `.pbiviz` file import. ⚠️ Cyclic-refresh blocker **recurs** after structural changes/restarts — see RESET note + full-XMLA-refresh playbook in the Power BI section. |
+| BI dashboard | Power BI — **8 pages built + restyled to the example images**: Executive Overview, Weather & Forecast, Air Quality (incl. the pollution-alerts table — `mart_pollution_alerts` consumed), Weather + Pollution, Traffic & Congestion, **City Livability** (KPIs incl. `Best/Worst City`, livability ranking, comfort-vs-7d trend, temp/air/traffic composition stacked bars, heat-graded snapshot table), **Forecast & Accuracy** (2026-07-22), **AI City Summaries** (2026-07-29, severity colour coding 2026-07-31) — model ~17 tables / 32-rel star / **~84 measures** (see the caveat under the Power BI heading), dropdown slicers synced across pages, Bing maps on Traffic + Weather+Pollution (Azure Maps needs org sign-in — unavailable on personal account). Remaining (optional): Sankeys via `.pbiviz` file import. ⚠️ Cyclic-refresh blocker **recurs** after structural changes/restarts — see RESET note + full-XMLA-refresh playbook in the Power BI section. |
 | Noise / energy APIs | Additional smart city data sources |
 
 ### Bonus (not in original scope)
@@ -428,7 +428,7 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
   re-running converges on the same value) and nothing calls it automatically, so it's kept as the
   repair tool if keys ever drift from the models. Its migration *guide* was retired — the
   migration is done and the macro's own header documents it (recoverable from `9b718a4`).
-- ✅ **Marts layer (star schema + OBT + analytics)** — **15** models in `models/marts/`: dims (`dim_city` *derived, no seed*; `dim_hour`; `dim_date`), daily facts (`fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily`), hourly facts (`fct_weather_hourly`, `fct_pollution_hourly`, `fct_traffic_hourly`), `fct_forecast_accuracy`, the derived OBT `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`, `mart_pollution_alerts`). Wired as the `dbt_marts` DAG step.
+- ✅ **Marts layer (star schema + OBT + analytics)** — **16** models in `models/marts/` (15 at the 2026-07-01 build; `fct_traffic_incidents` added 2026-08-05): dims (`dim_city` *derived, no seed*; `dim_hour`; `dim_date`), daily facts (`fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily`), hourly facts (`fct_weather_hourly`, `fct_pollution_hourly`, `fct_traffic_hourly`), `fct_forecast_accuracy`, `fct_traffic_incidents`, the derived OBT `mart_city_daily`, and analytics marts (`mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`, `mart_pollution_alerts`). Wired as the `dbt_marts` DAG step.
 - ✅ **One Airbyte connection per API** — connectors are partition-routed (`ListPartitionRouter`) over a `locations` list, so a single connection (`openweather_all`, `tomtom_all`) ingests every city instead of one connection per city. Scales to many cities; Airflow + dbt unchanged.
 - ✅ Expanded city coverage to **10 weather cities** (added Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid) and **6 traffic cities** (added Belgrade, Brussels, Barcelona); the 4 Macedonian cities are weather-only (no TomTom coverage)
 - ✅ **Forecast** intermediate layer — incremental issue history (`int_city_weather_forecast`); the forward-looking *latest* (`mart_forecast_latest`) + prediction-vs-actual *accuracy* (`fct_forecast_accuracy`) models now live in the marts layer
@@ -441,7 +441,15 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 
 ---
 
-## Power BI Dashboard (in active build — 15 tables, clean 26-rel star, 79 measures, 7 pages)
+## Power BI Dashboard (~17 tables, clean 32-rel star, ~84 measures, 8 pages)
+
+> ⚠️ **These header counts are reconciled from the dated entries below, NOT from inspecting the
+> PBIP** (it lives outside this repo and needs Desktop closed or an XMLA connection). Tables =
+> 15 marts + `mart_city_summary` (2026-07-29) + `fct_traffic_incidents` (2026-08-05).
+> Measures = 81 (2026-07-31) + 3 (2026-08-05). One gap is unexplained: the 07-29 entry records the
+> star going 26 → 28, but the 08-05 entry records 30 → 32, so **something took it 28 → 30 that was
+> never logged** (most likely the `ml_predictions.all_predictions` view import). Verify against the
+> live model before quoting these anywhere that matters.
 
 > **Page 7 — Forecast & Accuracy (2026-07-22, violet accent `#A78BFA`, `b7…0007`):** image-2-style
 > **day-tile strip** (matrix: columns = new `forecast_day` calc column "Wed 22"-style on
@@ -640,7 +648,10 @@ Desktop once more. The star holds at **26 relationships, all fact→dim**.
   to `smart_city_theme.json`. ⚠️ **Editing the theme file does nothing on its own** — it must be
   re-imported via **View → Themes → Browse for themes**; Power BI bakes a copy into
   `Report/StaticResources/RegisteredResources/`.
-- ✅ **Model layer complete** — **15** marts tables loaded (all of `models/marts/`; `mart_pollution_alerts`
+- ✅ **Model layer complete** — *(snapshot as of 2026-07-15; superseded by the header counts above —
+  `mart_city_summary` and `fct_traffic_incidents` were imported later, and measures have roughly
+  doubled since. The structural notes below still hold.)* **15** marts tables loaded (all of
+  `models/marts/` at that date; `mart_pollution_alerts`
   imported 2026-07-15 — see below); clean star (**26** relationships, all fact→dim, no junk fact-to-fact
   links); **49 measures** + 2 calc columns (`AQI Category (daily)` on `fct_pollution_daily`,
   `Congestion Band` on `fct_traffic_hourly` — both **bare-ref**, never self-qualified) added live.
@@ -779,7 +790,7 @@ variance before spending a card on it.
 | Intermediate (forecast) | PostgreSQL | `int_city_weather_forecast` | ✅ Built (incremental issue history) |
 | Marts (dims) | PostgreSQL | `dim_city` (derived), `dim_hour`, `dim_date` | ✅ Built |
 | Marts (daily facts) | PostgreSQL | `fct_weather_daily`, `fct_pollution_daily`, `fct_traffic_daily` | ✅ Built |
-| Marts (extra facts) | PostgreSQL | `fct_traffic_hourly`, `fct_weather_hourly`, `fct_pollution_hourly`, `fct_forecast_accuracy` | ✅ Built |
+| Marts (extra facts) | PostgreSQL | `fct_traffic_hourly`, `fct_weather_hourly`, `fct_pollution_hourly`, `fct_forecast_accuracy`, `fct_traffic_incidents` | ✅ Built |
 | Marts (OBT + analytics) | PostgreSQL | `mart_city_daily`, `mart_forecast_latest`, `mart_temperature_trends`, `mart_weather_alerts`, `mart_pollution_alerts` | ✅ Built |
 
 ### Orchestration
@@ -916,7 +927,7 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 | _(ephemeral, no DB object)_ | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (ephemeral CTEs — compile inline) |
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
 | `intermediate` (forecast) | int_city_weather_forecast | dbt (incremental issue history) |
-| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_incidents, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt (8 incremental `delete+insert` facts + 7 tables — see Marts materialization) |
+| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_incidents, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt — 16 models (8 incremental `delete+insert` facts + 8 tables — see Marts materialization) |
 | `marts` (AI) | mart_city_summary | **Not dbt** — AI-generated daily narratives, written by `ai/load_summaries.py` (Gemini via the `@daily` `smart_city_ai_summary` DAG; Claude Code as manual fallback — the `model` column says which). FK `city_date_key`/`city_key`/`date_key` into the star. |
 | `ml_predictions` | aqi_forecast, temperature_forecast, traffic_forecast, rain_forecast, city_score_forecast, pollution_anomaly, model_registry (+ views `model_health`, `all_predictions`) | **Not dbt** — ML forecasts written by `ml/predict.py` via the `@daily` `smart_city_ml` DAG. DDL in `ml/schema.sql`. Every table carries `city_key`/`date_key` into the star — `city_key` **joined from `dim_city`**, never re-hashed (only dbt calls `generate_surrogate_key`); `date_key` is `YYYYMMDD::int`, computed. **Power BI: import the `all_predictions` view only** (six tables sharing `city` would re-trip the autodetect cyclic error) and relate `city_key` → `dim_city`, leaving `date_key` unrelated like `mart_forecast_latest` — forecasts point at future dates a date filter would blank. |
 
@@ -944,9 +955,11 @@ Bitola, Ohrid) appear with NULL traffic. Full spec + reference SQL in `docs/mart
 **Marts materialization (mixed, since 2026-07-20):** the 8 **append-only** facts are
 `materialized='incremental'`, `delete+insert` (3 hourly on `city_hour_key`, 3 daily on
 `city_date_key`, `fct_forecast_accuracy` on `forecast_key`, `mart_pollution_alerts` on
-`alert_key`). The other 7 stay `table` on purpose — dims (tiny/static), the two rolling-window
-marts (`mart_city_daily`, `mart_temperature_trends` — windows need prior days as input rows, so
-an incremental batch would truncate them), and the two forward-looking snapshots
+`alert_key`). The other 8 stay `table` on purpose — dims (tiny/static), the three window-function
+models (`mart_city_daily`, `mart_temperature_trends`, `fct_traffic_incidents` — windows need prior
+rows as input, so an incremental batch would compute them wrong at the boundary; for
+`fct_traffic_incidents` the window is each location's full history, which is what decides session
+boundaries), and the two forward-looking snapshots
 (`mart_forecast_latest`, `mart_weather_alerts` — passed slots must drop out, which `delete+insert`
 can't express). Column shapes are unchanged, so the Power BI (PBIP) import contract is preserved.
 `dbt build --select marts --full-refresh` rebuilds all identically if keys ever drift.
