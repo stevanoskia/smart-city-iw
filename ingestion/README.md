@@ -3,7 +3,7 @@
 Ingestion is handled by **Airbyte** using two **custom declarative connectors** (built in the
 Airbyte Connector Builder), loaded raw into PostgreSQL (`staging` schema — raw JSON). Setup is
 **config-driven**: sources / streams / cities live in the **`config` schema in Postgres**
-(`config.sources`, `config.streams`, `config.source_locations` — see `config/README.md`), and
+(`config.sources`, `config.streams`, `config.source_locations` — see `metadata/README.md`), and
 one script applies them to Airbyte. Adding a city is an `INSERT`, not UI clicking.
 
 Airbyte UI: http://localhost:8000 (deployed via `abctl`, runs in Kind/Kubernetes)
@@ -31,8 +31,9 @@ config schema (Postgres)  ──►  setup_airbyte.py  ──►  Airbyte (sourc
   (container-safe — skips the destination; the DAG's `reconcile_airbyte` task calls it each run).
 - **`connections/*.yaml`** — the custom connector definitions:
   `open_weather_free_2_5.yaml`, `tomtom_traffic.yaml`.
-- **`config/sources.yml` + `config/connections.yml`** — *retired*; kept only as the one-time input
-  for `config/seed_config.py`. After seeding, edit `config.*` with SQL, not these files.
+- **`config/`** — holds only the auto-generated, gitignored `connection_ids.yml` (plus a `.gitkeep`
+  so the docker-compose mount target exists in a fresh clone). The old `sources.yml` /
+  `connections.yml` were deleted 2026-08-10 — edit `config.*` in Postgres with SQL instead.
 
 **One Airbyte source + connection per provider** — `openweather_all`, `tomtom_all`. Each connector
 is **partition-routed** (`ListPartitionRouter`) over its `locations` list, so a single connection
@@ -78,7 +79,7 @@ SELECT city, COUNT(*) FROM staging.traffic_incidents GROUP BY city;
 1. Call the helper — `select config.add_city('Zagreb', 45.8150, 15.9819);` for a weather-only city,
    or pass a bounding box `select config.add_city('Zagreb', 45.8150, 15.9819, 45.75,15.85,45.88,16.05);`
    to also enable TomTom traffic. (It does the `config.locations` + `config.source_locations` inserts
-   for you; raw SQL alternative in `config/README.md`.)
+   for you; raw SQL alternative in `metadata/README.md`.)
 2. It applies automatically on the next hourly run (the DAG's `reconcile_airbyte` task pushes the
    updated source config to Airbyte), or run `python ingestion/scripts/setup_airbyte.py` on the
    host to apply it immediately.

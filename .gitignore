@@ -247,6 +247,12 @@ docs/ai_city_summaries_plan.md
 # Airbyte — auto-generated, environment-specific
 ingestion/config/connection_ids.yml
 
+# The `config` schema is DB-owned (2026-08-10) — no DDL or seeder belongs in the repo.
+# Guard against a stray `pg_dump -f metadata/schema.sql` silently re-committing it.
+# Backups live OUTSIDE the repo: Documents/smart_city_config_backups/. See metadata/README.md.
+metadata/*.sql
+metadata/*.py
+
 # dbt artifacts
 dbt/smart_city/target/
 dbt/smart_city/logs/

@@ -3,7 +3,7 @@
       Config-driven staging model builder — the "same engine" that generates every stg_*
       model. Emits the identical typed SELECT the hand-written stg models used to, but from
       config.field_mappings: for each active field, `source_expr [::data_type] as target_column`
-      (see config/schema.sql + config/README.md).
+      (see metadata/README.md — the config schema is DB-owned, no DDL in the repo).
 
       raw_id / extracted_at are emitted as a fixed header: they are Airbyte-managed
       (_airbyte_raw_id / _airbyte_extracted_at), always present, and not part of the API

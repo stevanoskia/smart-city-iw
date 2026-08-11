@@ -43,8 +43,8 @@ TomTom API  -------+--> Airbyte --> PostgreSQL --> dbt intermediate --> dbt mart
 | OpenWeather Free 2.5 | current weather, air pollution, 5-day forecast | Skopje, Berlin, London, Amsterdam, Belgrade, Brussels, Barcelona, Prilep, Bitola, Ohrid (10) |
 | TomTom Traffic | traffic flow, traffic incidents | London, Berlin, Amsterdam, Belgrade, Brussels, Barcelona (6) |
 
-Each provider is one Airbyte connection, partition-routed over its city list — add cities in
-`ingestion/config/sources.yml`, no new connections.
+Each provider is one Airbyte connection, partition-routed over its city list — add cities with
+`select config.add_city('Zagreb', lat, lon [, bbox]);`, no new connections.
 
 ---
 
@@ -283,8 +283,10 @@ directly-attached subnet). Re-run it *before* the next hourly DAG run, or that r
 
 ```
 smart-city-iw/
+├── metadata/            <- DOCS ONLY for the `config` schema (no DDL - the DB owns it)
+│   └── README.md        <- table reference (8 tables), inspect / backup / restore
 ├── ingestion/
-│   ├── config/          <- city configs + connection IDs for Airflow
+│   ├── config/          <- connection IDs for Airflow (auto-generated, gitignored)
 │   ├── connections/     <- Airbyte connector YAMLs
 │   └── scripts/         <- setup_airbyte.py (config-driven Airbyte setup)
 ├── airflow/

@@ -82,6 +82,25 @@ models:
         tests:
           - relationships: { to: ref('dim_date'), field: date_key }
 
+  - name: fct_traffic_incidents
+    description: >
+      Incident-grain traffic fact — ONE ROW PER INCIDENT. Identity is
+      (city, road_from, road_to, feature_type) plus a session number, because TomTom
+      rotates incident_id roughly weekly (the TTI-<uuid> prefix is a batch id), so the
+      vendor id cannot identify a physical incident. Sessions break on missed
+      COLLECTION days, not calendar days, since the pipeline only runs while the dev
+      machine is on (~58% of days). Use this to COUNT incidents; use
+      fct_traffic_daily.total_incidents for incident-DAYS of disruption.
+    columns:
+      - name: incident_key
+        tests: [unique, not_null]
+      - name: city_key
+        tests:
+          - relationships: { to: ref('dim_city'), field: city_key }
+      - name: date_key
+        tests:
+          - relationships: { to: ref('dim_date'), field: date_key }
+
   - name: fct_traffic_hourly
     description: >
       Hourly traffic fact (city × date × hour) for peak-hour analysis. hour_utc is

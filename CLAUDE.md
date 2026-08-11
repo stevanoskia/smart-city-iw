@@ -36,6 +36,43 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
 | ✅ ML prediction pipelines | **Built + hardened 2026-08-05** — 6 models → `ml_predictions` schema, `@daily` `smart_city_ml` DAG. See Recently Completed + `ml/README.md`. |
 
 ### Recently Completed
+- ✅ **`fct_traffic_incidents` — incident-grain fact; "Total Incidents" was 2.4× too high**
+  (2026-08-05) — the Power BI card read **141K**; the real figure is **60,641**. Two stacked
+  causes, both worth remembering:
+  - **Summing a per-day distinct count gives incident-DAYS.** `Total Incidents` was
+    `SUM(fct_traffic_daily[total_incidents])`, and that column is `count(distinct incident_id)`
+    *per city-day*. 28.8% of incidents span >1 day (avg 1.57, max 6) → 1.5× overstatement.
+    The dbt model was correct at its grain; nothing existed at *incident* grain to count.
+  - ⚠️ **TomTom ROTATES `incident_id` roughly weekly.** The id embeds a `TTI-<uuid>` prefix
+    that is a **batch identifier, not an incident identifier**: each uuid covers a distinct,
+    non-overlapping date range (Jun 17–23, Jun 24–29, Jul 1–3, Jul 7–13 …) and **no id ever
+    appears under two uuids**. The same physical roadworks is re-issued a new id every week —
+    one Barcelona incident on Gran Via absorbed **111 different ids** over 24 days. So even
+    `DISTINCTCOUNT(incident_id)` (96,872) over-counts. **Identity must come from location,
+    never from TomTom's id.**
+  - **Grain = `(city, road_from, road_to, feature_type)` + a session number.** Location alone
+    would merge a June jam and an August jam on the same stretch, so it is sessionised.
+  - ⚠️ **Sessions break on missed COLLECTION days, not calendar days.** Only **~58% of calendar
+    days were collected** (Airflow runs while the laptop is on), so a wall-clock gap rule starts
+    a new incident every time the *pipeline* was down — it swung the count 85K→42K on threshold
+    alone. Each city gets a `dense_rank()` index of days it actually collected, and a session
+    breaks only when the location is absent on a day we genuinely looked. Threshold is
+    `var('incident_session_gap_days', 1)`.
+  - `started_at` is carried but **not** used for identity or `date_key`: unstable (up to 20
+    distinct values for one id) and 18.5% of incidents began before we first saw them (earliest
+    2020). `date_key` = first observation, keeping rows inside the observation window.
+  - **`materialized='table'`** on purpose — session boundaries are a window over each location's
+    full history, so an incremental batch would compute them wrong at the boundary (same
+    rationale as `mart_city_daily` / `mart_temperature_trends`).
+  - **Power BI:** table imported (star **30 → 32**), `Total Incidents` **renamed to
+    `Incident-days`** (kept — it is a valid disruption measure, just misnamed) and three new
+    measures added: `Distinct Incidents`, `Major Incidents`, `Avg Incident Duration (days)`.
+    The KPI card + the city×month heat matrix were repointed — including the matrix's
+    **`FillRule` input and its selector `metadata`**, which a projection-only edit would have
+    missed and silently broken the gradient.
+  - **Verified:** `dbt build` green (model + 4 tests), 60,641 rows exactly matching the
+    prototype, 0 orphaned FKs, rebuild byte-identical (checksum unchanged), and
+    `SUM(days_observed)` = 132,695 ≤ the old 144,842 as the reconciliation predicted.
 - ✅ **ML prediction pipelines — rebuilt on a leak-free, baseline-gated core** (2026-08-05) —
   the six forecasting ideas from the project brief now run as a scheduled `@daily` DAG
   (`smart_city_ml`) writing into a new **`ml_predictions`** schema. This reworks the first ML
@@ -279,17 +316,21 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
   configuration moved out of scattered YAML + hardcoded SQL into a **`config` schema** in the
   `smart_city` DB (the single source of truth), and the pipeline made a **generic, config-driven
   engine**. Adding a source/city/field is now an **INSERT**, not a code change. Pieces:
-  - **`config` schema (7 tables)** — `config.sources` / `config.streams` / `config.locations` /
+  - **`config` schema (8 tables)** — `config.sources` / `config.streams` / `config.locations` /
     `config.source_locations` (What/Where/When), `config.field_mappings` (the contract:
     `source_expr [::data_type] as target_column`, with `is_required` + `is_active` flags),
     `config.validation_rules` (quality thresholds; `severity` error/warn), `config.validation_runs`
-    (audit log). Current-state DDL in **`config/schema.sql`** (idempotent retrofits for older DBs
-    live in **`config/migrations.sql`** — a no-op on a fresh DB), loaded by **`config/seed_config.py`**
-    (seeds from the legacy YAML + the ~88 field mappings transcribed from the stg models). Run order:
-    `schema.sql` → `migrations.sql` → `seed_config.py`. Full guide in
-    **`config/README.md`** (this dir IS shipped/committed, unlike `docs/`). SQL helper functions
-    in `schema.sql`: `config.add_city(city,lat,lon[,bbox])` (one call = locations +
-    source_locations inserts), `config.set_city_active(city,bool)`, `config.remove_city(city)`.
+    (validation audit log), `config.load_errors` (ingestion failures — see below).
+    ⚠️ **The DB owns this schema — there is NO DDL in the repo** (changed 2026-08-10; was
+    `config/schema.sql` + `migrations.sql` + `seed_config.py`). Tables are created/altered
+    **directly in Postgres**; the only description of them is the table reference in
+    **`metadata/README.md`** (this dir IS shipped/committed, unlike `docs/`), which must be updated
+    in the same sitting as any `alter table`. The schema is **host state like `.env`/`pg_hba.conf`**
+    — a rebuilt machine restores it from `Documents/smart_city_config_backups/` (`pg_dump
+    --schema=config`), not from a clone. Old DDL recoverable via `git show 62e63a1:config/schema.sql`.
+    SQL helper functions live in the DB (`\df config.*`): `config.add_city(city,lat,lon[,bbox])`
+    (one call = locations + source_locations inserts), `config.set_city_active(city,bool)`,
+    `config.remove_city(city)`.
   - **Config-driven staging (dbt "same engine")** — the 5 `stg_*.sql` are now one-liners
     `{{ build_staging('<stream>') }}`; the `build_staging` + `get_field_mappings` macros
     (`dbt/smart_city/macros/`) generate each SELECT from `config.field_mappings` at run time
@@ -321,8 +362,21 @@ facts + forecast history) → dbt `marts`, orchestrated hourly by Airflow, with 
     reaches the config DB (`host.docker.internal`) + Airbyte, reuses the destination (skips LAN IP),
     updates both sources from `config.*`, writes `connection_ids.yml`. Host `setup_airbyte.py` path
     also verified (produces the same `connection_ids.yml`; DB config matches the old YAML exactly).
-  - **YAML retired** — `ingestion/config/sources.yml` + `connections.yml` remain only as the
-    one-time seed input; after seeding, edit `config.*` with SQL. See `config/README.md`.
+  - **YAML retired + DELETED (2026-08-10)** — `ingestion/config/sources.yml` + `connections.yml`
+    survived only as the one-time seed input for `seed_config.py`; when that was deleted they lost
+    their last reader and went with it. `ingestion/config/` now holds just the gitignored
+    `connection_ids.yml` (+ a `.gitkeep` so the docker-compose mount target exists in a fresh
+    clone). Edit `config.*` with SQL. See `metadata/README.md`.
+  - **`config.load_errors` — ingestion failures are now queryable in SQL** (2026-08-10). A failed
+    sync used to leave detail only in Airbyte's job log and a transient alert email, so *"which
+    city failed to ingest last Tuesday?"* was unanswerable. `airbyte_utils.wait_for_sync` already
+    parsed `attempts[].attempt.failureSummary.failures[]` to build that email — it now **also**
+    persists it: one row per failure per run (`source_name`/`stream_name`/`city`/`job_id`/
+    `failure_origin`/`failure_type`/`message`). Same triage idiom as `validation_runs` — a
+    `resolved` flag, a `config.open_load_errors` view, and `config.resolve_load_error(id)` /
+    `config.resolve_load_errors(source)`. **Logging never breaks ingestion**: the write is
+    best-effort in its own connection+transaction and swallows any exception, so a config-DB
+    hiccup can't convert a sync failure into a *different* failure and lose the real error.
 - ✅ **Airbyte sync: trigger + wait merged into one task per connection** (2026-07-20) — the
   hourly DAG's `trigger_syncs` (push `job_id` to XCom) + `wait_syncs` (poll it) split was replaced
   by a single `syncs.sync_*` task per connection that triggers **and** waits. The split made
@@ -707,8 +761,8 @@ variance before spending a card on it.
 
 > **10 weather cities, 6 traffic cities.** Traffic covers London, Berlin, Amsterdam, Belgrade,
 > Brussels, Barcelona; the 4 Macedonian cities (Skopje, Prilep, Bitola, Ohrid) are weather/pollution
-> only — TomTom has no segment/incident coverage there. Add a city in `ingestion/config/sources.yml`
-> and re-run `setup_airbyte.py`.
+> only — TomTom has no segment/incident coverage there. Add a city with
+> `select config.add_city('Zagreb', lat, lon [, bbox])` and re-run `setup_airbyte.py`.
 
 ### dbt Transformation
 | Layer | DB | Model | Status |
@@ -857,12 +911,12 @@ sequence. No `dbt seed` step — `dim_city` is derived from data, not a CSV.)
 
 | Schema | Tables | Owner |
 |---|---|---|
-| `config` | sources, streams, locations, source_locations, field_mappings, validation_rules, validation_runs | metadata-driven config (DDL `config/schema.sql`, seed `config/seed_config.py`) — single source of truth for ingestion + the data contract |
+| `config` | sources, streams, locations, source_locations, field_mappings, validation_rules, validation_runs, load_errors | metadata-driven config — **DB-owned, no DDL in the repo**; reference + backup/restore in `metadata/README.md`. Single source of truth for ingestion + the data contract |
 | `staging` | current_weather, air_pollution, weather_forecast, traffic_flow, traffic_incidents (raw JSON) | Airbyte |
 | _(ephemeral, no DB object)_ | stg_current_weather, stg_air_pollution, stg_weather_forecast, stg_traffic_flow, stg_traffic_incidents | dbt (ephemeral CTEs — compile inline) |
 | `intermediate` (hourly facts) | int_city_hourly_weather, int_city_hourly_pollution, int_city_hourly_traffic_flow, int_city_hourly_traffic_incidents | dbt (incremental tables) |
 | `intermediate` (forecast) | int_city_weather_forecast | dbt (incremental issue history) |
-| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt (8 incremental `delete+insert` facts + 7 tables — see Marts materialization) |
+| `marts` | dim_city, dim_hour, dim_date, fct_weather_daily, fct_pollution_daily, fct_traffic_daily, fct_traffic_incidents, fct_traffic_hourly, fct_weather_hourly, fct_pollution_hourly, fct_forecast_accuracy, mart_city_daily, mart_forecast_latest, mart_temperature_trends, mart_weather_alerts, mart_pollution_alerts | dbt (8 incremental `delete+insert` facts + 7 tables — see Marts materialization) |
 | `marts` (AI) | mart_city_summary | **Not dbt** — AI-generated daily narratives, written by `ai/load_summaries.py` (Gemini via the `@daily` `smart_city_ai_summary` DAG; Claude Code as manual fallback — the `model` column says which). FK `city_date_key`/`city_key`/`date_key` into the star. |
 | `ml_predictions` | aqi_forecast, temperature_forecast, traffic_forecast, rain_forecast, city_score_forecast, pollution_anomaly, model_registry (+ views `model_health`, `all_predictions`) | **Not dbt** — ML forecasts written by `ml/predict.py` via the `@daily` `smart_city_ml` DAG. DDL in `ml/schema.sql`. Every table carries `city_key`/`date_key` into the star — `city_key` **joined from `dim_city`**, never re-hashed (only dbt calls `generate_surrogate_key`); `date_key` is `YYYYMMDD::int`, computed. **Power BI: import the `all_predictions` view only** (six tables sharing `city` would re-trip the autodetect cyclic error) and relate `city_key` → `dim_city`, leaving `date_key` unrelated like `mart_forecast_latest` — forecasts point at future dates a date filter would blank. |
 
@@ -930,12 +984,12 @@ the DAG's `reconcile_airbyte` task).
 Each connector is partition-routed (`ListPartitionRouter`) over a `locations` array — one API
 request per city per stream, all inside one sync. **Add a city** = `select config.add_city('Zagreb',
 lat, lon [, bbox])` (helper does the `config.locations` + `config.source_locations` inserts; also
-`config.set_city_active(city, bool)` and `config.remove_city(city)` — see `config/README.md`),
+`config.set_city_active(city, bool)` and `config.remove_city(city)` — see `metadata/README.md`),
 then the next `reconcile_airbyte` run (or `python ingestion/scripts/setup_airbyte.py` on the host)
-applies it; no new connection, no DAG re-parse. The old `sources.yml`/`connections.yml` remain only
-as the one-time seed input.
+applies it; no new connection, no DAG re-parse. The old `sources.yml`/`connections.yml` were
+deleted 2026-08-10 along with the seeder that was their last reader.
 
-Config source of truth: the `config` schema (`config/schema.sql` + `config/seed_config.py`)
+Config source of truth: the `config` schema **in Postgres** (no DDL in the repo — `metadata/README.md`)
 Connector YAMLs: `ingestion/connections/open_weather_free_2_5.yaml`, `ingestion/connections/tomtom_traffic.yaml`
 
 ### Auth
@@ -1182,6 +1236,11 @@ GEMINI_MAX_OUTPUT_TOKENS=8192        # optional
   directly attached to, so Postgres needs no edit per network. **Host config, not in git** —
   a rebuilt machine must redo it (`SELECT type, address, auth_method FROM pg_hba_file_rules;`
   to check; `SELECT pg_reload_conf();` to apply)
+- **The `config` schema is host state, not in git** — same category as `pg_hba.conf` and `.env`
+  (changed 2026-08-10; the DDL + seeder were deleted). A rebuilt machine restores it from
+  `Documents/smart_city_config_backups/` (`pg_dump --schema=config`) **before** the first
+  `dbt build`, or staging fails — `build_staging` reads `config.field_mappings` at run time.
+  Re-dump after any material config change. Reference: `metadata/README.md`
 - Airflow runs in Docker (not natively on Windows)
 - dbt runs in `venv313` on the host machine (manual) OR inside Airflow container (automated)
 - All timestamps stored as UTC
@@ -1197,9 +1256,9 @@ GEMINI_MAX_OUTPUT_TOKENS=8192        # optional
 smart-city-iw/
 ├── ingestion/
 │   ├── config/
-│   │   ├── sources.yml          ← city/coordinate config
-│   │   ├── connections.yml      ← sync schedule, destination
-│   │   └── connection_ids.yml   ← auto-generated, git-ignored
+│   │   └── connection_ids.yml   ← auto-generated, git-ignored (dir kept via .gitkeep
+│   │                               for the docker-compose mount; the old sources.yml +
+│   │                               connections.yml were deleted 2026-08-10)
 │   ├── connections/
 │   │   ├── open_weather_free_2_5.yaml
 │   │   └── tomtom_traffic.yaml
@@ -1242,12 +1301,11 @@ smart-city-iw/
 │   ├── powerbi_dashboard_plan.md     ← Power BI page-by-page plan
 │   ├── deployment.md                 ← deployment notes
 │   └── branch-reconciliation.md      ← branch reconciliation notes
-├── config/                     ← ✅ SHIPPED (committed). Metadata-driven config schema
-│   │                              (defines the `config` schema; distinct from `ingestion/config/`):
-│   ├── schema.sql                    ← DDL for the config schema (7 tables) — current-state, idempotent
-│   ├── migrations.sql                ← idempotent retrofits for pre-existing DBs (run after schema.sql; no-op on fresh)
-│   ├── seed_config.py                ← one-time loader (YAML + transcribed field mappings)
-│   └── README.md                     ← create/seed/edit config; the config-driven lifecycle
+├── metadata/                    ← ✅ SHIPPED (committed). Documentation ONLY — the `config`
+│   └── README.md                     ← the config schema's table reference (8 tables, all columns
+│                                       + constraints), inspect/backup/restore, what-still-needs-code.
+│                                       ⚠️ NO DDL: the DB owns the schema (renamed from config/ +
+│                                       schema.sql/migrations.sql/seed_config.py deleted 2026-08-10)
 ├── ai/                          ← ✅ SHIPPED (committed). AI city summaries — scheduled daily by
 │   │                              the smart_city_ai_summary DAG (Gemini API):
 │   ├── README.md                     ← the shipped guide (pipeline, scheduling, config, rationale)
