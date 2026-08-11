@@ -21,7 +21,8 @@ config schema (Postgres)  ──►  setup_airbyte.py  ──►  Airbyte (sourc
 
 - **`config` schema** — `config.sources` (connector name, `api_key_env`/`api_key_field`),
   `config.streams`, `config.locations` + `config.source_locations` (one row per city; TomTom rows
-  carry the bounding box). DDL/seed in `config/`. This is the source of truth.
+  carry the bounding box). **DB-owned — no DDL in the repo**; reference in `metadata/README.md`.
+  This is the source of truth.
 - **destination** — the single PostgreSQL destination is a constant in `setup_airbyte.py`
   (`smart_city_postgres` → `staging`); sync mode `full_refresh_append`.
 - **`scripts/setup_airbyte.py`** — reads `config.*`, creates/updates sources / destination /
