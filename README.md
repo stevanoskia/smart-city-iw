@@ -103,15 +103,29 @@ python ingestion/scripts/setup_airbyte.py
 ```
 
 ### 6. Run dbt manually
+Always activate `venv313` first and run from `dbt/smart_city/`.
+
 ```bash
+source venv313/Scripts/activate
 cd dbt/smart_city
+
 dbt deps                                           # install pinned dbt_utils (from package-lock.yml)
 dbt run   --select staging      --target staging   # ephemeral parse — no DB object
 dbt build --select intermediate --target staging   # hourly facts + forecast history + tests
 dbt build --select marts        --target staging   # star schema + OBT + analytics + tests
+
+dbt build --select staging intermediate marts --target staging   # everything, in dependency order
+
+dbt docs generate --target staging && dbt docs serve             # browsable model + lineage docs
 ```
+> `dbt build` runs models **and** their tests; `dbt run` builds without testing.
+>
 > `dbt deps` is required once (and after any `packages.yml` change) — it installs `dbt_utils`,
 > which every model's surrogate keys (`dbt_utils.generate_surrogate_key`) depend on.
+>
+> ⚠️ **On the host, add `--profiles-dir C:/Users/Andrej/.dbt`.** A `profiles.yml` also lives in the
+> project directory for Airflow/Docker (it expects `SMART_CITY_PG_*` env vars); without the flag dbt
+> picks up that container profile instead of the localhost one.
 
 ### 7. Start Airflow
 ```bash

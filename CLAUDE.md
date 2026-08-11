@@ -1289,11 +1289,12 @@ smart-city-iw/
 │           ├── staging/         ← 5 stg_* → one-line {{ build_staging('<stream>') }}, generated
 │           │                       from config.field_mappings; ephemeral (inline CTEs, no DB object)
 │           ├── intermediate/    ← hourly facts (4) + forecast history (1) → tables
-│           └── marts/           ← 15 models: dims + facts (incl. hourly weather/pollution) + OBT + analytics → tables
+│           └── marts/           ← 16 models: 3 dims + 8 facts + OBT + 4 analytics → tables
+│                                   (no README here — it duplicated the root one; deleted 2026-08-11)
 ├── docs/                        ← ⚠️ LOCAL-ONLY, gitignored. The repo ships only docs/.gitkeep —
-│   │                              a fresh clone has NONE of the files below. The READMEs (root,
-│   │                              ingestion/, dbt/smart_city/) are the shipped docs and must stay
-│   │                              self-contained: never link a README to anything in here.
+│   │                              a fresh clone has NONE of the files below. The shipped docs are
+│   │                              the READMEs at root, ingestion/, metadata/, ai/, ml/ — they must
+│   │                              stay self-contained: never link a README to anything in here.
 │   ├── staging_as_raw_landing.md     ← airbyte_raw→staging collapse: ephemeral parsing, JSON→typed
 │   ├── marts_build_guide.md          ← marts build walkthrough + reference SQL
 │   ├── marts_implementation_plan.md  ← marts star-schema design / rationale
