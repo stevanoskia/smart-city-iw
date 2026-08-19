@@ -1,0 +1,133 @@
+table 'marts fct_traffic_hourly'
+	lineageTag: 58de5509-29c1-4cb0-b636-4e07752f5cc7
+
+	column city_hour_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 3940c900-9de8-4552-b82e-1aacb136e3b0
+		summarizeBy: none
+		sourceColumn: city_hour_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 08df2aac-8baa-42f6-b25c-4ba9eaee1015
+		summarizeBy: none
+		sourceColumn: city_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: ee1b9d96-0605-41b9-9751-85c5a53acac0
+		summarizeBy: none
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column hour_utc
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: f58502dc-5ca5-4af9-9ea9-1b64c37535e0
+		summarizeBy: none
+		sourceColumn: hour_utc
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: ac33c7d9-ad9d-455d-886d-9451e7e93715
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_utc
+		dataType: dateTime
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: 48628e2c-0ec1-4706-a6aa-1cfeeaaaf80b
+		summarizeBy: none
+		sourceColumn: date_utc
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column observed_at
+		dataType: dateTime
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 2ca8176a-f74e-4181-a545-ad5c19aab62a
+		summarizeBy: none
+		sourceColumn: observed_at
+
+		annotation SummarizationSetBy = Automatic
+
+	column congestion_score
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: a7aee449-c359-467f-9d7a-bfca58923d8e
+		summarizeBy: sum
+		sourceColumn: congestion_score
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column current_speed_kmh
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 8fd857a8-6d0d-4660-86a9-8185a42a9570
+		summarizeBy: sum
+		sourceColumn: current_speed_kmh
+
+		annotation SummarizationSetBy = Automatic
+
+	column free_flow_speed_kmh
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 4f8c3647-f247-4347-b680-fd68b644c01a
+		summarizeBy: sum
+		sourceColumn: free_flow_speed_kmh
+
+		annotation SummarizationSetBy = Automatic
+
+	column road_closure
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: 5833bd18-2ed5-489a-95a9-71ffc23b55fa
+		summarizeBy: none
+		sourceColumn: road_closure
+
+		annotation SummarizationSetBy = Automatic
+
+	column confidence
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: c6850bd8-6835-40bb-a130-7c011d415e61
+		summarizeBy: sum
+		sourceColumn: confidence
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'marts fct_traffic_hourly' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_fct_traffic_hourly = Source{[Schema="marts",Item="fct_traffic_hourly"]}[Data]
+				in
+				    marts_fct_traffic_hourly
+

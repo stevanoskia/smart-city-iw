@@ -1,0 +1,85 @@
+table 'ml_predictions pollution_anomaly'
+	lineageTag: 88f8f6e6-93de-4f2b-88da-4322400b141a
+
+	column city
+		dataType: string
+		isNullable: false
+		sourceProviderType: nvarchar(max)
+		lineageTag: f6e50d7f-1180-4ec8-8a60-b7087c4ab0f8
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column observed_at
+		dataType: dateTime
+		isNullable: false
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: a2d38a7c-5d98-4497-8c2c-9686e3abc1da
+		summarizeBy: none
+		sourceColumn: observed_at
+
+		annotation SummarizationSetBy = Automatic
+
+	column pm2_5_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 1f932a2d-2577-49f5-b186-93a183188f44
+		summarizeBy: sum
+		sourceColumn: pm2_5_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column anomaly_score
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: a785af21-f2f4-4414-973e-776fa57c8292
+		summarizeBy: sum
+		sourceColumn: anomaly_score
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column is_anomaly
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: 04755485-48fb-4dc4-b8d4-64fe1c0c93cd
+		summarizeBy: none
+		sourceColumn: is_anomaly
+
+		annotation SummarizationSetBy = Automatic
+
+	column model_version
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: b2fe9f60-d1e8-457f-8f55-5a7cd49b5d84
+		summarizeBy: none
+		sourceColumn: model_version
+
+		annotation SummarizationSetBy = Automatic
+
+	column scored_at
+		dataType: dateTime
+		isNullable: false
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 3666f941-252d-43fc-82f0-3cfb933208bf
+		summarizeBy: none
+		sourceColumn: scored_at
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'ml_predictions pollution_anomaly' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    ml_predictions_pollution_anomaly = Source{[Schema="ml_predictions",Item="pollution_anomaly"]}[Data]
+				in
+				    ml_predictions_pollution_anomaly
+

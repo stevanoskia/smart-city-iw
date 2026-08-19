@@ -1,0 +1,99 @@
+table 'marts dim_city'
+	lineageTag: 6797d1ec-3634-4392-a877-18662c37387c
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 91f5ca9d-f178-4131-8e88-c8e3e9817051
+		summarizeBy: none
+		sourceColumn: city_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 0a19d11a-39bf-472b-aa86-20041f333575
+		summarizeBy: none
+		sourceColumn: city
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column country
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: ac8c453d-fcbd-4e9c-a7d3-472de4662ef1
+		summarizeBy: none
+		sourceColumn: country
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column latitude
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 5e464d05-85ef-4b24-ad44-ee4ae869038c
+		summarizeBy: sum
+		sourceColumn: latitude
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column longitude
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 166394a0-3b7b-4bf9-8756-71776f62403d
+		summarizeBy: sum
+		sourceColumn: longitude
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column has_weather_data
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: 3ecbd52e-1627-4b69-8200-fbc282b80998
+		summarizeBy: none
+		sourceColumn: has_weather_data
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column has_traffic_data
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: a7427603-07b6-4fe0-a785-a0b1ced1ab7b
+		summarizeBy: none
+		sourceColumn: has_traffic_data
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'marts dim_city' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_dim_city = Source{[Schema="marts",Item="dim_city"]}[Data]
+				in
+				    marts_dim_city
+
+	annotation PBI_ResultType = Table
+
+	annotation PBI_NavigationStepName = Navigation
+

@@ -1,0 +1,167 @@
+table 'marts fct_traffic_daily'
+	lineageTag: a075527f-27d2-4b43-aded-3b237ccd0e7e
+
+	column city_date_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: d9114dc6-4eb8-455a-877c-ac83ddb5db74
+		summarizeBy: none
+		sourceColumn: city_date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: d2ad0d84-5013-4e27-b5a1-5e37081118fa
+		summarizeBy: none
+		sourceColumn: city_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 3e5de156-e989-4f5b-8081-e79ad172f5ae
+		summarizeBy: none
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 29e63a2c-0179-4120-bc2c-d16641ef3640
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_utc
+		dataType: dateTime
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: 6e14bcde-4f91-4639-af1e-d1ca9845deef
+		summarizeBy: none
+		sourceColumn: date_utc
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column avg_congestion_score
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 103ef6a2-0e31-4efb-88f8-467b5020bb26
+		summarizeBy: sum
+		sourceColumn: avg_congestion_score
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column max_congestion_score
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 5b9ab58f-ab3b-4f36-89b0-31407a960b2f
+		summarizeBy: sum
+		sourceColumn: max_congestion_score
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_current_speed_kmh
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 916f359d-de01-4259-95ff-5f43be8e0dd9
+		summarizeBy: sum
+		sourceColumn: avg_current_speed_kmh
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_free_flow_speed_kmh
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: c673c810-29cc-4f0f-b4c2-4a2d90c98fe4
+		summarizeBy: sum
+		sourceColumn: avg_free_flow_speed_kmh
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column pct_congested_snapshots
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 8720d7dc-c76c-4ca5-8833-d68be5c1ba36
+		summarizeBy: sum
+		sourceColumn: pct_congested_snapshots
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column road_closure_count
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 7ebbfe86-3d63-4a8d-83a4-e29f7d97f138
+		summarizeBy: sum
+		sourceColumn: road_closure_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column flow_observation_count
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: da3e2178-f517-475d-bc50-931980442622
+		summarizeBy: sum
+		sourceColumn: flow_observation_count
+
+		annotation SummarizationSetBy = Automatic
+
+	column total_incidents
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 8374491e-c6b2-483d-aa34-792cfa9fbe48
+		summarizeBy: sum
+		sourceColumn: total_incidents
+
+		annotation SummarizationSetBy = Automatic
+
+	column major_incidents
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 1f98ac10-2834-49b7-96c9-cfe6df189f5d
+		summarizeBy: sum
+		sourceColumn: major_incidents
+
+		annotation SummarizationSetBy = Automatic
+
+	column avg_delay_sec
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 13913e10-e3fe-46eb-8f13-7bde6a0fb353
+		summarizeBy: sum
+		sourceColumn: avg_delay_sec
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'marts fct_traffic_daily' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_fct_traffic_daily = Source{[Schema="marts",Item="fct_traffic_daily"]}[Data]
+				in
+				    marts_fct_traffic_daily
+

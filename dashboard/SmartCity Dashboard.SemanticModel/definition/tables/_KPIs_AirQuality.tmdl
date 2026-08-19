@@ -1,0 +1,936 @@
+table _KPIs_AirQuality
+	isHidden
+	lineageTag: 6cb631ca-0ca7-4471-b6b8-afc25b5c5ac0
+
+	measure 'Current PM2.5' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[pm2_5_ug_m3])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: e752919f-df2e-4921-b3e8-e4dd9347c716
+
+	measure 'Current PM10' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[pm10_ug_m3])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: ab80f800-cb79-4f73-8e97-9a369ab8eb20
+
+	measure 'Current NO2' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[no2_ug_m3])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: d5d74b8d-c838-490b-8567-4b8592ee6aa7
+
+	measure 'Current O3' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[o3_ug_m3])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: ec417a11-337d-4756-b613-080340668e24
+
+	measure 'Current CO' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[co_ug_m3])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: 37292ed7-071e-497e-8b7c-bfe2aea04106
+
+	measure 'Current SO2' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[so2_ug_m3])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: e6cec153-da4b-4c48-b64e-ac7129a62a3e
+
+	measure 'PM2.5 vs Yesterday' =
+			VAR Today = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR TodayVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm2_5_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today)
+			VAR YestVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm2_5_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today - 1)
+			RETURN TodayVal - YestVal
+		formatString: +0.0;-0.0;0.0
+		lineageTag: b33a29ba-6030-4ac1-b04c-962e7da0b4bf
+
+	measure 'PM10 vs Yesterday' =
+			VAR Today = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR TodayVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm10_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today)
+			VAR YestVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm10_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today - 1)
+			RETURN TodayVal - YestVal
+		formatString: +0.0;-0.0;0.0
+		lineageTag: 3c5a2db4-0cfe-4ce5-97f6-80000e1e420f
+
+	measure 'NO2 vs Yesterday' =
+			VAR Today = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR TodayVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_no2_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today)
+			VAR YestVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_no2_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today - 1)
+			RETURN TodayVal - YestVal
+		formatString: +0.0;-0.0;0.0
+		lineageTag: 91ee459b-f2af-4ed7-ad02-c5b76dccb1ae
+
+	measure 'O3 vs Yesterday' =
+			VAR Today = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR TodayVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_o3_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today)
+			VAR YestVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_o3_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today - 1)
+			RETURN TodayVal - YestVal
+		formatString: +0.0;-0.0;0.0
+		lineageTag: e6542e0d-3e75-4d99-9f90-a70593384e0a
+
+	measure 'Poor AQI Hours %' = DIVIDE(SUM('marts fct_pollution_daily'[hours_poor_air]), SUM('marts fct_pollution_daily'[observation_count]))
+		formatString: 0.0%
+		lineageTag: f6c6f049-ca8e-47e5-a723-03879df578c4
+
+	measure 'AQI Health Recommendation' =
+			VAR AQI = ROUND([Avg AQI (Latest)], 0)
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(AQI), "Air-quality data unavailable.",
+			    AQI <= 1, "Air quality is good. Normal outdoor activity is suitable.",
+			    AQI = 2, "Air quality is fair. Sensitive individuals should consider limiting prolonged exertion outdoors.",
+			    AQI = 3, "Air quality is moderate. Sensitive groups should reduce prolonged outdoor activity.",
+			    AQI = 4, "Air quality is poor. Reduce prolonged outdoor activity, especially for sensitive groups.",
+			    "Air quality is very poor. Avoid strenuous outdoor activity where possible."
+			)
+		lineageTag: 1738bc82-8613-4820-a079-b207f54830cd
+
+	measure 'Congestion PM2.5 Paired Days' =
+			VAR Paired =
+			    ADDCOLUMNS(
+			        'marts fct_pollution_daily',
+			        "CongestionVal", LOOKUPVALUE('marts fct_traffic_daily'[avg_congestion_score], 'marts fct_traffic_daily'[city_date_key], 'marts fct_pollution_daily'[city_date_key])
+			    )
+			RETURN COUNTROWS(FILTER(Paired, NOT ISBLANK([CongestionVal])))
+		formatString: 0
+		lineageTag: 40f38aa5-0b20-4f15-a37f-0eee2ead4dcc
+
+	measure 'Congestion PM2.5 Correlation' =
+			VAR Paired =
+			    ADDCOLUMNS(
+			        'marts fct_pollution_daily',
+			        "CongestionVal", LOOKUPVALUE('marts fct_traffic_daily'[avg_congestion_score], 'marts fct_traffic_daily'[city_date_key], 'marts fct_pollution_daily'[city_date_key])
+			    )
+			VAR ValidPairs = FILTER(Paired, NOT ISBLANK([CongestionVal]))
+			VAR N = COUNTROWS(ValidPairs)
+			VAR TotalX = SUMX(ValidPairs, 'marts fct_pollution_daily'[avg_pm2_5_ug_m3])
+			VAR TotalY = SUMX(ValidPairs, [CongestionVal])
+			VAR TotalXY = SUMX(ValidPairs, 'marts fct_pollution_daily'[avg_pm2_5_ug_m3] * [CongestionVal])
+			VAR TotalX2 = SUMX(ValidPairs, 'marts fct_pollution_daily'[avg_pm2_5_ug_m3] ^ 2)
+			VAR TotalY2 = SUMX(ValidPairs, [CongestionVal] ^ 2)
+			VAR Numerator = N * TotalXY - TotalX * TotalY
+			VAR Denominator = SQRT((N * TotalX2 - TotalX ^ 2) * (N * TotalY2 - TotalY ^ 2))
+			RETURN IF(N >= 10 && Denominator <> 0, DIVIDE(Numerator, Denominator), BLANK())
+		formatString: 0.00
+		lineageTag: dc996a55-279b-4e7e-a5ae-c60f6d75612e
+
+	measure 'Traffic Coverage %' =
+			DIVIDE(
+			    CALCULATE(DISTINCTCOUNT('marts fct_traffic_daily'[city]), ALLSELECTED('marts fct_traffic_daily')),
+			    CALCULATE(DISTINCTCOUNT('marts dim_city'[city]), ALLSELECTED('marts dim_city'))
+			)
+		formatString: 0%
+		lineageTag: 58935a0f-bdd6-41a0-b0b9-caea7b7ce12b
+
+	measure 'Current AQI' = [Avg AQI (Latest)]
+		formatString: 0
+		lineageTag: c31c5ff1-68c5-4554-90c4-1e6d9c260a42
+
+	measure 'Current AQI Category' =
+			VAR AQI = ROUND([Current AQI], 0)
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(AQI), "N/A",
+			    AQI <= 1, "Good",
+			    AQI = 2, "Fair",
+			    AQI = 3, "Moderate",
+			    AQI = 4, "Poor",
+			    "Very Poor"
+			)
+		lineageTag: e168784c-91d4-431e-a000-008b6f4356b5
+
+	measure 'Current AQI Category Color' =
+			SWITCH(
+			    TRUE(),
+			    [Current AQI Category] = "Good", "#2ECC71",
+			    [Current AQI Category] = "Fair", "#A9D751",
+			    [Current AQI Category] = "Moderate", "#F1C40F",
+			    [Current AQI Category] = "Poor", "#E67E22",
+			    [Current AQI Category] = "Very Poor", "#E74C3C",
+			    "#95A5A6"
+			)
+		lineageTag: e4d23de8-a9b7-4033-af47-ef2ff7be90f3
+
+	measure 'Current AQI (Gauge Value)' = DIVIDE([Current AQI] - 1, 5 - 1) * 100
+		formatString: 0
+		lineageTag: 4be59ae6-ef4e-494d-924c-094ee0ce616b
+
+	measure 'PM2.5 vs Yesterday %' =
+			VAR Today = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR TodayVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm2_5_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today)
+			VAR YestVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm2_5_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today - 1)
+			RETURN DIVIDE(TodayVal - YestVal, YestVal)
+		formatString: +0.0%;-0.0%;0.0%
+		lineageTag: bdc389b0-0a1a-4aea-a315-b8b356ddb602
+
+	measure 'PM2.5 Trend Arrow' = IF([PM2.5 vs Yesterday] >= 0, UNICHAR(11165), UNICHAR(11167))
+		lineageTag: 3fa4363e-c00d-4763-8d3e-61a78bcf9a37
+
+	measure 'PM2.5 Trend Color' = IF([PM2.5 vs Yesterday] <= 0, "#2E7D32", "#C62828")
+		lineageTag: cb1dbb1b-b509-462e-947b-2d1046594e2b
+
+	measure 'PM2.5 Sparkline' =
+			VAR LatestDate = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR StartDate = LatestDate - 13
+			VAR TrendTable =
+			    ADDCOLUMNS(
+			        FILTER(
+			            ALL('marts fct_pollution_daily'[date_utc]),
+			            'marts fct_pollution_daily'[date_utc] >= StartDate && 'marts fct_pollution_daily'[date_utc] <= LatestDate
+			        ),
+			        "@Val", CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm2_5_ug_m3]))
+			    )
+			VAR CleanTrend = FILTER(TrendTable, NOT ISBLANK([@Val]))
+			VAR PointCount = COUNTROWS(CleanTrend)
+			VAR RankedTrend =
+			    ADDCOLUMNS(
+			        CleanTrend,
+			        "@Idx", RANKX(CleanTrend, 'marts fct_pollution_daily'[date_utc],, ASC, Dense) - 1
+			    )
+			VAR MinY = MINX(RankedTrend, [@Val])
+			VAR MaxY = MAXX(RankedTrend, [@Val])
+			VAR YRange = IF(MaxY = MinY, 1, MaxY - MinY)
+			VAR W = 120
+			VAR H = 30
+			VAR Pad = 2
+			VAR PlotW = W - 2 * Pad
+			VAR PlotH = H - 2 * Pad
+			VAR PointsStr =
+			    CONCATENATEX(
+			        RankedTrend,
+			        VAR X = Pad + DIVIDE([@Idx], PointCount - 1) * PlotW
+			        VAR YNorm = DIVIDE([@Val] - MinY, YRange)
+			        VAR Y = Pad + (1 - YNorm) * PlotH
+			        RETURN FORMAT(ROUND(X, 2), "General Number", "en-US") & "," & FORMAT(ROUND(Y, 2), "General Number", "en-US")
+			        , " ",
+			        [@Idx], ASC
+			    )
+			VAR PrevVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 2), [@Val])
+			VAR LastVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 1), [@Val])
+			VAR StrokeColor = IF(LastVal <= PrevVal, "%233FB950", "%23F85149")
+			VAR AreaPoints = Pad & "," & (H - Pad) & " " & PointsStr & " " & (W - Pad) & "," & (H - Pad)
+			VAR SvgRaw =
+			    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " & W & " " & H & "' preserveAspectRatio='none'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" & StrokeColor & "' stop-opacity='0.45'/><stop offset='1' stop-color='" & StrokeColor & "' stop-opacity='0'/></linearGradient></defs><polygon points='" & AreaPoints & "' fill='url(%23g)' stroke='none'/><polyline fill='none' stroke='" & StrokeColor & "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' points='" & PointsStr & "'/></svg>"
+			RETURN
+			IF(PointCount < 2, BLANK(), "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20"))
+		lineageTag: d56ef1b2-560d-44e0-a938-a2c8a7e10581
+		dataCategory: ImageUrl
+
+	measure 'PM10 vs Yesterday %' =
+			VAR Today = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR TodayVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm10_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today)
+			VAR YestVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm10_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today - 1)
+			RETURN DIVIDE(TodayVal - YestVal, YestVal)
+		formatString: +0.0%;-0.0%;0.0%
+		lineageTag: cd4d031d-4987-4e97-abc1-079f657cdce9
+
+	measure 'PM10 Trend Arrow' = IF([PM10 vs Yesterday] >= 0, UNICHAR(11165), UNICHAR(11167))
+		lineageTag: 1b3205f6-6fbf-475c-9532-948d619a7658
+
+	measure 'PM10 Trend Color' = IF([PM10 vs Yesterday] <= 0, "#2E7D32", "#C62828")
+		lineageTag: 445e9f30-35dc-4490-9120-47bdf8aba187
+
+	measure 'PM10 Sparkline' =
+			VAR LatestDate = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR StartDate = LatestDate - 13
+			VAR TrendTable =
+			    ADDCOLUMNS(
+			        FILTER(
+			            ALL('marts fct_pollution_daily'[date_utc]),
+			            'marts fct_pollution_daily'[date_utc] >= StartDate && 'marts fct_pollution_daily'[date_utc] <= LatestDate
+			        ),
+			        "@Val", CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_pm10_ug_m3]))
+			    )
+			VAR CleanTrend = FILTER(TrendTable, NOT ISBLANK([@Val]))
+			VAR PointCount = COUNTROWS(CleanTrend)
+			VAR RankedTrend =
+			    ADDCOLUMNS(
+			        CleanTrend,
+			        "@Idx", RANKX(CleanTrend, 'marts fct_pollution_daily'[date_utc],, ASC, Dense) - 1
+			    )
+			VAR MinY = MINX(RankedTrend, [@Val])
+			VAR MaxY = MAXX(RankedTrend, [@Val])
+			VAR YRange = IF(MaxY = MinY, 1, MaxY - MinY)
+			VAR W = 120
+			VAR H = 30
+			VAR Pad = 2
+			VAR PlotW = W - 2 * Pad
+			VAR PlotH = H - 2 * Pad
+			VAR PointsStr =
+			    CONCATENATEX(
+			        RankedTrend,
+			        VAR X = Pad + DIVIDE([@Idx], PointCount - 1) * PlotW
+			        VAR YNorm = DIVIDE([@Val] - MinY, YRange)
+			        VAR Y = Pad + (1 - YNorm) * PlotH
+			        RETURN FORMAT(ROUND(X, 2), "General Number", "en-US") & "," & FORMAT(ROUND(Y, 2), "General Number", "en-US")
+			        , " ",
+			        [@Idx], ASC
+			    )
+			VAR PrevVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 2), [@Val])
+			VAR LastVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 1), [@Val])
+			VAR StrokeColor = IF(LastVal <= PrevVal, "%233FB950", "%23F85149")
+			VAR AreaPoints = Pad & "," & (H - Pad) & " " & PointsStr & " " & (W - Pad) & "," & (H - Pad)
+			VAR SvgRaw =
+			    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " & W & " " & H & "' preserveAspectRatio='none'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" & StrokeColor & "' stop-opacity='0.45'/><stop offset='1' stop-color='" & StrokeColor & "' stop-opacity='0'/></linearGradient></defs><polygon points='" & AreaPoints & "' fill='url(%23g)' stroke='none'/><polyline fill='none' stroke='" & StrokeColor & "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' points='" & PointsStr & "'/></svg>"
+			RETURN
+			IF(PointCount < 2, BLANK(), "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20"))
+		lineageTag: 5e5b553e-68f5-4033-bcb2-9b66ce3806ad
+		dataCategory: ImageUrl
+
+	measure 'NO2 vs Yesterday %' =
+			VAR Today = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR TodayVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_no2_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today)
+			VAR YestVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_no2_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today - 1)
+			RETURN DIVIDE(TodayVal - YestVal, YestVal)
+		formatString: +0.0%;-0.0%;0.0%
+		lineageTag: f6edaa79-4b32-439a-8d9a-a1d582599d5b
+
+	measure 'NO2 Trend Arrow' = IF([NO2 vs Yesterday] >= 0, UNICHAR(11165), UNICHAR(11167))
+		lineageTag: 39acbea0-5443-4035-8dc4-ec5af7ed5dcb
+
+	measure 'NO2 Trend Color' = IF([NO2 vs Yesterday] <= 0, "#2E7D32", "#C62828")
+		lineageTag: b50a9ce8-d624-4da8-b255-852f6ad86769
+
+	measure 'NO2 Sparkline' =
+			VAR LatestDate = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR StartDate = LatestDate - 13
+			VAR TrendTable =
+			    ADDCOLUMNS(
+			        FILTER(
+			            ALL('marts fct_pollution_daily'[date_utc]),
+			            'marts fct_pollution_daily'[date_utc] >= StartDate && 'marts fct_pollution_daily'[date_utc] <= LatestDate
+			        ),
+			        "@Val", CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_no2_ug_m3]))
+			    )
+			VAR CleanTrend = FILTER(TrendTable, NOT ISBLANK([@Val]))
+			VAR PointCount = COUNTROWS(CleanTrend)
+			VAR RankedTrend =
+			    ADDCOLUMNS(
+			        CleanTrend,
+			        "@Idx", RANKX(CleanTrend, 'marts fct_pollution_daily'[date_utc],, ASC, Dense) - 1
+			    )
+			VAR MinY = MINX(RankedTrend, [@Val])
+			VAR MaxY = MAXX(RankedTrend, [@Val])
+			VAR YRange = IF(MaxY = MinY, 1, MaxY - MinY)
+			VAR W = 120
+			VAR H = 30
+			VAR Pad = 2
+			VAR PlotW = W - 2 * Pad
+			VAR PlotH = H - 2 * Pad
+			VAR PointsStr =
+			    CONCATENATEX(
+			        RankedTrend,
+			        VAR X = Pad + DIVIDE([@Idx], PointCount - 1) * PlotW
+			        VAR YNorm = DIVIDE([@Val] - MinY, YRange)
+			        VAR Y = Pad + (1 - YNorm) * PlotH
+			        RETURN FORMAT(ROUND(X, 2), "General Number", "en-US") & "," & FORMAT(ROUND(Y, 2), "General Number", "en-US")
+			        , " ",
+			        [@Idx], ASC
+			    )
+			VAR PrevVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 2), [@Val])
+			VAR LastVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 1), [@Val])
+			VAR StrokeColor = IF(LastVal <= PrevVal, "%233FB950", "%23F85149")
+			VAR AreaPoints = Pad & "," & (H - Pad) & " " & PointsStr & " " & (W - Pad) & "," & (H - Pad)
+			VAR SvgRaw =
+			    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " & W & " " & H & "' preserveAspectRatio='none'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" & StrokeColor & "' stop-opacity='0.45'/><stop offset='1' stop-color='" & StrokeColor & "' stop-opacity='0'/></linearGradient></defs><polygon points='" & AreaPoints & "' fill='url(%23g)' stroke='none'/><polyline fill='none' stroke='" & StrokeColor & "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' points='" & PointsStr & "'/></svg>"
+			RETURN
+			IF(PointCount < 2, BLANK(), "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20"))
+		lineageTag: cfca68c3-da94-4c9a-860d-245a3fb7d709
+		dataCategory: ImageUrl
+
+	measure 'O3 vs Yesterday %' =
+			VAR Today = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR TodayVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_o3_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today)
+			VAR YestVal = CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_o3_ug_m3]), 'marts fct_pollution_daily'[date_utc] = Today - 1)
+			RETURN DIVIDE(TodayVal - YestVal, YestVal)
+		formatString: +0.0%;-0.0%;0.0%
+		lineageTag: 177bb83f-51c4-477e-ac2c-7e8439281e16
+
+	measure 'O3 Trend Arrow' = IF([O3 vs Yesterday] >= 0, UNICHAR(11165), UNICHAR(11167))
+		lineageTag: 2e780927-8429-4ab9-a90d-6674d3308997
+
+	measure 'O3 Trend Color' = IF([O3 vs Yesterday] <= 0, "#2E7D32", "#C62828")
+		lineageTag: 35b4fc36-5242-4511-857c-1232fa4bc6f8
+
+	measure 'O3 Sparkline' =
+			VAR LatestDate = CALCULATE(MAX('marts fct_pollution_daily'[date_utc]), ALLSELECTED('marts fct_pollution_daily'))
+			VAR StartDate = LatestDate - 13
+			VAR TrendTable =
+			    ADDCOLUMNS(
+			        FILTER(
+			            ALL('marts fct_pollution_daily'[date_utc]),
+			            'marts fct_pollution_daily'[date_utc] >= StartDate && 'marts fct_pollution_daily'[date_utc] <= LatestDate
+			        ),
+			        "@Val", CALCULATE(AVERAGE('marts fct_pollution_daily'[avg_o3_ug_m3]))
+			    )
+			VAR CleanTrend = FILTER(TrendTable, NOT ISBLANK([@Val]))
+			VAR PointCount = COUNTROWS(CleanTrend)
+			VAR RankedTrend =
+			    ADDCOLUMNS(
+			        CleanTrend,
+			        "@Idx", RANKX(CleanTrend, 'marts fct_pollution_daily'[date_utc],, ASC, Dense) - 1
+			    )
+			VAR MinY = MINX(RankedTrend, [@Val])
+			VAR MaxY = MAXX(RankedTrend, [@Val])
+			VAR YRange = IF(MaxY = MinY, 1, MaxY - MinY)
+			VAR W = 120
+			VAR H = 30
+			VAR Pad = 2
+			VAR PlotW = W - 2 * Pad
+			VAR PlotH = H - 2 * Pad
+			VAR PointsStr =
+			    CONCATENATEX(
+			        RankedTrend,
+			        VAR X = Pad + DIVIDE([@Idx], PointCount - 1) * PlotW
+			        VAR YNorm = DIVIDE([@Val] - MinY, YRange)
+			        VAR Y = Pad + (1 - YNorm) * PlotH
+			        RETURN FORMAT(ROUND(X, 2), "General Number", "en-US") & "," & FORMAT(ROUND(Y, 2), "General Number", "en-US")
+			        , " ",
+			        [@Idx], ASC
+			    )
+			VAR PrevVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 2), [@Val])
+			VAR LastVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 1), [@Val])
+			VAR StrokeColor = IF(LastVal <= PrevVal, "%233FB950", "%23F85149")
+			VAR AreaPoints = Pad & "," & (H - Pad) & " " & PointsStr & " " & (W - Pad) & "," & (H - Pad)
+			VAR SvgRaw =
+			    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " & W & " " & H & "' preserveAspectRatio='none'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" & StrokeColor & "' stop-opacity='0.45'/><stop offset='1' stop-color='" & StrokeColor & "' stop-opacity='0'/></linearGradient></defs><polygon points='" & AreaPoints & "' fill='url(%23g)' stroke='none'/><polyline fill='none' stroke='" & StrokeColor & "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' points='" & PointsStr & "'/></svg>"
+			RETURN
+			IF(PointCount < 2, BLANK(), "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20"))
+		lineageTag: e8eb48b1-63c6-4673-9c32-2da02c842593
+		dataCategory: ImageUrl
+
+	measure 'Pollutant Concentration' =
+			SWITCH(
+			    SELECTEDVALUE('_Pollutants'[Pollutant]),
+			    "PM2.5", [Current PM2.5],
+			    "PM10",  [Current PM10],
+			    "NO2",   [Current NO2],
+			    "O3",    [Current O3],
+			    "CO",    [Current CO],
+			    "SO2",   [Current SO2]
+			)
+		formatString: 0.00
+		lineageTag: 1a2fa349-d0e9-4e28-96af-8689c096821b
+
+	measure 'Pollutant Threshold Utilization' = DIVIDE([Pollutant Concentration], SELECTEDVALUE('_Pollutants'[WHO_Limit]))
+		formatString: 0%
+		lineageTag: bb55fea8-5980-4174-a82b-f3bd8440cb59
+
+	measure 'Pollutant Severity Share %' =
+			VAR ThisVal = [Pollutant Threshold Utilization]
+			VAR Total = SUMX(ALL('_Pollutants'), [Pollutant Threshold Utilization])
+			RETURN DIVIDE(ThisVal, Total)
+		formatString: 0%
+		lineageTag: 78101e9f-5e1d-4f6c-be0b-d278e94d8acf
+
+	measure 'Dominant Pollutant' =
+			VAR Ranked =
+			    ADDCOLUMNS(
+			        ALL('_Pollutants'),
+			        "@Util", [Pollutant Threshold Utilization]
+			    )
+			VAR TopRow = TOPN(1, Ranked, [@Util], DESC)
+			RETURN CONCATENATEX(TopRow, '_Pollutants'[Pollutant], ", ")
+		lineageTag: 661004db-677f-4c0d-87c5-d1fbcd5964f4
+
+	measure 'Pollutants Above WHO Limit' =
+			COALESCE(
+			    COUNTROWS(
+			        FILTER(
+			            ADDCOLUMNS(ALL('_Pollutants'), "@Util", [Pollutant Threshold Utilization]),
+			            [@Util] > 1
+			        )
+			    ),
+			    0
+			)
+		formatString: 0
+		lineageTag: 1e0082db-13e4-49fc-921a-94ac5dbdc3d9
+
+	measure 'Pollutant Color' = SELECTEDVALUE('_Pollutants'[Color], "#8B949E")
+		lineageTag: 524f8111-3da2-4874-aeef-97ed869ab421
+
+	measure 'Scatter Congestion %' = AVERAGE('marts mart_city_daily'[avg_congestion_score]) * 100
+		formatString: 0.0
+		lineageTag: 635e318a-b9d9-4ce4-8afd-63ad267cdfb9
+
+	measure 'Scatter AQI' = AVERAGE('marts mart_city_daily'[avg_aqi])
+		formatString: 0.00
+		lineageTag: 6ca035ff-89e9-4633-8bf7-c4dde48a7eac
+
+	measure 'Scatter PM2.5' = AVERAGE('marts mart_city_daily'[avg_pm2_5_ug_m3])
+		formatString: 0.0
+		lineageTag: 3d7ee7ed-129c-48a0-8dca-bf1104ed4856
+
+	measure 'Correlation Paired Days' =
+			COALESCE(
+			    COUNTROWS(
+			        FILTER(
+			            'marts mart_city_daily',
+			            NOT ISBLANK('marts mart_city_daily'[avg_congestion_score])
+			                && NOT ISBLANK('marts mart_city_daily'[avg_aqi])
+			        )
+			    ),
+			    0
+			)
+		formatString: 0
+		lineageTag: 2204e106-b0f4-40eb-8ee1-7a698fe6f615
+
+	measure 'Traffic Covered Cities' =
+			COALESCE(
+			    CALCULATE(
+			        DISTINCTCOUNT('marts mart_city_daily'[city]),
+			        FILTER('marts mart_city_daily', NOT ISBLANK('marts mart_city_daily'[avg_congestion_score]))
+			    ),
+			    0
+			)
+		formatString: 0
+		lineageTag: d7ef93be-c3cb-4bf5-b6ad-a6207c85d63d
+
+	measure 'Congestion AQI Correlation' =
+			VAR Paired =
+			    FILTER(
+			        'marts mart_city_daily',
+			        NOT ISBLANK('marts mart_city_daily'[avg_congestion_score])
+			            && NOT ISBLANK('marts mart_city_daily'[avg_aqi])
+			    )
+			VAR N = COUNTROWS(Paired)
+			VAR TotX = SUMX(Paired, 'marts mart_city_daily'[avg_congestion_score])
+			VAR TotY = SUMX(Paired, 'marts mart_city_daily'[avg_aqi])
+			VAR TotXY = SUMX(Paired, 'marts mart_city_daily'[avg_congestion_score] * 'marts mart_city_daily'[avg_aqi])
+			VAR TotX2 = SUMX(Paired, 'marts mart_city_daily'[avg_congestion_score] ^ 2)
+			VAR TotY2 = SUMX(Paired, 'marts mart_city_daily'[avg_aqi] ^ 2)
+			VAR Num = N * TotXY - TotX * TotY
+			VAR Den = SQRT((N * TotX2 - TotX ^ 2) * (N * TotY2 - TotY ^ 2))
+			RETURN IF(N >= 10 && Den <> 0, DIVIDE(Num, Den), BLANK())
+		formatString: 0.00
+		lineageTag: 23a0f771-90a8-4442-bac1-44f34cc3ea0b
+
+	measure 'Congestion PM2.5 Correlation (daily)' =
+			VAR Paired =
+			    FILTER(
+			        'marts mart_city_daily',
+			        NOT ISBLANK('marts mart_city_daily'[avg_congestion_score])
+			            && NOT ISBLANK('marts mart_city_daily'[avg_pm2_5_ug_m3])
+			    )
+			VAR N = COUNTROWS(Paired)
+			VAR TotX = SUMX(Paired, 'marts mart_city_daily'[avg_congestion_score])
+			VAR TotY = SUMX(Paired, 'marts mart_city_daily'[avg_pm2_5_ug_m3])
+			VAR TotXY = SUMX(Paired, 'marts mart_city_daily'[avg_congestion_score] * 'marts mart_city_daily'[avg_pm2_5_ug_m3])
+			VAR TotX2 = SUMX(Paired, 'marts mart_city_daily'[avg_congestion_score] ^ 2)
+			VAR TotY2 = SUMX(Paired, 'marts mart_city_daily'[avg_pm2_5_ug_m3] ^ 2)
+			VAR Num = N * TotXY - TotX * TotY
+			VAR Den = SQRT((N * TotX2 - TotX ^ 2) * (N * TotY2 - TotY ^ 2))
+			RETURN IF(N >= 10 && Den <> 0, DIVIDE(Num, Den), BLANK())
+		formatString: 0.00
+		lineageTag: fe313465-c6c6-48a6-9bef-e854add62006
+
+	measure 'Correlation Strength Label' =
+			VAR R = [Congestion AQI Correlation (by city)]
+			VAR A = ABS(R)
+			VAR Strength =
+			    SWITCH(
+			        TRUE(),
+			        ISBLANK(R), "Not enough data",
+			        A < 0.2, "Very weak",
+			        A < 0.4, "Weak",
+			        A < 0.6, "Moderate",
+			        A < 0.8, "Strong",
+			        "Very strong"
+			    )
+			VAR Direction = IF(ISBLANK(R), "", IF(R >= 0, " positive", " negative"))
+			RETURN Strength & Direction
+		lineageTag: 52fe44c2-f5fc-416f-be83-21afa3418069
+
+	measure 'Correlation Insight' =
+			VAR R = [Congestion AQI Correlation (by city)]
+			VAR Cities = [Traffic Covered Cities]
+			VAR Days = [Correlation Paired Days]
+			VAR Reading =
+			    SWITCH(
+			        TRUE(),
+			        ABS(R) < 0.2, "City congestion levels show almost no relationship with their AQI.",
+			        ABS(R) < 0.4, "More congested cities tend to have only slightly higher AQI - the link is weak.",
+			        ABS(R) < 0.6, "More congested cities tend to have moderately higher AQI.",
+			        "More congested cities clearly tend to have higher AQI."
+			    )
+			RETURN
+			IF(
+			    ISBLANK(R),
+			    "Not enough cities with traffic coverage to assess a relationship.",
+			    Reading & " Each point is one city averaged over " & Days & " city-days. Only " & Cities &
+			    " cities have traffic coverage, so this is a small sample - treat as indicative, not conclusive."
+			)
+		lineageTag: a137103f-ac8a-44a6-80d9-d1f59739867c
+
+	measure 'Traffic Coverage Note' =
+			VAR Covered = [Traffic Covered Cities]
+			VAR Total = CALCULATE(DISTINCTCOUNT('marts dim_city'[city]), ALL('marts dim_city'))
+			RETURN "Traffic data available for " & Covered & " of " & Total & " cities"
+		lineageTag: b6d32742-5ed7-4c86-bbad-9166ee174e8f
+
+	measure 'Congestion AQI Correlation (weekly)' =
+			VAR Base =
+			    ADDCOLUMNS(
+			        FILTER(
+			            'marts mart_city_daily',
+			            NOT ISBLANK('marts mart_city_daily'[avg_congestion_score])
+			                && NOT ISBLANK('marts mart_city_daily'[avg_aqi])
+			        ),
+			        "@WeekKey", RELATED('marts dim_date'[year]) * 100 + RELATED('marts dim_date'[week_of_year])
+			    )
+			VAR Agg =
+			    GROUPBY(
+			        Base,
+			        'marts mart_city_daily'[city],
+			        [@WeekKey],
+			        "@C", AVERAGEX(CURRENTGROUP(), 'marts mart_city_daily'[avg_congestion_score]),
+			        "@A", AVERAGEX(CURRENTGROUP(), 'marts mart_city_daily'[avg_aqi])
+			    )
+			VAR N = COUNTROWS(Agg)
+			VAR TotX = SUMX(Agg, [@C])
+			VAR TotY = SUMX(Agg, [@A])
+			VAR TotXY = SUMX(Agg, [@C] * [@A])
+			VAR TotX2 = SUMX(Agg, [@C] ^ 2)
+			VAR TotY2 = SUMX(Agg, [@A] ^ 2)
+			VAR Num = N * TotXY - TotX * TotY
+			VAR Den = SQRT((N * TotX2 - TotX ^ 2) * (N * TotY2 - TotY ^ 2))
+			RETURN IF(N >= 10 && Den <> 0, DIVIDE(Num, Den), BLANK())
+		formatString: 0.00
+		lineageTag: 1d087f4a-3e6e-43e8-a2ec-ef81803310f4
+
+	measure 'Correlation Paired Weeks' =
+			VAR Base =
+			    ADDCOLUMNS(
+			        FILTER(
+			            'marts mart_city_daily',
+			            NOT ISBLANK('marts mart_city_daily'[avg_congestion_score])
+			                && NOT ISBLANK('marts mart_city_daily'[avg_aqi])
+			        ),
+			        "@WeekKey", RELATED('marts dim_date'[year]) * 100 + RELATED('marts dim_date'[week_of_year])
+			    )
+			RETURN
+			COALESCE(
+			    COUNTROWS(GROUPBY(Base, 'marts mart_city_daily'[city], [@WeekKey])),
+			    0
+			)
+		formatString: 0
+		lineageTag: 41b491f1-39ad-4494-87ee-50fcc424e19d
+
+	measure 'Congestion AQI Correlation (by city)' =
+			VAR Agg =
+			    FILTER(
+			        ADDCOLUMNS(
+			            SUMMARIZE('marts mart_city_daily', 'marts mart_city_daily'[city]),
+			            "@C", CALCULATE(AVERAGE('marts mart_city_daily'[avg_congestion_score])),
+			            "@A", CALCULATE(AVERAGE('marts mart_city_daily'[avg_aqi]))
+			        ),
+			        NOT ISBLANK([@C]) && NOT ISBLANK([@A])
+			    )
+			VAR N = COUNTROWS(Agg)
+			VAR TotX = SUMX(Agg, [@C])
+			VAR TotY = SUMX(Agg, [@A])
+			VAR TotXY = SUMX(Agg, [@C] * [@A])
+			VAR TotX2 = SUMX(Agg, [@C] ^ 2)
+			VAR TotY2 = SUMX(Agg, [@A] ^ 2)
+			VAR Num = N * TotXY - TotX * TotY
+			VAR Den = SQRT((N * TotX2 - TotX ^ 2) * (N * TotY2 - TotY ^ 2))
+			RETURN IF(N >= 5 && Den <> 0, DIVIDE(Num, Den), BLANK())
+		formatString: 0.00
+		lineageTag: e4cbfffe-3761-4374-9994-4f59947d22e1
+
+	measure 'Correlation Insight (short)' =
+			VAR R = [Congestion AQI Correlation (by city)]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(R), "Not enough cities to compare.",
+			    ABS(R) < 0.2, "Congestion barely explains AQI differences between cities.",
+			    ABS(R) < 0.4, "Weak link - congestion explains little of the AQI gap between cities.",
+			    ABS(R) < 0.6, "More congested cities do tend to have somewhat worse AQI.",
+			    "More congested cities clearly have worse AQI."
+			)
+		lineageTag: 862ca3b7-e2c6-4d79-b7c9-5649711ff7bf
+
+	measure 'City AQI (latest)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[aqi])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: 8337adfd-be93-4a59-8c8a-f1d00e2ad152
+
+	measure 'City PM2.5 (latest)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[pm2_5_ug_m3])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: 9604e23d-9bdb-48ee-b911-8bb727cf3298
+
+	measure 'City AQI Category' =
+			VAR A = ROUND([City AQI (latest)], 0)
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(A), "N/A",
+			    A <= 1, "Good",
+			    A = 2, "Fair",
+			    A = 3, "Moderate",
+			    A = 4, "Poor",
+			    "Very Poor"
+			)
+		lineageTag: 47811159-16db-4d6d-85ac-c9aaf688c0f8
+
+	measure 'City AQI Color' =
+			VAR C = [City AQI Category]
+			RETURN
+			SWITCH(
+			    C,
+			    "Good", "#2ECC71",
+			    "Fair", "#A9D751",
+			    "Moderate", "#F1C40F",
+			    "Poor", "#E67E22",
+			    "Very Poor", "#E74C3C",
+			    "#95A5A6"
+			)
+		lineageTag: 98bc9a99-5e0c-434d-9503-9dd57ff7dfaa
+
+	measure 'City Congestion %' =
+			VAR V = AVERAGE('marts mart_city_daily'[avg_congestion_score])
+			RETURN IF(ISBLANK(V), BLANK(), V * 100)
+		formatString: 0.0
+		lineageTag: 7eb9a5ec-43cc-4f5a-a6fd-e29162eb4b2f
+
+	measure 'City PM2.5 Color' =
+			VAR V = [City PM2.5 (latest)]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(V), "#95A5A6",
+			    V < 7.5,  "#2ECC71",
+			    V < 15,   "#A9D751",
+			    V < 22.5, "#F1C40F",
+			    V < 37.5, "#E67E22",
+			    "#E74C3C"
+			)
+		lineageTag: 2119992b-625f-4942-9b0b-7f1dab5bbe5d
+
+	measure 'City PM2.5 Rank' =
+			VAR Ranked =
+			    RANKX(
+			        FILTER(ALL('marts dim_city'[city]), NOT ISBLANK([City PM2.5 (latest)])),
+			        [City PM2.5 (latest)],
+			        ,
+			        DESC,
+			        Dense
+			    )
+			RETURN IF(ISBLANK([City PM2.5 (latest)]), BLANK(), Ranked)
+		formatString: 0
+		lineageTag: f11a4b1a-fba0-4518-9ad7-2030b69d5141
+
+	measure 'City Congestion Display' =
+			VAR V = [City Congestion %]
+			RETURN IF(ISBLANK(V), "n/a", FORMAT(V, "0.0") & "%")
+		lineageTag: 48c9f579-798d-45d7-ac9f-2f448104cf95
+
+	measure 'Active Alerts' = COALESCE(COUNTROWS('marts mart_weather_alerts'), 0)
+		formatString: 0
+		lineageTag: bd2e1034-4250-42dd-bc3f-bb8dc3c8fc4a
+
+	measure 'Severe Alerts' =
+			COALESCE(
+			    CALCULATE(
+			        COUNTROWS('marts mart_weather_alerts'),
+			        'marts mart_weather_alerts'[severity] = "Severe"
+			    ),
+			    0
+			)
+		formatString: 0
+		lineageTag: 387d9988-0026-4d77-96b9-7e6441982eb8
+
+	measure 'Cities With Alerts' = COALESCE(DISTINCTCOUNT('marts mart_weather_alerts'[city]), 0)
+		formatString: 0
+		lineageTag: d972c5dc-f29b-4e08-9362-b8b020689ca7
+
+	measure 'Alert Lead Time' =
+			VAR H = SELECTEDVALUE('marts mart_weather_alerts'[lead_time_hours])
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(H), "",
+			    H < 1, "now",
+			    H < 24, "in " & FORMAT(H, "0") & "h",
+			    "in " & FORMAT(ROUND(H / 24, 0), "0") & "d"
+			)
+		lineageTag: 12d011d8-e655-4347-9ae3-50fcffc306e2
+
+	measure 'Alert Severity Color' =
+			SWITCH(
+			    SELECTEDVALUE('marts mart_weather_alerts'[severity]),
+			    "Severe", "#E74C3C",
+			    "Warning", "#F1C40F",
+			    "#8B949E"
+			)
+		lineageTag: 39d09df6-15f0-4d6f-8226-fa9cbcdcf825
+
+	measure 'Next Alert Summary' =
+			VAR Soonest =
+			    TOPN(
+			        1,
+			        'marts mart_weather_alerts',
+			        'marts mart_weather_alerts'[lead_time_hours], ASC
+			    )
+			VAR TheCity = MAXX(Soonest, 'marts mart_weather_alerts'[city])
+			VAR TheType = MAXX(Soonest, 'marts mart_weather_alerts'[alert_type])
+			VAR TheHours = MAXX(Soonest, 'marts mart_weather_alerts'[lead_time_hours])
+			RETURN
+			IF(
+			    ISBLANK(TheCity),
+			    "No active weather alerts",
+			    TheType & " in " & TheCity & " - " &
+			    IF(TheHours < 24, FORMAT(TheHours, "0") & "h away", FORMAT(ROUND(TheHours / 24, 0), "0") & "d away")
+			)
+		lineageTag: e8aba94c-fa92-4adb-8839-37b8c795d30c
+
+	measure 'Alerts Headline' =
+			VAR N = [Active Alerts]
+			VAR C = [Cities With Alerts]
+			RETURN
+			IF(N = 0, "All clear", FORMAT(N, "0") & " alerts across " & FORMAT(C, "0") & " cities")
+		lineageTag: bdd5aa5f-fd9f-413f-a325-421d62ad9664
+
+	measure 'Coverage Hours (24h)' = COALESCE(CALCULATE(DISTINCTCOUNT('marts fct_pollution_hourly'[hour_utc]), REMOVEFILTERS('marts fct_pollution_hourly'), 'marts fct_pollution_hourly'[observed_at] >= NOW() - 1), 0)
+		formatString: 0
+		lineageTag: 90ece660-264f-48f5-9b98-6524e7f4d667
+
+	measure 'Coverage % (24h)' = DIVIDE([Coverage Hours (24h)], 24)
+		formatString: 0%
+		lineageTag: 8ea06a1f-4110-4ce0-af76-751a26213a5e
+
+	measure 'Coverage Status' = VAR P = [Coverage % (24h)] RETURN SWITCH(TRUE(), P >= 0.8, "COMPLETE", P >= 0.4, "PARTIAL", "LIMITED")
+		lineageTag: 61d85c33-ff46-482a-8d31-36b74a1cd344
+
+	measure 'Coverage Status Color' = SWITCH([Coverage Status], "COMPLETE", "#3FB950", "PARTIAL", "#F1C40F", "#E67E22")
+		lineageTag: bac2f7e5-8a2d-4762-a515-13a1485aa0c1
+
+	measure 'Cities Reporting (24h)' = COALESCE(CALCULATE(DISTINCTCOUNT('marts fct_pollution_hourly'[city]), REMOVEFILTERS('marts fct_pollution_hourly'), 'marts fct_pollution_hourly'[observed_at] >= NOW() - 1), 0)
+		formatString: 0
+		lineageTag: 7082e0ab-d084-44d5-b02e-ac58faf7dd2c
+
+	measure 'Last Reading (UTC)' = VAR T = CALCULATE(MAX('marts fct_pollution_hourly'[observed_at]), REMOVEFILTERS('marts fct_pollution_hourly')) RETURN IF(ISBLANK(T), "no data", FORMAT(T, "HH:mm") & " UTC")
+		lineageTag: 67d376de-cf60-4b63-8b93-ddae19a177aa
+
+	measure 'Coverage Summary' = FORMAT([Coverage Hours (24h)], "0") & " of 24 hours captured  -  " & FORMAT([Cities Reporting (24h)], "0") & " cities reporting"
+		lineageTag: 787db2de-a5df-46f2-aebf-703c9b0b0ca7
+
+	measure 'Coverage Strip' =
+			VAR Cutoff = NOW() - 1
+			VAR TotalCities = CALCULATE(DISTINCTCOUNT('marts dim_city'[city]), REMOVEFILTERS('marts dim_city'))
+			VAR Slots = GENERATESERIES(0, 23, 1)
+			VAR Boxes =
+			    CONCATENATEX(
+			        Slots,
+			        VAR H = [Value]
+			        VAR CityCount =
+			            COALESCE(
+			                CALCULATE(
+			                    DISTINCTCOUNT('marts fct_pollution_hourly'[city]),
+			                    REMOVEFILTERS('marts fct_pollution_hourly'),
+			                    'marts fct_pollution_hourly'[observed_at] >= Cutoff,
+			                    'marts fct_pollution_hourly'[hour_utc] = H
+			                ),
+			                0
+			            )
+			        VAR X = 2 + H * 20
+			        VAR Style =
+			            SWITCH(
+			                TRUE(),
+			                CityCount = 0, "fill='none' stroke='%2330363D' stroke-width='1.5'",
+			                CityCount >= TotalCities, "fill='%233FB950'",
+			                "fill='%23E67E22'"
+			            )
+			        RETURN "<rect x='" & FORMAT(X, "0") & "' y='4' width='16' height='20' rx='3' " & Style & "/>",
+			        "",
+			        [Value], ASC
+			    )
+			VAR Ticks =
+			    "<text x='2' y='41' font-size='10' fill='%238B949E'>00</text>" &
+			    "<text x='118' y='41' font-size='10' fill='%238B949E'>06</text>" &
+			    "<text x='238' y='41' font-size='10' fill='%238B949E'>12</text>" &
+			    "<text x='358' y='41' font-size='10' fill='%238B949E'>18</text>" &
+			    "<text x='456' y='41' font-size='10' fill='%238B949E'>24</text>"
+			VAR SvgRaw = "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 484 46'>" & Boxes & Ticks & "</svg>"
+			RETURN "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20")
+		lineageTag: b6ec424f-8754-4b3f-8e12-5e5ef6d6e2f9
+		dataCategory: ImageUrl
+
+	measure 'AQ Coverage Chip' = VAR C = [Coverage % (24h)] VAR H = [Coverage Hours (24h)] VAR L = [Last Reading (UTC)] RETURN UNICHAR ( 9679 ) & " Coverage " & FORMAT ( C, "0%" ) & "  " & UNICHAR ( 183 ) & "  " & FORMAT ( H, "0" ) & "/24h  " & UNICHAR ( 183 ) & "  " & L
+		displayFolder: Air Quality Redesign
+		lineageTag: 7ffde0d7-5f39-49b0-a2ed-a0e27d171177
+
+	measure 'AQ Coverage Chip Color' = VAR C = [Coverage % (24h)] RETURN SWITCH ( TRUE (), ISBLANK ( C ), "#8B949E", C >= 0.9, "#46D477", C >= 0.5, "#F5C518", "#F17632" )
+		isHidden
+		displayFolder: Air Quality Redesign
+		lineageTag: 4697beb1-4c37-4beb-a87f-da84d73c4ce5
+
+	measure 'AQ Insight' =
+			VAR Cat = [Current AQI Category]
+			VAR Dom = [Dominant Pollutant]
+			VAR P = [Current PM2.5]
+			VAR Pred = [Predicted PM2.5 (24h)]
+			VAR Cov = [Coverage % (24h)]
+			VAR Dir = SWITCH ( TRUE (), ISBLANK ( Pred ) || ISBLANK ( P ), "", Pred > P + 0.5, " The model predicts a slight increase over the next 24 hours.", Pred < P - 0.5, " The model predicts a slight decrease over the next 24 hours.", " The model predicts little change over the next 24 hours." )
+			VAR CovNote = IF ( COALESCE ( Cov, 1 ) < 0.9, " Readings cover only " & FORMAT ( Cov, "0%" ) & " of the last 24 hours, so treat these values as indicative.", "" )
+			RETURN
+			"Air quality is " & Cat & "." & IF ( ISBLANK ( Dom ), "", " " & Dom & " is the dominant pollutant relative to its WHO limit" & IF ( ISBLANK ( P ), ".", ", while PM2.5 sits at " & FORMAT ( P, "0.0" ) & " " & UNICHAR ( 181 ) & "g/m" & UNICHAR ( 179 ) & "." ) ) & Dir & CovNote
+		displayFolder: Air Quality Redesign
+		lineageTag: b4f2c73e-b63f-4ca1-be84-506b539d37d2
+
+	column _
+		lineageTag: af5b0cdc-a746-480d-8af7-2d1fbaa71323
+		isNameInferred
+		sourceColumn: [_]
+
+	partition _KPIs_AirQuality = calculated
+		source = ROW("_", BLANK())
+

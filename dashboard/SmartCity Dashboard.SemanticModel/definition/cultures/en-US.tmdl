@@ -1,0 +1,1903 @@
+cultureInfo en-US
+
+	linguisticMetadata =
+			{
+			  "Version": "2.0.0",
+			  "Language": "en-US",
+			  "Entities": {
+			    "marts_mart_city_daily.forecast_temp_c": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts mart_city_daily",
+			          "ConceptualProperty": "Forecast Temp (°C)"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "marts_mart_city_daily.forecast_rain_": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts mart_city_daily",
+			          "ConceptualProperty": "Forecast Rain %"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "marts_mart_city_daily.forecast_icon_url": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts mart_city_daily",
+			          "ConceptualProperty": "Forecast Icon URL"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "marts_dim_city.city": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts dim_city",
+			          "ConceptualProperty": "city"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "City": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        },
+			        {
+			          "‎": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "marts_dim_city.latitude": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts dim_city",
+			          "ConceptualProperty": "latitude"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "latitude": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "marts_dim_city.longitude": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts dim_city",
+			          "ConceptualProperty": "longitude"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "longitude": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_report_date": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Report Date"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Date": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_city_status": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 City Status"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "CITY STATUS": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        },
+			        {
+			          "Status": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.current_temp_c": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Current Temp (°C)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Temp": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        },
+			        {
+			          "TEMPERATURE": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_congestion_display": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Congestion Display"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "CONGESTION": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_alert_count": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Alert Count"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "ACTIVE ALERTS": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.weather": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Weather"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Weather": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.air_quality": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Air Quality"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Air Quality": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.traffic": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Traffic"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Traffic": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.alerts": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Alerts"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Alerts": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_forecast_pm25": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Forecast PM25"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "PM2.5 +24h": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_forecast_temp": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Forecast Temp"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Temperature +3h": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_forecast_cong": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Forecast Cong"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Congestion +1h": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_alert_when": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Alert When"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Alert time": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.weather_score": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Weather Score"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Weather": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.air_quality_score": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Air Quality Score"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Air Quality": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.traffic_score": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Traffic Score"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Traffic": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_comparison_footer": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Comparison Footer"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Note": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_summary_text": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Summary Text"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Summary": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.p2_latest_reading": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "P2 Latest Reading"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Latest": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_airquality.current_aqi_category": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Current AQI Category"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Cat": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        },
+			        {
+			          "AIR QUALITY": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_airquality.current_pm2_5": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Current PM2.5"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "PM2.5 µg/m³": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        },
+			        {
+			          "PM2.5": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_p2_alerts.alert_icon": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_P2_Alerts",
+			          "ConceptualProperty": "alert_icon"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_p2_alerts.alert_label": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_P2_Alerts",
+			          "ConceptualProperty": "alert_label"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_p2_alerts.alert_at": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_P2_Alerts",
+			          "ConceptualProperty": "alert_at"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Date": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "marts_mart_forecast_latest.weather_main": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts mart_forecast_latest",
+			          "ConceptualProperty": "weather_main"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Condition": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "marts_mart_forecast_latest.forecast_date_utc": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts mart_forecast_latest",
+			          "ConceptualProperty": "forecast_date_utc"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "DATE": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.forecast_condition_count": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Forecast Condition Count"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Share": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.forecast_daily_high": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Forecast Daily High"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "HIGH": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.forecast_icon_url": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Forecast Icon URL"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_weather.forecast_daily_low": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Forecast Daily Low"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "LOW": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "marts_dim_date.date_utc": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts dim_date",
+			          "ConceptualProperty": "date_utc"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Date": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.avg_temp": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Avg Temp"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Avg Temp": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "marts_mart_forecast_latest.forecast_hour_utc": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "marts mart_forecast_latest",
+			          "ConceptualProperty": "forecast_hour_utc"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Hour": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.w4_daylight": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "W4 Daylight"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Daylight": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.forecast_temp_24h": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Forecast Temp 24h"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Forecast": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.w4_wind_km_h": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "W4 Wind (km/h)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Wind": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.forecast_daily_condition": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Forecast Daily Condition"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_weather.high_c": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "High (°C)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "High (°C)": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.avg_c": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Avg (°C)"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_weather.low_c": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Low (°C)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Low (°C)": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.weather_impact_condition": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "Weather Impact (Condition)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Traffic Impact": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.w4_visibility_display": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "W4 Visibility Display"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Visibility": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.w4_precipitation_risk": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "W4 Precipitation Risk"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Precipitation Risk": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.w4_wind_risk": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "W4 Wind Risk"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Wind Risk": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_weather.w4_insight": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Weather",
+			          "ConceptualProperty": "W4 Insight"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Insight": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.last_updated_city": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Last Updated (City)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "City": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.weather_condition": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Weather Condition"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Condition": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.weather_icon_url": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Weather Icon URL"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Icon": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.feels_like_c": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Feels Like (°C)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Feels Like": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.sunrise": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Sunrise"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Sunrise": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.sunset": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Sunset"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Sunset": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.humidity_": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Humidity %"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Humidity": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.pressure_hpa": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Pressure (hPa)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "PRESSURE": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.rain_probability": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Rain Probability"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "RAIN PROBABILITY": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_overview.comfort_index": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Overview",
+			          "ConceptualProperty": "Comfort Index"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "COMFORT INDEX": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_traffic.road_surface": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Traffic",
+			          "ConceptualProperty": "Road Surface"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Road Surface": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_airquality.current_aqi": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Current AQI"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_airquality.aqi_health_recommendation": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "AQI Health Recommendation"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Advice": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_airquality.pollutant_threshold_utilization": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Pollutant Threshold Utilization"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_airquality.aq_coverage_chip": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "AQ Coverage Chip"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_airquality.city_pm2_5_latest": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "City PM2.5 (latest)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "PM2.5": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_airquality.correlation_insight_short": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Correlation Insight (short)"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_airquality.aq_insight": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "AQ Insight"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_airquality.current_pm10": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Current PM10"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "PM10 µg/m³": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_airquality.current_no2": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Current NO2"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "NO2 ppb": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_airquality.current_o3": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Current O3"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "O3 ppb": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_timespine_aqi.hour_ts": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_TimeSpine_AQI",
+			          "ConceptualProperty": "hour_ts"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Hour": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_forecast.historical_pm2_5": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Forecast",
+			          "ConceptualProperty": "Historical PM2.5"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Historical": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_forecast.forecast_pm2_5": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Forecast",
+			          "ConceptualProperty": "Forecast PM2.5"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Forecast": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_forecast.forecast_pm2_5_upper_approx": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Forecast",
+			          "ConceptualProperty": "Forecast PM2.5 Upper (approx)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Range": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_forecast.forecast_pm2_5_lower_approx": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Forecast",
+			          "ConceptualProperty": "Forecast PM2.5 Lower (approx)"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_pollutants.pollutant": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_Pollutants",
+			          "ConceptualProperty": "Pollutant"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Pollutant": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_ml.predicted_pm2_5_24h": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "Predicted PM2.5 (24h)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Pred": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_ml.predicted_pm2_5_category": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "Predicted PM2.5 Category"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Cat": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_ml.aqi_model_vs_baseline_": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "AQI Model vs Baseline %"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "better than baseline": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_ml.mae_7d": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "MAE (7d)"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "MAE (7d) - live error": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_ml.rmse_7d": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "RMSE (7d)"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_ml.mape_7d": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "MAPE (7d)"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_ml.bias_7d": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "Bias (7d)"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_ml.live_forecast_note": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "Live Forecast Note"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_airquality.pollutant_severity_share_": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Pollutant Severity Share %"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "Share": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_airquality.last_reading_utc": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AirQuality",
+			          "ConceptualProperty": "Last Reading (UTC)"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_ml.prediction_icon": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_ML",
+			          "ConceptualProperty": "Prediction Icon"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_ai_summary.ai_city_dot": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AI_Summary",
+			          "ConceptualProperty": "AI City Dot"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "‎": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_ai_summary.ai_city_status": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_AI_Summary",
+			          "ConceptualProperty": "AI City Status"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "‎": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "table_kpis_forecast.fa_stored_mae": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Forecast",
+			          "ConceptualProperty": "FA Stored MAE"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_forecast.fa_improvement_vs_baseline": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Forecast",
+			          "ConceptualProperty": "FA Improvement vs Baseline"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "table_kpis_forecast.fa_verdict": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "_KPIs_Forecast",
+			          "ConceptualProperty": "FA Verdict"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "ml_predictions_forecast_scored.model_display": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "ml_predictions forecast_scored",
+			          "ConceptualProperty": "model_display"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "ml_predictions_forecast_scored.horizon": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "ml_predictions forecast_scored",
+			          "ConceptualProperty": "horizon"
+			        }
+			      },
+			      "State": "Generated"
+			    },
+			    "ml_predictions_model_scorecard.model": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "ml_predictions model_scorecard",
+			          "ConceptualProperty": "model"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "MODEL": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "ml_predictions_model_scorecard.horizon": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "ml_predictions model_scorecard",
+			          "ConceptualProperty": "horizon"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "HORIZON": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "ml_predictions_model_scorecard.mae": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "ml_predictions model_scorecard",
+			          "ConceptualProperty": "mae"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "MAE": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "ml_predictions_model_scorecard.vs_baseline": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "ml_predictions model_scorecard",
+			          "ConceptualProperty": "vs_baseline"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "VS BASELINE": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "ml_predictions_model_scorecard.verdict": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "ml_predictions model_scorecard",
+			          "ConceptualProperty": "verdict"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "VERDICT": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    },
+			    "ml_predictions_model_scorecard.sort_order": {
+			      "Definition": {
+			        "Binding": {
+			          "ConceptualEntity": "ml_predictions model_scorecard",
+			          "ConceptualProperty": "sort_order"
+			        }
+			      },
+			      "State": "Generated",
+			      "Terms": [
+			        {
+			          "‎": {
+			            "State": "Suggested",
+			            "Source": {
+			              "Type": "External",
+			              "Agent": "PowerBI.VisualColumnRename"
+			            },
+			            "Weight": 0.9
+			          }
+			        }
+			      ]
+			    }
+			  }
+			}
+		contentType: json
+

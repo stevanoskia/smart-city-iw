@@ -1,0 +1,341 @@
+table _KPIs_Forecast
+	lineageTag: c7b78b75-a769-4841-b288-9dbd2b09bec3
+
+	measure 'MAE Temp' = AVERAGE('marts fct_forecast_accuracy'[temp_abs_error])
+		lineageTag: 48a86c31-78bd-4ceb-8f2c-7bef1946afd5
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Temp Bias' = AVERAGE('marts fct_forecast_accuracy'[temp_bias])
+		lineageTag: 2ad43677-c5cf-4963-94e4-343ae8ceafcb
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Rain Accuracy %' = AVERAGE('marts fct_forecast_accuracy'[rain_correct_int]) * 100
+		lineageTag: 72467a9e-dd07-4eee-be5e-40df7ba6f926
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Condition Accuracy %' = AVERAGE('marts fct_forecast_accuracy'[condition_correct_int]) * 100
+		lineageTag: 77280276-732b-4aaa-aa51-f3aad5039bbe
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Within 2C %' = AVERAGE('marts fct_forecast_accuracy'[temp_within_2c]) * 100
+		lineageTag: c49a1999-4a90-45f3-8533-dc8ca450f165
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Forecast Count' = COUNTROWS('marts fct_forecast_accuracy')
+		formatString: 0
+		lineageTag: 77fd1fcc-a252-486b-8951-26d67bc8cd9a
+
+	measure 'Traffic Active Incidents' =
+			
+			SUM('marts fct_traffic_daily'[total_incidents])
+		formatString: 0
+		lineageTag: c5dd719a-35f8-4161-b593-cc0f02b45c78
+
+	measure Humidity = FORMAT(AVERAGE('marts fct_weather_hourly'[humidity_pct]), "0") & "%"
+		lineageTag: 0b0f8d42-818d-45d9-9140-d8602eddfe10
+
+	measure Wind = FORMAT(AVERAGE('marts fct_weather_hourly'[wind_speed_ms]) * 3.6, "0") & " km/h"
+		lineageTag: 9b83916a-9444-4f14-9c3b-b35a6dabbdcb
+
+	measure Pressure = FORMAT(AVERAGE('marts fct_weather_hourly'[pressure_hpa]), "0") & " hPa"
+		lineageTag: 531280ad-2a29-41ab-8368-12756bed5699
+
+	measure Visibility = FORMAT(AVERAGE('marts fct_weather_hourly'[visibility_m]) / 1000, "0.0") & " km"
+		lineageTag: 3a59adef-8c61-4529-817f-948578244e79
+
+	measure 'Metric Value' =
+			
+			SWITCH(
+			    SELECTEDVALUE('WeatherMetrics'[Metric]),
+			    "Humidity", FORMAT(AVERAGE('marts fct_weather_hourly'[humidity_pct]), "0") & "%",
+			    "Wind", FORMAT(AVERAGE('marts fct_weather_hourly'[wind_speed_ms]) * 3.6, "0") & " km/h",
+			    "Visibility", FORMAT(AVERAGE('marts fct_weather_hourly'[visibility_m]) / 1000, "0.0") & " km",
+			    "Pressure", FORMAT(AVERAGE('marts fct_weather_hourly'[pressure_hpa]), "0") & " hPa"
+			)
+		lineageTag: 17679720-ec3c-4ebd-9f99-e48530ec87fd
+
+	measure 'Historical PM2.5' =
+			VAR CurrentHour = SELECTEDVALUE('_TimeSpine_AQI'[hour_ts])
+			RETURN
+			IF(
+			    NOT ISBLANK(CurrentHour) && CurrentHour <= NOW(),
+			    CALCULATE(
+			        AVERAGE('marts fct_pollution_hourly'[pm2_5_ug_m3]),
+			        FILTER('marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at] = CurrentHour)
+			    )
+			)
+		formatString: 0.0
+		lineageTag: 28fda3eb-f4ef-4fcd-8074-c8155fde768a
+
+	measure 'Forecast PM2.5' =
+			VAR CurrentHour = SELECTEDVALUE('_TimeSpine_AQI'[hour_ts])
+			RETURN
+			IF(
+			    NOT ISBLANK(CurrentHour) && CurrentHour > NOW(),
+			    CALCULATE(
+			        AVERAGE('ml_predictions aqi_forecast'[predicted_pm2_5]),
+			        FILTER('ml_predictions aqi_forecast', 'ml_predictions aqi_forecast'[predicted_for] = CurrentHour)
+			    )
+			)
+		formatString: 0.0
+		lineageTag: 509eb027-796b-4211-9b32-cffb8f51bb0c
+
+	measure 'Forecast PM2.5 Upper (approx)' = IF(NOT ISBLANK([Forecast PM2.5]), [Forecast PM2.5] + [AQI Model MAE])
+		formatString: 0.0
+		lineageTag: c78862af-00bb-4c2a-9d0e-847724c60f43
+
+	measure 'Forecast PM2.5 Lower (approx)' = IF(NOT ISBLANK([Forecast PM2.5]), MAX([Forecast PM2.5] - [AQI Model MAE], 0))
+		formatString: 0.0
+		lineageTag: 7d2e2b88-8dc7-42f9-a3d4-ddedbd157040
+
+	/// Forecast & Accuracy page. Live measures read ml_predictions.forecast_scored
+	/// (one row per matured prediction); Stored measures read model_metrics
+	/// (held-out test set). The two disagree on purpose - see FA Stored MAE.
+	measure 'FA Predicted' = AVERAGE('ml_predictions forecast_scored'[predicted_value])
+		formatString: 0.0
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000001-0000-4000-8000-000000000001
+
+	measure 'FA Actual' = AVERAGE('ml_predictions forecast_scored'[actual_value])
+		formatString: 0.0
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000002-0000-4000-8000-000000000002
+
+	/// Unit of the selected model, so cards can label themselves (°C, µg/m³, ...).
+	measure 'FA Unit' = SELECTEDVALUE('ml_predictions forecast_scored'[unit], "")
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000003-0000-4000-8000-000000000003
+
+	/// Most recent matured target time in the current selection.
+	measure 'FA Latest Target' = MAX('ml_predictions forecast_scored'[target_datetime])
+		isHidden
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000004-0000-4000-8000-000000000004
+
+	measure 'FA Latest Predicted' =
+			VAR _t = [FA Latest Target]
+			RETURN
+			CALCULATE(
+			    AVERAGE('ml_predictions forecast_scored'[predicted_value]),
+			    'ml_predictions forecast_scored'[target_datetime] = _t
+			)
+		formatString: 0.0"°C"
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000005-0000-4000-8000-000000000005
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'FA Latest Actual' =
+			VAR _t = [FA Latest Target]
+			RETURN
+			CALCULATE(
+			    AVERAGE('ml_predictions forecast_scored'[actual_value]),
+			    'ml_predictions forecast_scored'[target_datetime] = _t
+			)
+		formatString: 0.0"°C"
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000006-0000-4000-8000-000000000006
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// Signed error. The format string has THREE sections - positive;negative;zero - and the unit must be repeated in each. Writing only 0.0"°C" collapses it to one section and loses the sign.
+	measure 'FA Latest Error' = [FA Latest Predicted] - [FA Latest Actual]
+		formatString: +0.0"°C";-0.0"°C";0.0"°C"
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000007-0000-4000-8000-000000000007
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'FA Latest Abs Error' = ABS([FA Latest Error])
+		formatString: 0.0
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000008-0000-4000-8000-000000000008
+
+	/// Tolerance is the model's OWN held-out RMSE, not a number chosen to look good:
+	/// an error inside one RMSE is a typical error for that model, not an outlier.
+	/// CALCULATE+MAX rather than LOOKUPVALUE so a second model_version can't error it.
+	measure 'FA Tolerance' =
+			VAR _k = SELECTEDVALUE('ml_predictions forecast_scored'[metrics_key])
+			RETURN
+			CALCULATE(
+			    MAX('ml_predictions model_metrics'[rmse]),
+			    REMOVEFILTERS('ml_predictions model_metrics'),
+			    'ml_predictions model_metrics'[model_name] = _k
+			)
+		formatString: 0.00
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000009-0000-4000-8000-000000000009
+
+	measure 'FA Tolerance Status' =
+			VAR _e = [FA Latest Abs Error]
+			VAR _t = [FA Tolerance]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(_e) || ISBLANK(_t), "NO DATA",
+			    _e <= _t, "WITHIN TOLERANCE",
+			    "OUTSIDE TOLERANCE"
+			)
+		displayFolder: Forecast Accuracy
+		lineageTag: fa00000a-0000-4000-8000-00000000000a
+
+	measure 'FA Tolerance Colour' =
+			SWITCH(
+			    [FA Tolerance Status],
+			    "WITHIN TOLERANCE", "#72D84A",
+			    "OUTSIDE TOLERANCE", "#FF4B42",
+			    "#6B7280"
+			)
+		displayFolder: Forecast Accuracy
+		lineageTag: fa00000b-0000-4000-8000-00000000000b
+
+	/// LIVE production accuracy over whatever the slicers select.
+	measure 'FA MAE' = AVERAGE('ml_predictions forecast_scored'[absolute_error])
+		formatString: 0.00
+		displayFolder: Forecast Accuracy
+		lineageTag: fa00000c-0000-4000-8000-00000000000c
+
+	measure 'FA RMSE' = SQRT(AVERAGE('ml_predictions forecast_scored'[squared_error]))
+		formatString: 0.00
+		displayFolder: Forecast Accuracy
+		lineageTag: fa00000d-0000-4000-8000-00000000000d
+
+	/// Held-out R2 from training - stored, not recomputed over an arbitrary window.
+	measure 'FA R2' =
+			VAR _k = SELECTEDVALUE('ml_predictions forecast_scored'[metrics_key])
+			RETURN
+			CALCULATE(
+			    MAX('ml_predictions model_metrics'[r2]),
+			    REMOVEFILTERS('ml_predictions model_metrics'),
+			    'ml_predictions model_metrics'[model_name] = _k
+			)
+		formatString: 0.00
+		displayFolder: Forecast Accuracy
+		lineageTag: fa00000e-0000-4000-8000-00000000000e
+
+	/// The scorecard compares STORED test-set MAE with baseline_mae, because
+	/// baseline_mae is itself a test-set figure. Comparing live MAE against a
+	/// test-set baseline would be apples to oranges.
+	measure 'FA Stored MAE' =
+			VAR _k = SELECTEDVALUE('ml_predictions forecast_scored'[metrics_key])
+			RETURN
+			CALCULATE(
+			    MAX('ml_predictions model_metrics'[mae]),
+			    REMOVEFILTERS('ml_predictions model_metrics'),
+			    'ml_predictions model_metrics'[model_name] = _k
+			)
+		formatString: 0.000
+		displayFolder: Forecast Accuracy
+		lineageTag: fa00000f-0000-4000-8000-00000000000f
+
+	measure 'FA Baseline MAE' =
+			VAR _k = SELECTEDVALUE('ml_predictions forecast_scored'[metrics_key])
+			RETURN
+			CALCULATE(
+			    MAX('ml_predictions model_metrics'[baseline_mae]),
+			    REMOVEFILTERS('ml_predictions model_metrics'),
+			    'ml_predictions model_metrics'[model_name] = _k
+			)
+		formatString: 0.000
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000010-0000-4000-8000-000000000010
+
+	measure 'FA Improvement vs Baseline' = DIVIDE([FA Baseline MAE] - [FA Stored MAE], [FA Baseline MAE])
+		formatString: 0.0%
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000011-0000-4000-8000-000000000011
+
+	measure 'FA Verdict' =
+			VAR _m = [FA Stored MAE]
+			VAR _b = [FA Baseline MAE]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(_m) || ISBLANK(_b), "No metrics",
+			    _m < _b, "Beats baseline",
+			    "Does not beat baseline"
+			)
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000012-0000-4000-8000-000000000012
+
+	measure 'FA Verdict Colour' =
+			SWITCH(
+			    [FA Verdict],
+			    "Beats baseline", "#72D84A",
+			    "Does not beat baseline", "#FF4B42",
+			    "#6B7280"
+			)
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000013-0000-4000-8000-000000000013
+
+	measure 'FA Improvement Colour' = IF([FA Improvement vs Baseline] > 0, "#72D84A", "#FF4B42")
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000014-0000-4000-8000-000000000014
+
+	measure 'FA Chart Title' = "PREDICTED VS ACTUAL — " & UPPER(SELECTEDVALUE('ml_predictions forecast_scored'[model_display], "SELECT A MODEL"))
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000015-0000-4000-8000-000000000015
+
+	measure 'FA Error Callout' =
+			VAR _e = [FA Latest Error]
+			RETURN IF(ISBLANK(_e), BLANK(), "Error " & FORMAT(_e, "+0.0;-0.0;0.0") & " " & [FA Unit])
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000016-0000-4000-8000-000000000016
+
+	measure 'FA Issued Label' =
+			VAR _h = SELECTEDVALUE('ml_predictions forecast_scored'[horizon])
+			RETURN IF(ISBLANK(_h), BLANK(), "Forecast issued " & SUBSTITUTE(_h, "+", "") & " earlier")
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000017-0000-4000-8000-000000000017
+
+	measure 'FA Scored Count' = COUNTROWS('ml_predictions forecast_scored')
+		formatString: #,0
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000018-0000-4000-8000-000000000018
+
+	/// Scorecard cell colours. Read the row's own text, so they work per row in
+	/// the table without depending on any slicer.
+	measure 'FA SC Verdict Colour' =
+			SWITCH(
+			    SELECTEDVALUE('ml_predictions model_scorecard'[verdict]),
+			    "Beats baseline", "#72D84A",
+			    "Does not beat baseline", "#FF4B42",
+			    "#AAA8A5"
+			)
+		displayFolder: Forecast Accuracy
+		lineageTag: fa000019-0000-4000-8000-000000000019
+
+	measure 'FA SC Baseline Colour' =
+			VAR _t = SELECTEDVALUE('ml_predictions model_scorecard'[vs_baseline])
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(_t), "#AAA8A5",
+			    CONTAINSSTRING(_t, "better"), "#72D84A",
+			    CONTAINSSTRING(_t, "worse"), "#FF4B42",
+			    "#AAA8A5"
+			)
+		displayFolder: Forecast Accuracy
+		lineageTag: fa00001a-0000-4000-8000-00000000001a
+
+	column _
+		isHidden
+		formatString: 0
+		lineageTag: a80ae105-26f9-48f7-a6b5-6f18325dc944
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [_]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition _KPIs_Forecast = calculated
+		mode: import
+		source = ROW("_", BLANK())
+
+	annotation PBI_Id = 86d77ad1cd3a47d0aa538c0b751f26bb
+

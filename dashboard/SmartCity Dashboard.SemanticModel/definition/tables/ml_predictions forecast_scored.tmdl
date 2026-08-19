@@ -1,0 +1,153 @@
+table 'ml_predictions forecast_scored'
+	lineageTag: c79a8b03-cdc0-485a-a723-b9338c72612d
+
+	column model_name
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 38116277-675a-4592-b3f4-b2c9fb2d9c1e
+		summarizeBy: none
+		sourceColumn: model_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column horizon
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 349175a2-8520-48b8-9f54-56a41da7d461
+		summarizeBy: none
+		sourceColumn: horizon
+
+		annotation SummarizationSetBy = Automatic
+
+	column model_display
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 589148df-9361-4670-950c-dddd69a98ad3
+		summarizeBy: none
+		sourceColumn: model_display
+
+		annotation SummarizationSetBy = Automatic
+
+	column metrics_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 463224c7-68ad-46bf-9216-8377c7daeb66
+		summarizeBy: none
+		sourceColumn: metrics_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column unit
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 4c585b5a-9462-44f4-8fa4-811a6af12497
+		summarizeBy: none
+		sourceColumn: unit
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: f5de488e-d7a3-49e0-87a5-1ad444897a60
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column issued_at
+		dataType: dateTime
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 989053d0-8a96-468f-aef6-1fa947e26fcb
+		summarizeBy: none
+		sourceColumn: issued_at
+
+		annotation SummarizationSetBy = Automatic
+
+	column target_datetime
+		dataType: dateTime
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 78c8dbe7-916d-4ea7-ad00-ecb711623f65
+		summarizeBy: none
+		sourceColumn: target_datetime
+
+		annotation SummarizationSetBy = Automatic
+
+	column target_date
+		dataType: dateTime
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: 5786bd76-47bf-4791-9cf1-5f46ecdd8553
+		summarizeBy: none
+		sourceColumn: target_date
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column predicted_value
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 61cb1446-56f6-44f4-b3f3-3044537914d0
+		summarizeBy: sum
+		sourceColumn: predicted_value
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column actual_value
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 63c03f9f-86ba-4a97-a6cd-4014c755caf5
+		summarizeBy: sum
+		sourceColumn: actual_value
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column error
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: c8c5cba5-2709-4368-bcea-4b5a8bfafcaa
+		summarizeBy: sum
+		sourceColumn: error
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column absolute_error
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 04bb862a-3c75-46b5-9b52-459cbf06a942
+		summarizeBy: sum
+		sourceColumn: absolute_error
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column squared_error
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 53018eb9-f3fe-4830-8692-b9290b96bb48
+		summarizeBy: sum
+		sourceColumn: squared_error
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'ml_predictions forecast_scored' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    ml_predictions_forecast_scored = Source{[Schema="ml_predictions",Item="forecast_scored"]}[Data]
+				in
+				    ml_predictions_forecast_scored
+

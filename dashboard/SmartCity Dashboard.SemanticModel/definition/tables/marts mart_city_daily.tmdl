@@ -1,0 +1,409 @@
+table 'marts mart_city_daily'
+	lineageTag: ac1e6f1e-fe8a-4f4e-b66e-6bed89f0fd9e
+
+	column city_date_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 7db61b17-a501-4a85-a15a-19315ecd75c6
+		summarizeBy: none
+		sourceColumn: city_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 670fb195-4bbc-45b8-b419-cc18ea09611a
+		summarizeBy: none
+		sourceColumn: city_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 86ef9ae9-3025-4f3b-9210-663ed5b0c1b9
+		summarizeBy: none
+		sourceColumn: date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: a460f321-7347-496b-a608-5f96231a7d0f
+		summarizeBy: none
+		sourceColumn: city
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column country
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 1640bd6d-6280-4a83-b6f6-e43124f637e9
+		summarizeBy: none
+		sourceColumn: country
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_utc
+		dataType: dateTime
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: 9722d074-8c86-4c96-bf97-cf79a5e63bb5
+		summarizeBy: none
+		sourceColumn: date_utc
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column avg_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 7db81987-66d3-4768-aec4-a070c3504132
+		summarizeBy: sum
+		sourceColumn: avg_temp_celsius
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column min_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 5cfefb42-c43e-47f8-a133-8fb07578edbd
+		summarizeBy: sum
+		sourceColumn: min_temp_celsius
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column max_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 332572ff-f97f-441f-b2bb-291347c5abb7
+		summarizeBy: sum
+		sourceColumn: max_temp_celsius
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_humidity_pct
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 13250282-da76-43c0-bcbf-05590fb5bf9f
+		summarizeBy: sum
+		sourceColumn: avg_humidity_pct
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_rain_mm
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 90b88d33-4635-48b6-9036-43b8ed045f47
+		summarizeBy: sum
+		sourceColumn: total_rain_mm
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column dominant_weather_main
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 81b0967c-9575-48f4-884c-ff8f97b21d19
+		summarizeBy: none
+		sourceColumn: dominant_weather_main
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column avg_aqi
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: df6e6d6b-0ba0-4c43-ac75-11552ac3e24a
+		summarizeBy: sum
+		sourceColumn: avg_aqi
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column max_aqi
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 227a1ab7-a689-42d9-b36b-d91d2beb4489
+		summarizeBy: sum
+		sourceColumn: max_aqi
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column avg_pm2_5_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 41856faf-78e8-476d-b1a4-ff30b5401c0a
+		summarizeBy: sum
+		sourceColumn: avg_pm2_5_ug_m3
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_pm10_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: a25df571-fed0-42ad-9e7e-31b6d9bef65a
+		summarizeBy: sum
+		sourceColumn: avg_pm10_ug_m3
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column hours_poor_air
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: f09f4ce7-af95-4579-bdc6-18785657e52c
+		summarizeBy: sum
+		sourceColumn: hours_poor_air
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column avg_congestion_score
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: c5cb07cc-9974-413f-9697-28f7714f86cd
+		summarizeBy: sum
+		sourceColumn: avg_congestion_score
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_current_speed_kmh
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: cee4c4b3-4422-4a03-b345-be5edae447e7
+		summarizeBy: sum
+		sourceColumn: avg_current_speed_kmh
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_incidents
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 824c89d1-a7a1-4684-b3b0-bec5178f630e
+		summarizeBy: sum
+		sourceColumn: total_incidents
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column major_incidents
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: d837cb89-7ef5-4c59-91fa-b87268e13b20
+		summarizeBy: sum
+		sourceColumn: major_incidents
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column norm_temp
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 466eae27-9f7b-424c-aa91-dcd6c78765f1
+		summarizeBy: sum
+		sourceColumn: norm_temp
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column norm_aqi
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: ccbca8e6-7866-481e-a890-257a388b70ac
+		summarizeBy: sum
+		sourceColumn: norm_aqi
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column norm_traffic
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: efeaf8c9-c126-4ca5-9c6e-9a5cabb46ee1
+		summarizeBy: sum
+		sourceColumn: norm_traffic
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column comfort_index
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 413f529a-d162-4d1c-b8d9-4c04c944722f
+		summarizeBy: sum
+		sourceColumn: comfort_index
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column livability_score
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 7e5c4e5f-49ce-424e-9412-819e4537ffb3
+		summarizeBy: sum
+		sourceColumn: livability_score
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column comfort_index_label
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: b9c1b76c-0a82-4236-a066-db7959c36efb
+		summarizeBy: none
+		sourceColumn: comfort_index_label
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column congestion_label
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: c7934fc8-ee0b-416f-a25c-85204a953c7c
+		summarizeBy: none
+		sourceColumn: congestion_label
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column aqi_alert
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: 80525996-bf9f-41b3-b5b5-cd4d0ac070d5
+		summarizeBy: none
+		sourceColumn: aqi_alert
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column rolling_7d_comfort
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 72fe7b93-d6aa-4836-b7d1-0a654b3a56a8
+		summarizeBy: sum
+		sourceColumn: rolling_7d_comfort
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column prior_7d_comfort
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: b80d677d-a573-4af4-95ae-cb1ba15f696b
+		summarizeBy: sum
+		sourceColumn: prior_7d_comfort
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column comfort_trend
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 4ecaa603-cedf-48d5-9c38-31ed4aeda869
+		summarizeBy: none
+		sourceColumn: comfort_trend
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'marts mart_city_daily' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_mart_city_daily = Source{[Schema="marts",Item="mart_city_daily"]}[Data]
+				in
+				    marts_mart_city_daily
+
+	annotation PBI_ResultType = Table
+

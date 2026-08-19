@@ -1,0 +1,40 @@
+table 'marts dim_hour'
+	lineageTag: eeee86c9-94ee-435e-ab93-91485d05d9b8
+
+	column hour_utc
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 0c7698cb-50be-4d35-9dff-48c8f5b084be
+		summarizeBy: none
+		sourceColumn: hour_utc
+
+		annotation SummarizationSetBy = Automatic
+
+	column hour_label
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: e0940b45-4e43-464c-aef3-f5d45a931728
+		summarizeBy: none
+		sourceColumn: hour_label
+
+		annotation SummarizationSetBy = Automatic
+
+	column day_part
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: a2ec715d-ec7a-4006-a02a-3353c8bb3d9c
+		summarizeBy: none
+		sourceColumn: day_part
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'marts dim_hour' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_dim_hour = Source{[Schema="marts",Item="dim_hour"]}[Data]
+				in
+				    marts_dim_hour
+

@@ -1,0 +1,188 @@
+table 'marts mart_temperature_trends'
+	lineageTag: f0bc3903-59c7-4490-8768-691579e7fa5b
+
+	column city_date_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 34a6b464-b927-41ac-82c8-a5a8c123bf69
+		summarizeBy: none
+		sourceColumn: city_date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: abdf990a-b7dc-4b94-9fb0-b82544e0e83d
+		summarizeBy: none
+		sourceColumn: city_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 04cb7799-6d34-4514-8de6-3d270e683799
+		summarizeBy: none
+		sourceColumn: date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: ff780551-0124-44d4-b2c4-423c80fcf8a1
+		summarizeBy: none
+		sourceColumn: city
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_utc
+		dataType: dateTime
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: 00047ae1-fa89-408d-bd33-7c878f26e015
+		summarizeBy: none
+		sourceColumn: date_utc
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column avg_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 317b5826-7393-4fab-b370-de423409ad1a
+		summarizeBy: sum
+		sourceColumn: avg_temp_celsius
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column min_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 11820997-d3a4-4c06-84a9-485adeddef26
+		summarizeBy: sum
+		sourceColumn: min_temp_celsius
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column max_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: a3a9907d-9b96-48b3-9d5b-cc143ebe0694
+		summarizeBy: sum
+		sourceColumn: max_temp_celsius
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column temp_7d_avg
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 7ecc4c05-0446-4fca-8552-5955ba2f4831
+		summarizeBy: sum
+		sourceColumn: temp_7d_avg
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column temp_30d_avg
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: cb4807d8-637c-4825-a2d4-e52324618e01
+		summarizeBy: sum
+		sourceColumn: temp_30d_avg
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column temp_anomaly
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: e126ee5a-d8c4-4040-af12-37b9afbda295
+		summarizeBy: sum
+		sourceColumn: temp_anomaly
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column temp_anomaly_label
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 7e5c33f2-9bdb-4f2c-b0d9-90541b6b2183
+		summarizeBy: none
+		sourceColumn: temp_anomaly_label
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column dod_change
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 245cb257-70a9-4176-a7c2-965e51357414
+		summarizeBy: sum
+		sourceColumn: dod_change
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column wow_change
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: c844349c-2307-40f1-84b5-bc88142c45f2
+		summarizeBy: sum
+		sourceColumn: wow_change
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'marts mart_temperature_trends' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_mart_temperature_trends = Source{[Schema="marts",Item="mart_temperature_trends"]}[Data]
+				in
+				    marts_mart_temperature_trends
+
+	annotation PBI_ResultType = Table
+

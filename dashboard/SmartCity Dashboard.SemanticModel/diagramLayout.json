@@ -1,0 +1,489 @@
+{
+  "version": "1.1.0",
+  "diagrams": [
+    {
+      "ordinal": 0,
+      "scrollPosition": {
+        "x": 0,
+        "y": 0
+      },
+      "nodes": [
+        {
+          "location": {
+            "x": 662.22342115241554,
+            "y": 1044.4385672753381
+          },
+          "nodeIndex": "marts dim_city",
+          "nodeLineageTag": "6797d1ec-3634-4392-a877-18662c37387c",
+          "size": {
+            "height": 248,
+            "width": 234
+          },
+          "zIndex": 32
+        },
+        {
+          "location": {
+            "x": 867.68690847482094,
+            "y": 658.58453404463808
+          },
+          "nodeIndex": "marts dim_date",
+          "nodeLineageTag": "e626d2f3-cfb4-48d9-ac7f-273a86780106",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 34
+        },
+        {
+          "location": {
+            "x": 424.93383010835959,
+            "y": 603.27987573510359
+          },
+          "nodeIndex": "marts fct_forecast_accuracy",
+          "nodeLineageTag": "dbd187b1-4e99-41cf-b659-e2359582a8b7",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 29
+        },
+        {
+          "location": {
+            "x": 713.96401690794869,
+            "y": 305.62295764125292
+          },
+          "nodeIndex": "marts mart_city_daily",
+          "nodeLineageTag": "ac1e6f1e-fe8a-4f4e-b66e-6bed89f0fd9e",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 30
+        },
+        {
+          "location": {
+            "x": 50,
+            "y": 1018.0648818104296
+          },
+          "nodeIndex": "marts mart_forecast_latest",
+          "nodeLineageTag": "585753a7-17a6-458f-b6c9-ee6a26855463",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 31
+        },
+        {
+          "location": {
+            "x": 1445.9664850511274,
+            "y": 704.54505183227968
+          },
+          "nodeIndex": "marts mart_temperature_trends",
+          "nodeLineageTag": "f0bc3903-59c7-4490-8768-691579e7fa5b",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 33
+        },
+        {
+          "location": {
+            "x": 1679.9664850511274,
+            "y": 735.16764839460643
+          },
+          "nodeIndex": "_KPIs_Overview",
+          "nodeLineageTag": "77c29c05-06dc-469f-98cd-fae9a9c96069",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 16
+        },
+        {
+          "location": {
+            "x": 1963.9664850511274,
+            "y": 735.16764839460643
+          },
+          "nodeIndex": "_KPIs_Weather",
+          "nodeLineageTag": "19512141-4f8e-4593-a708-b6b4a2ecd612",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 17
+        },
+        {
+          "location": {
+            "x": 2247.9664850511272,
+            "y": 735.16764839460643
+          },
+          "nodeIndex": "_KPIs_Forecast",
+          "nodeLineageTag": "c7b78b75-a769-4841-b288-9dbd2b09bec3",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 18
+        },
+        {
+          "location": {
+            "x": 419.21868341948556,
+            "y": 1408.8593960467658
+          },
+          "nodeIndex": "marts dim_hour",
+          "nodeLineageTag": "eeee86c9-94ee-435e-ab93-91485d05d9b8",
+          "size": {
+            "height": 152,
+            "width": 234
+          },
+          "zIndex": 19
+        },
+        {
+          "location": {
+            "x": 339.686612866337,
+            "y": 1017.994691479117
+          },
+          "nodeIndex": "marts fct_pollution_daily",
+          "nodeLineageTag": "a6bd81b3-584f-4087-8ee4-6b2cf84ffa2b",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 20
+        },
+        {
+          "location": {
+            "x": 708.58057477011789,
+            "y": 1420.3352967892129
+          },
+          "nodeIndex": "marts fct_pollution_hourly",
+          "nodeLineageTag": "c694093d-cf0c-47a5-87c8-21289212fa92",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 21
+        },
+        {
+          "location": {
+            "x": 888.712998210882,
+            "y": -50
+          },
+          "nodeIndex": "marts fct_traffic_daily",
+          "nodeLineageTag": "a075527f-27d2-4b43-aded-3b237ccd0e7e",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 22
+        },
+        {
+          "location": {
+            "x": 997.04472693120886,
+            "y": 1327.0398470595283
+          },
+          "nodeIndex": "marts fct_traffic_hourly",
+          "nodeLineageTag": "58de5509-29c1-4cb0-b636-4e07752f5cc7",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 23
+        },
+        {
+          "location": {
+            "x": 1286.887325176667,
+            "y": 1061.715220730526
+          },
+          "nodeIndex": "marts fct_weather_daily",
+          "nodeLineageTag": "a996a3e9-ec24-4f13-83f7-ad2ee3190465",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 36
+        },
+        {
+          "location": {
+            "x": 2531.9664850511272,
+            "y": 737.16764839460643
+          },
+          "nodeIndex": "marts mart_pollution_alerts",
+          "nodeLineageTag": "288b64c3-2b61-488c-8c2b-3d766a5e43ff",
+          "size": {
+            "height": 296,
+            "width": 234
+          },
+          "zIndex": 24
+        },
+        {
+          "location": {
+            "x": 2815.9664850511272,
+            "y": 735.16764839460643
+          },
+          "nodeIndex": "marts mart_weather_alerts",
+          "nodeLineageTag": "8721dd13-a2f2-4aec-8603-9dbf683a03e8",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 25
+        },
+        {
+          "location": {
+            "x": 1157.5515400134238,
+            "y": 400.23113109721226
+          },
+          "nodeIndex": "marts fct_weather_hourly",
+          "nodeLineageTag": "e9a92670-63cb-4986-9eab-8f70a0a48989",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 26
+        },
+        {
+          "location": {
+            "x": 72.447958118640372,
+            "y": 660.75067853952874
+          },
+          "nodeIndex": "marts mart_city_current",
+          "nodeLineageTag": "772e210f-97ea-4b16-9068-575471cd54b6",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 27
+        },
+        {
+          "location": {
+            "x": 3099.9664850511272,
+            "y": 735.16764839460643
+          },
+          "nodeIndex": "_KPIs_Traffic",
+          "nodeLineageTag": "165ef853-5b38-4c3c-b08c-21ad07d8d9c6",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 28
+        },
+        {
+          "location": {
+            "x": 3383.9664850511272,
+            "y": 785.16764839460643
+          },
+          "nodeIndex": "IncidentCategory",
+          "nodeLineageTag": "bd4c5b1d-af72-4b82-8604-49450e52db5e",
+          "size": {
+            "height": 200,
+            "width": 234
+          },
+          "zIndex": 35
+        },
+        {
+          "location": {
+            "x": 3617.9664850511272,
+            "y": 833.16764839460643
+          },
+          "nodeIndex": "WeatherMetrics",
+          "nodeLineageTag": "135e1800-0c2e-487c-8920-45d4a7fa0608",
+          "size": {
+            "height": 104,
+            "width": 234
+          },
+          "zIndex": 1
+        },
+        {
+          "location": {
+            "x": 3864.9304077438328,
+            "y": 723.64416155664594
+          },
+          "nodeIndex": "_KPIs_AirQuality",
+          "nodeLineageTag": "6cb631ca-0ca7-4471-b6b8-afc25b5c5ac0",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 2
+        },
+        {
+          "location": {
+            "x": 4135.9664850511272,
+            "y": 735.16764839460643
+          },
+          "nodeIndex": "_KPIs_ML",
+          "nodeLineageTag": "e6fc1bad-08dd-45e6-846d-b8abbc56c996",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 3
+        },
+        {
+          "location": {
+            "x": 4419.9664850511272,
+            "y": 785.16764839460643
+          },
+          "nodeIndex": "_TimeSpine_AQI",
+          "nodeLineageTag": "ce952c83-e31a-4f1f-9526-992da948fee0",
+          "size": {
+            "height": 200,
+            "width": 234
+          },
+          "zIndex": 4
+        },
+        {
+          "location": {
+            "x": 4703.9664850511272,
+            "y": 773.16764839460643
+          },
+          "nodeIndex": "ml_predictions aqi_forecast",
+          "nodeLineageTag": "3d8642ca-e20f-4897-85ee-985beb0bf8fd",
+          "size": {
+            "height": 224,
+            "width": 234
+          },
+          "zIndex": 5
+        },
+        {
+          "location": {
+            "x": 4987.9664850511272,
+            "y": 773.16764839460643
+          },
+          "nodeIndex": "ml_predictions city_score_forecast",
+          "nodeLineageTag": "c5bca20c-fa03-43be-b64c-615e0f0b7681",
+          "size": {
+            "height": 224,
+            "width": 234
+          },
+          "zIndex": 6
+        },
+        {
+          "location": {
+            "x": 5271.9664850511272,
+            "y": 737.16764839460643
+          },
+          "nodeIndex": "ml_predictions model_metrics",
+          "nodeLineageTag": "c06b392e-6000-48a8-ba83-c3b4fc01ba30",
+          "size": {
+            "height": 296,
+            "width": 234
+          },
+          "zIndex": 7
+        },
+        {
+          "location": {
+            "x": 5555.9664850511272,
+            "y": 761.16764839460643
+          },
+          "nodeIndex": "ml_predictions pollution_anomaly",
+          "nodeLineageTag": "88f8f6e6-93de-4f2b-88da-4322400b141a",
+          "size": {
+            "height": 248,
+            "width": 234
+          },
+          "zIndex": 8
+        },
+        {
+          "location": {
+            "x": 5839.9664850511272,
+            "y": 773.16764839460643
+          },
+          "nodeIndex": "ml_predictions temperature_forecast",
+          "nodeLineageTag": "e75ba0a4-f1c0-4fea-abd5-29317fbac541",
+          "size": {
+            "height": 224,
+            "width": 234
+          },
+          "zIndex": 9
+        },
+        {
+          "location": {
+            "x": 6123.9664850511272,
+            "y": 773.16764839460643
+          },
+          "nodeIndex": "ml_predictions traffic_forecast",
+          "nodeLineageTag": "045ada02-9535-46b8-b941-33d9b4058609",
+          "size": {
+            "height": 224,
+            "width": 234
+          },
+          "zIndex": 10
+        },
+        {
+          "location": {
+            "x": 6357.9664850511272,
+            "y": 797.16764839460643
+          },
+          "nodeIndex": "_Pollutants",
+          "nodeLineageTag": "2246485a-2ee8-4f04-8cc3-82b5e885d012",
+          "size": {
+            "height": 176,
+            "width": 234
+          },
+          "zIndex": 11
+        },
+        {
+          "location": {
+            "x": 6641.9664850511272,
+            "y": 737.16764839460643
+          },
+          "nodeIndex": "_ML_Forecast_Scored",
+          "size": {
+            "height": 296,
+            "width": 234
+          },
+          "zIndex": 12
+        },
+        {
+          "location": {
+            "x": 6925.9664850511272,
+            "y": 735.16764839460643
+          },
+          "nodeIndex": "_P2_Alerts",
+          "nodeLineageTag": "eb9e5320-d83e-4ecb-80bd-09d9bee152b3",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 13
+        },
+        {
+          "location": {
+            "x": 7159.9664850511272,
+            "y": 735.16764839460643
+          },
+          "nodeIndex": "_KPIs_AI_Summary",
+          "nodeLineageTag": "9b871d7f-8d37-41fc-9e9c-0322835be0a9",
+          "size": {
+            "height": 300,
+            "width": 234
+          },
+          "zIndex": 14
+        },
+        {
+          "location": {
+            "x": 7443.9664850511272,
+            "y": 773.16764839460643
+          },
+          "nodeIndex": "ai_summaries city_daily_summary",
+          "nodeLineageTag": "7dc0d825-6b4b-4d3b-97ba-148a74586a98",
+          "size": {
+            "height": 224,
+            "width": 234
+          },
+          "zIndex": 15
+        }
+      ],
+      "name": "All tables",
+      "zoomValue": 39.187717258932523,
+      "pinKeyFieldsToTop": false,
+      "showExtraHeaderInfo": false,
+      "hideKeyFieldsWhenCollapsed": false,
+      "tablesLocked": false
+    }
+  ],
+  "selectedDiagram": "All tables",
+  "defaultDiagram": "All tables"
+}

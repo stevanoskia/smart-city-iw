@@ -1,0 +1,95 @@
+table _ML_Forecast_Scored
+	isHidden
+	lineageTag: 09c6d451-1bea-4d68-9570-1385674c9640
+
+	column city
+		lineageTag: 2aba7ed7-6ba4-48dc-91c0-7aa407ccc49e
+		isNameInferred
+		sourceColumn: [city]
+
+	column predicted_for
+		lineageTag: 59398f95-5427-4e7a-b240-3eab49b64b66
+		isNameInferred
+		sourceColumn: [predicted_for]
+
+	column horizon_hours
+		lineageTag: e37d20fe-7237-4ecc-ab43-d6b96e145a68
+		isNameInferred
+		sourceColumn: [horizon_hours]
+
+	column model_version
+		lineageTag: b1afe792-8b3e-441c-9323-cff822fefa0f
+		isNameInferred
+		sourceColumn: [model_version]
+
+	column predicted_pm2_5
+		lineageTag: 6692daa6-382e-442d-9b95-70e532382f86
+		isNameInferred
+		sourceColumn: [predicted_pm2_5]
+
+	column actual_pm2_5
+		lineageTag: 6d94718f-2e89-45d8-8235-fa353f792e4b
+		isNameInferred
+		sourceColumn: [actual_pm2_5]
+
+	column abs_error
+		lineageTag: f3a8d6d3-2206-4dc1-88f3-320b7dc48757
+		isNameInferred
+		sourceColumn: [abs_error]
+
+	column bias
+		lineageTag: 1a31b335-5377-434c-98d4-b4ecf516c345
+		isNameInferred
+		sourceColumn: [bias]
+
+	column squared_error
+		lineageTag: 098e575c-26c8-430f-988f-fa02088d69a6
+		isNameInferred
+		sourceColumn: [squared_error]
+
+	partition _ML_Forecast_Scored = calculated
+		source =
+				VAR Matured =
+				    FILTER(
+				        'ml_predictions aqi_forecast',
+				        'ml_predictions aqi_forecast'[predicted_for] < NOW()
+				    )
+				VAR Bucketed =
+				    ADDCOLUMNS(
+				        Matured,
+				        "@Hour",
+				            DATE(
+				                YEAR('ml_predictions aqi_forecast'[predicted_for]),
+				                MONTH('ml_predictions aqi_forecast'[predicted_for]),
+				                DAY('ml_predictions aqi_forecast'[predicted_for])
+				            ) + TIME(HOUR('ml_predictions aqi_forecast'[predicted_for]), 0, 0)
+				    )
+				VAR WithActual =
+				    ADDCOLUMNS(
+				        Bucketed,
+				        "@Actual",
+				            VAR TheCity = 'ml_predictions aqi_forecast'[city]
+				            VAR TheHour = [@Hour]
+				            RETURN
+				                CALCULATE(
+				                    AVERAGE('marts fct_pollution_hourly'[pm2_5_ug_m3]),
+				                    ALL('marts fct_pollution_hourly'),
+				                    'marts fct_pollution_hourly'[city] = TheCity,
+				                    'marts fct_pollution_hourly'[observed_at] >= TheHour,
+				                    'marts fct_pollution_hourly'[observed_at] < TheHour + TIME(1, 0, 0)
+				                )
+				    )
+				RETURN
+				SELECTCOLUMNS(
+				    FILTER(WithActual, NOT ISBLANK([@Actual])),
+				    "city", 'ml_predictions aqi_forecast'[city],
+				    "predicted_for", 'ml_predictions aqi_forecast'[predicted_for],
+				    "horizon_hours", 'ml_predictions aqi_forecast'[horizon_hours],
+				    "model_version", 'ml_predictions aqi_forecast'[model_version],
+				    "predicted_pm2_5", 'ml_predictions aqi_forecast'[predicted_pm2_5] + 0.0,
+				    "actual_pm2_5", [@Actual] + 0.0,
+				    "abs_error", ABS('ml_predictions aqi_forecast'[predicted_pm2_5] - [@Actual]) + 0.0,
+				    "bias", ('ml_predictions aqi_forecast'[predicted_pm2_5] - [@Actual]) + 0.0,
+				    "squared_error", ('ml_predictions aqi_forecast'[predicted_pm2_5] - [@Actual]) ^ 2 + 0.0
+				)
+

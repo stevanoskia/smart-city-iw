@@ -1,0 +1,290 @@
+table 'marts fct_forecast_accuracy'
+	lineageTag: dbd187b1-4e99-41cf-b659-e2359582a8b7
+
+	column forecast_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 756a6cde-68bd-4327-8487-7fe569733bb7
+		summarizeBy: none
+		sourceColumn: forecast_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 7aabd5f1-8927-464c-8ef0-bd09355c3d64
+		summarizeBy: none
+		sourceColumn: city_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 267b26dd-a883-423c-a4fd-cf3fca4dad95
+		summarizeBy: none
+		sourceColumn: date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 88945d3a-dfca-42f1-a7fa-41c7f07b8ad0
+		summarizeBy: none
+		sourceColumn: city
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column forecast_at
+		dataType: dateTime
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: fccce648-b8a6-4871-83b3-a1e70a04813a
+		summarizeBy: none
+		sourceColumn: forecast_at
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column issued_at
+		dataType: dateTime
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 719f1142-748d-4782-869c-d686e1883351
+		summarizeBy: none
+		sourceColumn: issued_at
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column lead_time_hours
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: b2c4f117-6a8c-4aea-bb5a-5eac7981ceeb
+		summarizeBy: sum
+		sourceColumn: lead_time_hours
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column lead_time_bucket
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: e38e2ae3-cb9f-4d93-af6f-ac04bb7a473b
+		summarizeBy: none
+		sourceColumn: lead_time_bucket
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column predicted_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: a65f1281-2bb1-4000-a9d2-6853dba7db7e
+		summarizeBy: sum
+		sourceColumn: predicted_temp_celsius
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column actual_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 0a0fd262-15e8-4e90-8bcc-62478388a2ee
+		summarizeBy: sum
+		sourceColumn: actual_temp_celsius
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column temp_bias
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: f667608f-02c8-4c3f-95f9-4bd9aa3f59b1
+		summarizeBy: sum
+		sourceColumn: temp_bias
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column temp_abs_error
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 61db3817-7ac9-4b6c-a571-bc277534f3e3
+		summarizeBy: sum
+		sourceColumn: temp_abs_error
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column precipitation_probability
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 99c29406-9fcf-44bb-b30a-436208c3f03d
+		summarizeBy: sum
+		sourceColumn: precipitation_probability
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column predicted_rain
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: c430a48a-3fd2-4516-9e24-fb96856671c6
+		summarizeBy: none
+		sourceColumn: predicted_rain
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column actually_rained
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: bf07b09f-bafa-424b-85ab-7c07a2cad730
+		summarizeBy: none
+		sourceColumn: actually_rained
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column rain_correct
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: 65944539-2ae2-432e-b951-6e7f9db5c3ff
+		summarizeBy: none
+		sourceColumn: rain_correct
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_rain_mm
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 4bb60ff0-39e1-4ac2-90e6-892e245e1d9f
+		summarizeBy: sum
+		sourceColumn: actual_rain_mm
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column predicted_weather_main
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 3a3e5210-ad84-4bad-97b3-c551230ecf98
+		summarizeBy: none
+		sourceColumn: predicted_weather_main
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column actual_weather_main
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: db2a4099-4bae-4e94-aebb-5d5bbe9651bc
+		summarizeBy: none
+		sourceColumn: actual_weather_main
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column condition_correct
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: 2d799303-ee24-4d81-a1ce-02aefc3973d0
+		summarizeBy: none
+		sourceColumn: condition_correct
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column rain_correct_int
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 44b3ef3d-16e3-4f3a-849c-f41281b1925a
+		summarizeBy: sum
+		sourceColumn: rain_correct_int
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column condition_correct_int
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 5b9ddaa1-9fb2-46ca-baa5-11021aee4f85
+		summarizeBy: sum
+		sourceColumn: condition_correct_int
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column temp_within_2c
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 6480b88f-061c-4f09-aef8-d4d6fef3fb04
+		summarizeBy: sum
+		sourceColumn: temp_within_2c
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'marts fct_forecast_accuracy' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_fct_forecast_accuracy = Source{[Schema="marts",Item="fct_forecast_accuracy"]}[Data]
+				in
+				    marts_fct_forecast_accuracy
+
+	annotation PBI_ResultType = Table
+

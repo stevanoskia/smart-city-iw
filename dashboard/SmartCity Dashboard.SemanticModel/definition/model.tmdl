@@ -1,0 +1,55 @@
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	sourceQueryCulture: en-US
+	dataAccessOptions
+		legacyRedirects
+		returnErrorValuesAsNull
+
+annotation __PBI_TimeIntelligenceEnabled = 0
+
+annotation PBI_QueryOrder = ["marts dim_city","marts dim_date","marts fct_forecast_accuracy","marts mart_city_daily","marts mart_forecast_latest","marts mart_temperature_trends","marts dim_hour","marts fct_pollution_daily","marts fct_pollution_hourly","marts fct_traffic_daily","marts fct_weather_daily","marts mart_pollution_alerts","marts fct_traffic_hourly","marts mart_weather_alerts","marts fct_weather_hourly","marts mart_city_current","WeatherMetrics","ml_predictions aqi_forecast","ml_predictions city_score_forecast","ml_predictions pollution_anomaly","ml_predictions temperature_forecast","ml_predictions traffic_forecast","ml_predictions model_metrics","ai_summaries city_daily_summary","ml_predictions forecast_scored","ml_predictions model_scorecard"]
+
+annotation PBI_ProTooling = ["DevMode","MCP-PBIModeling"]
+
+ref table 'marts dim_city'
+ref table 'marts dim_date'
+ref table 'marts fct_forecast_accuracy'
+ref table 'marts mart_city_daily'
+ref table 'marts mart_forecast_latest'
+ref table 'marts mart_temperature_trends'
+ref table _KPIs_Overview
+ref table _KPIs_Weather
+ref table _KPIs_Forecast
+ref table 'marts dim_hour'
+ref table 'marts fct_pollution_daily'
+ref table 'marts fct_pollution_hourly'
+ref table 'marts fct_traffic_daily'
+ref table 'marts fct_weather_daily'
+ref table 'marts mart_pollution_alerts'
+ref table 'marts fct_traffic_hourly'
+ref table 'marts mart_weather_alerts'
+ref table 'marts fct_weather_hourly'
+ref table 'marts mart_city_current'
+ref table _KPIs_Traffic
+ref table IncidentCategory
+ref table WeatherMetrics
+ref table 'ml_predictions aqi_forecast'
+ref table 'ml_predictions city_score_forecast'
+ref table 'ml_predictions pollution_anomaly'
+ref table 'ml_predictions temperature_forecast'
+ref table 'ml_predictions traffic_forecast'
+ref table 'ml_predictions model_metrics'
+ref table _KPIs_AirQuality
+ref table _KPIs_ML
+ref table _TimeSpine_AQI
+ref table _Pollutants
+ref table _ML_Forecast_Scored
+ref table _P2_Alerts
+ref table 'ai_summaries city_daily_summary'
+ref table _KPIs_AI_Summary
+ref table 'ml_predictions forecast_scored'
+ref table 'ml_predictions model_scorecard'
+
+ref cultureInfo en-US
+

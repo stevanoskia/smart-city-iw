@@ -1,0 +1,142 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/page/2.1.0/schema.json",
+  "name": "a2e2f339c8565c3846e0",
+  "displayName": "Overview",
+  "displayOption": "FitToPage",
+  "height": 1440,
+  "width": 2560,
+  "objects": {
+    "background": [
+      {
+        "properties": {
+          "image": {
+            "image": {
+              "name": {
+                "expr": {
+                  "Literal": {
+                    "Value": "'ChatGPT Image Aug 11, 2026, 10_22_33 AM.png'"
+                  }
+                }
+              },
+              "url": {
+                "expr": {
+                  "ResourcePackageItem": {
+                    "PackageName": "RegisteredResources",
+                    "PackageType": 1,
+                    "ItemName": "ChatGPT_Image_Aug_11,_2026,_10669640858496299.png"
+                  }
+                }
+              },
+              "scaling": {
+                "expr": {
+                  "Literal": {
+                    "Value": "'Fit'"
+                  }
+                }
+              }
+            }
+          },
+          "transparency": {
+            "expr": {
+              "Literal": {
+                "Value": "0D"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "visualInteractions": [
+    {
+      "source": "p2d0statusmap00000ab",
+      "target": "p2h0comparison0000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2d0statusmap00000ab",
+      "target": "p2h1compnote000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2d0statusmap00000ab",
+      "target": "p2a2datecard000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2d0statusmap00000ab",
+      "target": "p2i2latestread0000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2d0statusmap00000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2h1compnote000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2a2datecard000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2i2latestread0000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2i1summary0000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2b0kpistatus00000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2b1kpitemp0000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2b2kpiair00000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2b3kpipm25000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2b4kpicong0000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2b5kpialerts00000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2f0fcstpm25000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2f1fcsttemp000000ab",
+      "type": "NoFilter"
+    },
+    {
+      "source": "p2h0comparison0000ab",
+      "target": "p2f2fcstcong000000ab",
+      "type": "NoFilter"
+    }
+  ]
+}

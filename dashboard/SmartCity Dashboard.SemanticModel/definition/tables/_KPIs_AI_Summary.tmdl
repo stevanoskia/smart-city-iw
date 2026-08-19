@@ -1,0 +1,338 @@
+/// Measure container for the AI City Summaries page. Mirrors the _KPIs_* convention used by the other pages.
+table _KPIs_AI_Summary
+	lineageTag: 9b871d7f-8d37-41fc-9e9c-0322835be0a9
+
+	/// Good/Fair/Poor/Alert per city. An alert headline overrides the comfort banding. Returns BLANK unless exactly one city is in context, so the table's grand-total row renders empty instead of a stray "No data" line.
+	measure 'AI City Status' =
+			VAR _oneCity = HASONEVALUE('marts dim_city'[city])
+			VAR _alert = SELECTEDVALUE('ai_summaries city_daily_summary'[alert_headline])
+			VAR _comfort = AVERAGE('marts mart_city_daily'[comfort_index])
+			RETURN
+			IF(
+			    NOT _oneCity,
+			    BLANK(),
+			    SWITCH(
+			        TRUE(),
+			        NOT ISBLANK(_alert) && _alert <> "No alerts", "Alert",
+			        ISBLANK(_comfort), "No data",
+			        _comfort >= 0.75, "Good",
+			        _comfort >= 0.50, "Fair",
+			        "Poor"
+			    )
+			)
+		displayFolder: Watchlist
+		lineageTag: 4c93259e-20f1-48e7-a7c6-7f7aedec24a5
+
+	/// Hex for conditional formatting: Format by = Field value.
+	measure 'AI City Status Colour' =
+			SWITCH(
+			    [AI City Status],
+			    "Alert", "#E8442A",
+			    "Poor",  "#E8442A",
+			    "Fair",  "#F2A33C",
+			    "Good",  "#4CC38A",
+			    "#6B7280"
+			)
+		displayFolder: Watchlist
+		lineageTag: da85262b-a51b-4734-a59a-33c20e9189d9
+
+	/// Sort helper so alert cities float to the top of the watchlist.
+	measure 'AI City Status Rank' = SWITCH([AI City Status], "Alert", 1, "Poor", 2, "Fair", 3, "Good", 4, 5)
+		formatString: 0
+		displayFolder: Watchlist
+		lineageTag: 3210436b-61d8-4163-afec-50e5f742dbb3
+
+	measure 'AI Summary Title' = UPPER(SELECTEDVALUE('marts dim_city'[city], "All cities")) & " — DAILY SUMMARY"
+		displayFolder: Detail panel
+		lineageTag: b7edf871-ebc7-48fd-a11d-3c093d3c5e9c
+
+	/// Single day renders as '14 Aug 2026'; a range as '5 Aug - 14 Aug 2026'.
+	measure 'AI Summary Date Label' =
+			VAR _min = MIN('marts dim_date'[date_utc])
+			VAR _max = MAX('marts dim_date'[date_utc])
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(_min), "All dates",
+			    _min = _max, FORMAT(_min, "d MMM yyyy"),
+			    FORMAT(_min, "d MMM") & " – " & FORMAT(_max, "d MMM yyyy")
+			)
+		displayFolder: Detail panel
+		lineageTag: c102fe77-a336-4315-8dc7-296557a6dd47
+
+	/// MAX not SELECTEDVALUE, so it still resolves over a multi-day range (SELECTEDVALUE would go blank).
+	measure 'AI Generated At' =
+			VAR _g = MAX('ai_summaries city_daily_summary'[generated_at])
+			RETURN IF(ISBLANK(_g), BLANK(), "Generated " & FORMAT(_g, "HH:mm") & " UTC")
+		displayFolder: Detail panel
+		lineageTag: 90047ac8-39c2-44c5-8d79-0e8628b8bb3d
+
+	/// Across a range, lists every distinct alert type seen. Blank when nothing but 'No alerts' appears.
+	measure 'AI Alert Headline' =
+			VAR _h =
+			    FILTER(
+			        VALUES('ai_summaries city_daily_summary'[alert_headline]),
+			        'ai_summaries city_daily_summary'[alert_headline] <> "No alerts"
+			    )
+			VAR _n = COUNTROWS(_h)
+			RETURN
+			IF(
+			    ISBLANK(_n),
+			    BLANK(),
+			    CONCATENATEX(
+			        _h,
+			        UPPER(SUBSTITUTE(SUBSTITUTE('ai_summaries city_daily_summary'[alert_headline], "(", ""), ")", "")),
+			        "  ·  "
+			    )
+			)
+		displayFolder: Detail panel
+		lineageTag: 4230cd1a-c749-48e0-b9a8-c553e0f515a6
+
+	measure 'AI Has Alert' = INT(NOT ISBLANK([AI Alert Headline]))
+		formatString: 0
+		displayFolder: Detail panel
+		lineageTag: 1a828c32-e689-483b-b392-e219882d9c1f
+
+	/// One paragraph per day over the selected range, oldest first, trimmed to whole days. The whole-day cut also subtracts LEN(_sep) because DAX TRIM strips spaces but NOT newlines - without it the text kept its trailing paragraph break and the note sat two blank lines lower, spilling onto the divider.
+	measure 'AI Summary Text' =
+			VAR _cap = 1400
+			VAR _sep = UNICHAR(10) & UNICHAR(10)
+			VAR _cities = DISTINCTCOUNT('ai_summaries city_daily_summary'[city])
+			VAR _rows = COUNTROWS('ai_summaries city_daily_summary')
+			VAR _days = DISTINCTCOUNT('ai_summaries city_daily_summary'[date_utc])
+			VAR _full =
+			    CONCATENATEX(
+			        'ai_summaries city_daily_summary',
+			        'ai_summaries city_daily_summary'[summary_text],
+			        _sep,
+			        'ai_summaries city_daily_summary'[date_utc], ASC
+			    )
+			VAR _cut = LEFT(_full, _cap)
+			VAR _paraPath = SUBSTITUTE(_cut, _sep, "|")
+			VAR _paraParts = PATHLENGTH(_paraPath)
+			VAR _lastPara = PATHITEM(_paraPath, _paraParts)
+			VAR _keepLen = LEN(_cut) - LEN(_lastPara) - LEN(_sep)
+			VAR _wholeDays = IF(_keepLen > 0, LEFT(_cut, _keepLen), "")
+			VAR _sentPath = SUBSTITUTE(SUBSTITUTE(_cut, UNICHAR(10), " "), ". ", "|")
+			VAR _sentParts = PATHLENGTH(_sentPath)
+			VAR _sentTail = PATHITEM(_sentPath, _sentParts)
+			VAR _sentTrim = IF(_sentParts <= 1, _cut, TRIM(LEFT(_cut, LEN(_cut) - LEN(_sentTail))))
+			VAR _kept = IF(_paraParts > 1 && _keepLen > 0, _wholeDays, _sentTrim)
+			VAR _shownDays = IF(_paraParts > 1 && _keepLen > 0, _paraParts - 1, 1)
+			VAR _more = _days - _shownDays
+			VAR _note =
+			    IF(
+			        _more > 0,
+			        UNICHAR(10) & "+ " & _more & IF(_more = 1, " more day", " more days") & " — narrow the dates.",
+			        ""
+			    )
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(_rows), "No summary has been generated for this city and date range yet.",
+			    _cities > 1, "Select a single city in the watchlist to read its summaries.",
+			    LEN(_full) > _cap, _kept & _note,
+			    _full
+			)
+		displayFolder: Detail panel
+		lineageTag: 3794c664-82f0-4e12-b390-9b502f66a418
+
+	measure 'AI Air Quality Label' =
+			VAR _aqi = ROUND(AVERAGE('marts mart_city_daily'[avg_aqi]), 0)
+			RETURN SWITCH(_aqi, 1, "Good", 2, "Fair", 3, "Moderate", 4, "Poor", 5, "Very Poor", "No data")
+		displayFolder: Detail panel
+		lineageTag: 86ef20de-4676-4d20-8825-84e0c0a2b967
+
+	measure 'AI Peak Temp' =
+			VAR _t = MAX('marts mart_city_daily'[max_temp_celsius])
+			RETURN IF(ISBLANK(_t), "No data", FORMAT(_t, "0.0") & "°C")
+		displayFolder: Detail panel
+		lineageTag: febdc8ed-94d5-4f07-93d3-329fd811f962
+
+	/// ISBLANK is tested FIRST on purpose: the 4 Macedonian cities have no TomTom coverage, and a bare < 0.2 test would report their NULL congestion as 'Low'.
+	measure 'AI Traffic Label' =
+			VAR _c = AVERAGE('marts mart_city_daily'[avg_congestion_score])
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(_c), "Not collected",
+			    _c < 0.2, "Low",
+			    _c < 0.4, "Moderate",
+			    _c < 0.6, "High",
+			    "Severe"
+			)
+		displayFolder: Detail panel
+		lineageTag: f41f6a6b-3656-46e8-af12-d4b7d7bee514
+
+	/// Built from mart_weather_alerts, not parsed from summary_text. REMOVEFILTERS on dim_date is required: the alerts are forward-looking and none of them fall on the summary's own date.
+	measure 'AI Looking Ahead' =
+			VAR _alerts = CALCULATETABLE('marts mart_weather_alerts', REMOVEFILTERS('marts dim_date'))
+			VAR _n = COUNTROWS(_alerts)
+			VAR _from = MINX(_alerts, 'marts mart_weather_alerts'[forecast_at])
+			VAR _to = MAXX(_alerts, 'marts mart_weather_alerts'[forecast_at])
+			VAR _kinds =
+			    CONCATENATEX(
+			        SUMMARIZE(_alerts, 'marts mart_weather_alerts'[severity], 'marts mart_weather_alerts'[alert_type]),
+			        'marts mart_weather_alerts'[severity] & "-level " & LOWER('marts mart_weather_alerts'[alert_type]),
+			        ", "
+			    )
+			RETURN
+			IF(
+			    ISBLANK(_n),
+			    "No forecast alerts flagged for this city.",
+			    _kinds & " flagged across " & _n & IF(_n = 1, " window", " windows") & ", "
+			        & FORMAT(_from, "d MMM HH:mm")
+			        & IF(_from = _to, "", " – " & FORMAT(_to, "d MMM HH:mm"))
+			        & " UTC."
+			)
+		displayFolder: Detail panel
+		lineageTag: c080b65e-421f-43ae-bc16-3275b8d1bc31
+
+	/// Fleet-wide: ignores the selected city so the header stays stable while clicking the watchlist.
+	measure 'AI KPI Cities On Alert' =
+			CALCULATE(
+			    DISTINCTCOUNT('ai_summaries city_daily_summary'[city]),
+			    'ai_summaries city_daily_summary'[alert_headline] <> "No alerts",
+			    REMOVEFILTERS('marts dim_city')
+			)
+		formatString: 0
+		displayFolder: KPIs
+		lineageTag: be8da0af-b841-42d4-956e-e69c26ccdb0c
+
+	measure 'AI KPI Cities Summarised' =
+			CALCULATE(
+			    DISTINCTCOUNT('ai_summaries city_daily_summary'[city]),
+			    REMOVEFILTERS('marts dim_city')
+			)
+		formatString: 0
+		displayFolder: KPIs
+		lineageTag: 0ba94318-beaa-4e18-963b-7b98e226719d
+
+	/// Cities with a summary / cities present in the OBT for the selected date. Catches a partially failed generation run.
+	measure 'AI KPI Summary Coverage %' =
+			VAR _done = [AI KPI Cities Summarised]
+			VAR _total = CALCULATE(DISTINCTCOUNT('marts mart_city_daily'[city]), REMOVEFILTERS('marts dim_city'))
+			RETURN DIVIDE(_done, _total)
+		formatString: 0.0%
+		displayFolder: KPIs
+		lineageTag: d7a6e6e7-36ff-45c8-a540-4c76c1fe0d99
+
+	measure 'AI KPI Last Generated' =
+			VAR _g = CALCULATE(MAX('ai_summaries city_daily_summary'[generated_at]), REMOVEFILTERS('marts dim_city'))
+			RETURN IF(ISBLANK(_g), "Never", FORMAT(_g, "d MMM HH:mm") & " UTC")
+		displayFolder: KPIs
+		lineageTag: 820f5860-42f4-466d-91f4-6ac1cdfe33cc
+
+	measure 'AI KPI Avg Livability' = CALCULATE(AVERAGE('marts mart_city_daily'[comfort_index]), REMOVEFILTERS('marts dim_city'))
+		formatString: 0.00
+		displayFolder: KPIs
+		lineageTag: 53ce3ae9-e1f1-47d0-b504-055dfb6fdf56
+
+	/// City with the highest peak temperature. City name is a second sort key so ties resolve to one row.
+	measure 'AI KPI Hottest City' =
+			VAR _t =
+			    CALCULATETABLE(
+			        ADDCOLUMNS(
+			            VALUES('marts dim_city'[city]),
+			            "@peak", CALCULATE(MAX('marts mart_city_daily'[max_temp_celsius]))
+			        ),
+			        REMOVEFILTERS('marts dim_city')
+			    )
+			VAR _top = TOPN(1, FILTER(_t, NOT ISBLANK([@peak])), [@peak], DESC, 'marts dim_city'[city], ASC)
+			RETURN CONCATENATEX(_top, 'marts dim_city'[city] & " · " & FORMAT([@peak], "0.0") & "°C", ", ")
+		displayFolder: KPIs
+		lineageTag: a58e9f74-946e-4028-ac03-a8b1928e673b
+
+	/// City with the highest average AQI. City name is a second sort key so a tie (Prilep and Skopje both hit 3.0) resolves to one row instead of concatenating both.
+	measure 'AI KPI Worst Air City' =
+			VAR _a =
+			    CALCULATETABLE(
+			        ADDCOLUMNS(
+			            VALUES('marts dim_city'[city]),
+			            "@aqi", CALCULATE(AVERAGE('marts mart_city_daily'[avg_aqi]))
+			        ),
+			        REMOVEFILTERS('marts dim_city')
+			    )
+			VAR _top = TOPN(1, FILTER(_a, NOT ISBLANK([@aqi])), [@aqi], DESC, 'marts dim_city'[city], ASC)
+			RETURN CONCATENATEX(_top, 'marts dim_city'[city] & " · AQI " & FORMAT([@aqi], "0.0"), ", ")
+		displayFolder: KPIs
+		lineageTag: e739c3a2-a6a0-4848-9aaf-fd9ed71ecdb8
+
+	/// Target for the KPI visual. Set direction to 'low is good' so fewer alerts reads green.
+	measure 'AI KPI Cities On Alert (Prev Day)' =
+			VAR _d = MAX('marts dim_date'[date_utc])
+			RETURN
+			CALCULATE(
+			    [AI KPI Cities On Alert],
+			    REMOVEFILTERS('marts dim_date'),
+			    'marts dim_date'[date_utc] = _d - 1
+			)
+		formatString: 0
+		displayFolder: KPIs
+		lineageTag: 2baa9e24-45d9-4814-9a46-d25199fbdf00
+
+	/// Status dot for the watchlist. Deliberately an EMOJI circle, not UNICHAR(9679) + conditional formatting: emoji carry their own colour, so the dot renders red/amber/green with no report-side formatting rules to get lost.
+	measure 'AI City Dot' =
+			VAR _s = [AI City Status]
+			RETURN
+			IF(
+			    ISBLANK(_s),
+			    BLANK(),
+			    SWITCH(
+			        _s,
+			        "Alert", UNICHAR(128308),
+			        "Poor",  UNICHAR(128308),
+			        "Fair",  UNICHAR(128992),
+			        "Good",  UNICHAR(128994),
+			        UNICHAR(9899)
+			    )
+			)
+		displayFolder: Watchlist
+		lineageTag: f7fe83a8-8d27-4bf3-86ee-69d48107f6d3
+
+	/// Colour for the AIR QUALITY tile, keyed off AI Air Quality Label.
+	measure 'AI Air Quality Colour' =
+			SWITCH(
+			    [AI Air Quality Label],
+			    "Good", "#4CC38A",
+			    "Fair", "#4CC38A",
+			    "Moderate", "#F2A33C",
+			    "Poor", "#E8442A",
+			    "Very Poor", "#E8442A",
+			    "#6B7280"
+			)
+		displayFolder: Detail panel
+		lineageTag: 1a7c4e02-9b35-4d18-8f61-5c2d90ab7714
+
+	/// Colour for the TRAFFIC tile, keyed off AI Traffic Label. "Not collected" falls through to grey, never green.
+	measure 'AI Traffic Colour' =
+			SWITCH(
+			    [AI Traffic Label],
+			    "Low", "#4CC38A",
+			    "Moderate", "#F2A33C",
+			    "High", "#E8442A",
+			    "Severe", "#E8442A",
+			    "#6B7280"
+			)
+		displayFolder: Detail panel
+		lineageTag: 2b8d5f13-ac46-4e29-9072-6d3ea1bc8825
+
+	/// Alert pill text. Falls back to a check-mark line rather than BLANK, because a blank measure renders as "--" in a card visual.
+	measure 'AI Alert Badge' =
+			IF(
+			    ISBLANK([AI Alert Headline]),
+			    UNICHAR(10003) & "  NO ACTIVE ALERTS",
+			    UNICHAR(9888) & "  " & [AI Alert Headline]
+			)
+		displayFolder: Detail panel
+		lineageTag: 3c9e6024-bd57-4f30-a183-7e4fb2cd9936
+
+	column _
+		lineageTag: 5a680cf4-d43c-4721-bc4f-0710fe83410a
+		isNameInferred
+		sourceColumn: [_]
+
+	partition _KPIs_AI_Summary = calculated
+		mode: import
+		source = ROW("_", 1)
+
