@@ -1,0 +1,56 @@
+table 'ml_predictions model_metrics'
+	lineageTag: c06b392e-6000-48a8-ba83-c3b4fc01ba30
+
+	column model_name
+		dataType: string
+		lineageTag: fecb7fa4-c3c1-4fa0-9d96-7caa71f43947
+		sourceColumn: model_name
+
+	column model_version
+		dataType: string
+		lineageTag: dc0e0182-41fc-412a-9e9b-6cc302fd15ad
+		sourceColumn: model_version
+
+	column trained_at
+		dataType: dateTime
+		lineageTag: b60abfc5-e8d9-4400-b20b-e50830051150
+		sourceColumn: trained_at
+
+	column mae
+		dataType: double
+		lineageTag: fc2b884a-9cb7-4a2a-82dc-abc8e1bbf1e5
+		sourceColumn: mae
+
+	column rmse
+		dataType: double
+		lineageTag: c2b0cc36-3c59-4566-a5aa-390facd5ae28
+		sourceColumn: rmse
+
+	column mape
+		dataType: double
+		lineageTag: 7edaf112-7b98-410e-b1a9-25013588b536
+		sourceColumn: mape
+
+	column r2
+		dataType: double
+		lineageTag: d54a7269-c94e-4169-a8b0-2b80860900a3
+		sourceColumn: r2
+
+	column baseline_mae
+		dataType: double
+		lineageTag: 948d14ed-6ac6-4eb6-b6e7-93bf67d79b0c
+		sourceColumn: baseline_mae
+
+	column test_size
+		dataType: int64
+		lineageTag: d1d0bb89-06af-4f8b-a91f-d968e2a5509a
+		sourceColumn: test_size
+
+	partition 'ml_predictions model_metrics' = m
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    ml_predictions_model_metrics = Source{[Schema="ml_predictions",Item="model_metrics"]}[Data]
+				in
+				    ml_predictions_model_metrics
+

@@ -1,0 +1,111 @@
+table 'marts mart_weather_alerts'
+	lineageTag: 8721dd13-a2f2-4aec-8603-9dbf683a03e8
+
+	column alert_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 3bb456d3-581d-449a-b730-aac94d90a064
+		summarizeBy: none
+		sourceColumn: alert_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: ca433aab-ba1a-4574-b2fe-6fc328a5d2a2
+		summarizeBy: none
+		sourceColumn: city_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 6d384ba2-166e-426f-9355-b8806e7a00bd
+		summarizeBy: sum
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: d2de52c2-7e9e-4175-81e1-f0fde64ea2d2
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column forecast_at
+		dataType: dateTime
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: c9a571e0-d550-4763-995e-f7c78c2cb60c
+		summarizeBy: none
+		sourceColumn: forecast_at
+
+		annotation SummarizationSetBy = Automatic
+
+	column lead_time_hours
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 19dd30c5-55c4-4691-8bf5-c48c6a5dd5ee
+		summarizeBy: sum
+		sourceColumn: lead_time_hours
+
+		annotation SummarizationSetBy = Automatic
+
+	column alert_type
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: d102f084-365d-4984-871d-8d1adde965cc
+		summarizeBy: none
+		sourceColumn: alert_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column severity
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 69c8bca5-71d1-4223-bedb-30ca625e7dd9
+		summarizeBy: none
+		sourceColumn: severity
+
+		annotation SummarizationSetBy = Automatic
+
+	column trigger_value
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 35050f1c-e472-456f-9df0-1dd5d8b60138
+		summarizeBy: sum
+		sourceColumn: trigger_value
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column trigger_unit
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: dcc79eb5-4fae-4626-a7ad-446ce09db384
+		summarizeBy: none
+		sourceColumn: trigger_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'marts mart_weather_alerts' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_mart_weather_alerts = Source{[Schema="marts",Item="mart_weather_alerts"]}[Data]
+				in
+				    marts_mart_weather_alerts
+
+	annotation PBI_NavigationStepName = Navigation
+
+	annotation PBI_ResultType = Table
+

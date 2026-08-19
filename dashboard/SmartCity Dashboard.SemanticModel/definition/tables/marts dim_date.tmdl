@@ -1,0 +1,152 @@
+table 'marts dim_date'
+	lineageTag: e626d2f3-cfb4-48d9-ac7f-273a86780106
+	dataCategory: Time
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 5797670e-b530-42a9-a2a6-436a118d008c
+		summarizeBy: none
+		sourceColumn: date_key
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_utc
+		dataType: dateTime
+		isKey
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: 355183ee-7263-4717-81f4-26a262ee7573
+		summarizeBy: none
+		sourceColumn: date_utc
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column year
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 4b01d86d-e76e-4f1e-a633-34d11bd73178
+		summarizeBy: sum
+		sourceColumn: year
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column quarter
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: a477b434-b1e4-4169-be10-51263587fcd7
+		summarizeBy: sum
+		sourceColumn: quarter
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column month
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 3eabb0ed-221d-4029-bcf7-2af86021f25e
+		summarizeBy: sum
+		sourceColumn: month
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column month_name
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 9699b922-3a25-47c5-ae7a-02ec2bad9d10
+		summarizeBy: none
+		sourceColumn: month_name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column day
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: c63e841f-7b0e-4b80-b1a1-e46cd7bb311d
+		summarizeBy: sum
+		sourceColumn: day
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column day_of_week
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: a47375e7-6796-4df4-8e92-914b621ab40d
+		summarizeBy: sum
+		sourceColumn: day_of_week
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column day_name
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: ec20eeae-640c-42db-b64c-0754c67e7a60
+		summarizeBy: none
+		sourceColumn: day_name
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column week_of_year
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: df1da8a5-488f-43d7-8ccf-dada2f02557a
+		summarizeBy: sum
+		sourceColumn: week_of_year
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	column is_weekend
+		dataType: boolean
+		formatString: """TRUE"";""TRUE"";""FALSE"""
+		sourceProviderType: bit
+		lineageTag: fa575206-2a75-4fee-ae1e-9268e64a7df5
+		summarizeBy: none
+		sourceColumn: is_weekend
+
+		changedProperty = IsHidden
+
+		annotation SummarizationSetBy = Automatic
+
+	/// Human-readable version of is_weekend for chart legends.
+	column 'Day Type' = IF('marts dim_date'[is_weekend], "Weekend", "Weekday")
+		lineageTag: cdfaec23-1008-4456-a583-a3bed41d4765
+
+	partition 'marts dim_date' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_dim_date = Source{[Schema="marts",Item="dim_date"]}[Data]
+				in
+				    marts_dim_date
+
+	annotation PBI_ResultType = Table
+

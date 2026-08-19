@@ -1,0 +1,570 @@
+table _KPIs_Traffic
+	lineageTag: 165ef853-5b38-4c3c-b08c-21ad07d8d9c6
+
+	measure 'Avg Free Flow Speed' =
+			
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN
+			CALCULATE(
+			    AVERAGE('marts fct_traffic_daily'[avg_free_flow_speed_kmh]),
+			    'marts fct_traffic_daily'[date_utc] = LatestDate
+			)
+		lineageTag: 644a3ddf-935d-4a6e-870e-40d570c67f0e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Avg Congestion %' =
+			
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_congestion_score]), 'marts fct_traffic_daily'[date_utc] = LatestDate) * 100
+		formatString: 0.0"%"
+		lineageTag: 2f2a13b8-0f2b-43d3-8e71-0dd03f8ed341
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Avg Delay (min)' =
+			
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN
+			CALCULATE(
+			    AVERAGE('marts fct_traffic_daily'[avg_delay_sec]),
+			    'marts fct_traffic_daily'[date_utc] = LatestDate
+			) / 60
+		lineageTag: 6eb6cbf0-a72a-404e-9534-4885a48800ac
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	/// Latest COMPLETE traffic day. Days still being ingested carry 1-6 flow observations per city; a finished day carries 7-12. On a thin day TomTom returns current_speed = free_flow_speed, so avg_congestion_score comes back as exactly 0 (not blank) and every KPI downstream reads 0 / Free Flow for cities that are in fact congested. The MinObs = 7 cut is taken from the observed bimodal split in flow_observation_count (1/2/4/6 vs 7/8/9/12), not chosen arbitrarily. 21 measures depend on this one.
+	measure 'Latest Traffic Date' =
+			
+			VAR MinObs = 7
+			RETURN
+			CALCULATE (
+			    MAX ( 'marts fct_traffic_daily'[date_utc] ),
+			    ALLSELECTED ( 'marts fct_traffic_daily'[date_utc] ),
+			    'marts fct_traffic_daily'[flow_observation_count] >= MinObs
+			)
+		formatString: General Date
+		lineageTag: 9a7ae6d8-670c-41d8-b3e0-5aa04a1a8c76
+
+	measure 'Avg Speed' =
+			
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN
+			CALCULATE(
+			    AVERAGE('marts fct_traffic_daily'[avg_current_speed_kmh]),
+			    'marts fct_traffic_daily'[date_utc] = LatestDate
+			)
+		formatString: 0.0" km/h"
+		lineageTag: bf0aca08-176e-4d5a-8cae-d36c508e819e
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Road Closures' =
+			
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN
+			CALCULATE(
+			    SUM('marts fct_traffic_daily'[road_closure_count]),
+			    'marts fct_traffic_daily'[date_utc] = LatestDate
+			)
+		formatString: 0
+		lineageTag: 7c9888d4-5c92-4c27-ad85-dfe9331de192
+
+	measure 'Traffic Status' = ```
+			
+			SWITCH(
+			    TRUE(),
+			    [Avg Congestion %] < 20, "🟢 Free Flow",
+			    [Avg Congestion %] < 50, "🟡 Moderate",
+			    [Avg Congestion %] < 75, "🟠 Heavy",
+			    "🔴 Severe"
+			)
+			
+			```
+		lineageTag: 13e2d0d1-042b-49a7-bf8a-a91741833ba1
+
+	measure 'Banner Subtitle' =
+			
+			"Congestion " & FORMAT([Avg Congestion %], "0") & "% · Delay +" &
+			FORMAT([Avg Delay (min)], "0") & " min · " & FORMAT([Latest Traffic Date], "dd MMM")
+		lineageTag: 6af9b5bd-6664-4a3e-89c3-7437d0a727b1
+
+	measure 'Congestion % (trend)' =
+			
+			AVERAGE('marts fct_traffic_daily'[avg_congestion_score]) * 100
+		formatString: 0.0"%"
+		lineageTag: 513b7746-ef48-46af-8ef4-c255fc54a9c1
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Incident Breakdown Value' =
+			
+			VAR LatestDate = [Latest Traffic Date]
+			VAR SelectedCat = SELECTEDVALUE(IncidentCategory[Category])
+			VAR MajorVal = CALCULATE(SUM('marts fct_traffic_daily'[major_incidents]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+			VAR ClosureVal = CALCULATE(SUM('marts fct_traffic_daily'[road_closure_count]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+			VAR TotalVal = CALCULATE(SUM('marts fct_traffic_daily'[total_incidents]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+			VAR OtherVal = MAX(0, TotalVal - MajorVal - ClosureVal)
+			RETURN
+			SWITCH(
+			    SelectedCat,
+			    "Major Incidents", MajorVal,
+			    "Road Closures", ClosureVal,
+			    "Other Incidents", OtherVal
+			)
+		formatString: 0
+		lineageTag: 28af2436-dbaa-4405-866d-9c9c53c2a579
+
+	measure 'Total Traffic Incidents' =
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN CALCULATE(SUM('marts fct_traffic_daily'[total_incidents]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+		formatString: 0
+		lineageTag: e45ec673-2479-43d1-b3dc-e39afd1083b8
+
+	measure 'Traffic Index' =
+			VAR SpeedVal = [Avg Speed]
+			VAR FreeFlowVal = [Avg Free Flow Speed]
+			RETURN
+			IF(
+			    ISBLANK(SpeedVal) || ISBLANK(FreeFlowVal),
+			    BLANK(),
+			    100 - DIVIDE(SpeedVal, FreeFlowVal, 0) * 100
+			)
+		formatString: 0
+		lineageTag: 49757686-6155-4fc3-9008-4683e6cdfe9e
+
+	measure 'Incident Count' = [Total Traffic Incidents]
+		formatString: 0
+		lineageTag: 8e602776-de98-4409-9eb9-a2c1f88b72fc
+
+	measure 'Normal Speed' = [Avg Free Flow Speed]
+		lineageTag: 053eff23-03cb-4ffe-a1c8-030d83993ed3
+
+	measure Severity = [Traffic Status]
+		lineageTag: 26d3e42b-5418-4ba7-8fc2-21984aa7f399
+
+	/// Average delay in seconds at the latest date (raw seconds; see Avg Delay (min) for the minutes version)
+	measure Delay =
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_delay_sec]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+		lineageTag: 1bfd9742-3318-43da-8cc6-e02a81c10991
+
+	/// Proxy based on flow_observation_count - no true vehicle-count field exists in the model
+	measure 'Flow Readings' =
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN CALCULATE(SUM('marts fct_traffic_daily'[flow_observation_count]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+		formatString: 0
+		lineageTag: d0377217-1818-4716-ab29-08c6df8c3378
+
+	measure 'Flow Readings Yesterday' =
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN CALCULATE(SUM('marts fct_traffic_daily'[flow_observation_count]), 'marts fct_traffic_daily'[date_utc] = LatestDate - 1)
+		formatString: 0
+		lineageTag: d7571100-5f76-4bff-baa7-8b122679286b
+
+	/// 7-day rolling average
+	measure 'Rolling Average Flow Readings' =
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN
+			CALCULATE(
+			    AVERAGE('marts fct_traffic_daily'[flow_observation_count]),
+			    FILTER(ALL('marts fct_traffic_daily'[date_utc]), 'marts fct_traffic_daily'[date_utc] <= LatestDate && 'marts fct_traffic_daily'[date_utc] > LatestDate - 7)
+			)
+		lineageTag: cdc45e49-3863-45ac-ae79-3145a042d2c2
+
+	/// 7-day rolling average
+	measure 'Rolling Average Speed' =
+			VAR LatestDate = [Latest Traffic Date]
+			RETURN
+			CALCULATE(
+			    AVERAGE('marts fct_traffic_daily'[avg_current_speed_kmh]),
+			    FILTER(ALL('marts fct_traffic_daily'[date_utc]), 'marts fct_traffic_daily'[date_utc] <= LatestDate && 'marts fct_traffic_daily'[date_utc] > LatestDate - 7)
+			)
+		lineageTag: b320db8b-e9e2-44b8-81dd-4fb2583ffee1
+
+	/// Day-over-day change vs. previous date_utc
+	measure 'Speed Change %' =
+			VAR LatestDate = [Latest Traffic Date]
+			VAR Today = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_current_speed_kmh]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+			VAR Yesterday = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_current_speed_kmh]), 'marts fct_traffic_daily'[date_utc] = LatestDate - 1)
+			RETURN DIVIDE(Today - Yesterday, Yesterday, 0) * 100
+		formatString: 0.0"%"
+		lineageTag: a762184c-6079-4738-a417-445326c7ae61
+
+	/// Change vs. the most recent PRIOR date that has data (not strictly yesterday, since daily ingestion has gaps). Returns BLANK if today or the prior data point is missing.
+	measure 'Congestion Change %' =
+			VAR LatestDate = [Latest Traffic Date]
+			VAR Today = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_congestion_score]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+			VAR PrevDate =
+			    CALCULATE(
+			        MAX('marts fct_traffic_daily'[date_utc]),
+			        FILTER(ALL('marts fct_traffic_daily'[date_utc]), 'marts fct_traffic_daily'[date_utc] < LatestDate)
+			    )
+			VAR PrevValue = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_congestion_score]), 'marts fct_traffic_daily'[date_utc] = PrevDate)
+			RETURN
+			IF(ISBLANK(Today) || ISBLANK(PrevValue), BLANK(), DIVIDE(Today - PrevValue, PrevValue, 0) * 100)
+		formatString: 0.0"%"
+		lineageTag: 45206650-d727-40a2-83bc-a38f06d918f0
+
+	/// Day-over-day change vs. previous date_utc
+	measure 'Incident Change %' =
+			VAR LatestDate = [Latest Traffic Date]
+			VAR Today = CALCULATE(SUM('marts fct_traffic_daily'[total_incidents]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+			VAR Yesterday = CALCULATE(SUM('marts fct_traffic_daily'[total_incidents]), 'marts fct_traffic_daily'[date_utc] = LatestDate - 1)
+			RETURN DIVIDE(Today - Yesterday, Yesterday, 0) * 100
+		formatString: 0.0"%"
+		lineageTag: f4ea6abf-3440-4b51-982e-e9d0cbb98652
+
+	/// Approximated from TomTom flow confidence score (0-1) in fct_traffic_hourly, not a true travel-time variance metric
+	measure 'Travel Time Reliability %' = AVERAGE('marts fct_traffic_hourly'[confidence]) * 100
+		formatString: 0.0"%"
+		lineageTag: 2b2ef21a-c4c5-4c23-9741-56865fab943f
+
+	/// Constant used as the reference label (/100) on the Traffic Index card
+	measure 'Traffic Index Max' = 100
+		formatString: 0
+		lineageTag: a299c414-9647-47ab-b0a0-72c52b9e6775
+
+	/// 14-day SVG sparkline of daily avg_current_speed_kmh, green if rising vs 14 days ago, red if falling. Plug into Card visual's Image (Image URL) field.
+	measure 'Avg Speed Sparkline' =
+			VAR LatestDate = CALCULATE(MAX('marts fct_traffic_daily'[date_utc]), ALLSELECTED('marts fct_traffic_daily'))
+			VAR StartDate = LatestDate - 13
+			VAR TrendTable =
+			    ADDCOLUMNS(
+			        FILTER(
+			            ALL('marts fct_traffic_daily'[date_utc]),
+			            'marts fct_traffic_daily'[date_utc] >= StartDate && 'marts fct_traffic_daily'[date_utc] <= LatestDate
+			        ),
+			        "@Speed", CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_current_speed_kmh]))
+			    )
+			VAR CleanTrend = FILTER(TrendTable, NOT ISBLANK([@Speed]))
+			VAR PointCount = COUNTROWS(CleanTrend)
+			VAR RankedTrend =
+			    ADDCOLUMNS(
+			        CleanTrend,
+			        "@Idx", RANKX(CleanTrend, 'marts fct_traffic_daily'[date_utc],, ASC, Dense) - 1
+			    )
+			VAR MinY = MINX(RankedTrend, [@Speed])
+			VAR MaxY = MAXX(RankedTrend, [@Speed])
+			VAR YRange = IF(MaxY = MinY, 1, MaxY - MinY)
+			VAR W = 120
+			VAR H = 30
+			VAR Pad = 2
+			VAR PlotW = W - 2 * Pad
+			VAR PlotH = H - 2 * Pad
+			VAR PointsStr =
+			    CONCATENATEX(
+			        RankedTrend,
+			        VAR X = Pad + DIVIDE([@Idx], PointCount - 1) * PlotW
+			        VAR YNorm = DIVIDE([@Speed] - MinY, YRange)
+			        VAR Y = Pad + (1 - YNorm) * PlotH
+			        RETURN FORMAT(ROUND(X, 2), "General Number", "en-US") & "," & FORMAT(ROUND(Y, 2), "General Number", "en-US")
+			        , " ",
+			        [@Idx], ASC
+			    )
+			VAR PrevVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 2), [@Speed])
+			VAR LastVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 1), [@Speed])
+			VAR StrokeColor = IF(LastVal >= PrevVal, "%233FB950", "%23F85149")
+			VAR AreaPoints = Pad & "," & (H - Pad) & " " & PointsStr & " " & (W - Pad) & "," & (H - Pad)
+			VAR SvgRaw =
+			    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " & W & " " & H & "'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" & StrokeColor & "' stop-opacity='0.45'/><stop offset='1' stop-color='" & StrokeColor & "' stop-opacity='0'/></linearGradient></defs><polygon points='" & AreaPoints & "' fill='url(%23g)' stroke='none'/><polyline fill='none' stroke='" & StrokeColor & "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' points='" & PointsStr & "'/></svg>"
+			RETURN
+			IF(PointCount < 2, BLANK(), "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20"))
+		displayFolder: Sparklines
+		lineageTag: a0cb9209-31e0-4074-b3ef-dab108155766
+		dataCategory: ImageUrl
+
+	/// Change vs. the most recent PRIOR date that has data (not strictly yesterday, since daily ingestion has gaps). Returns BLANK if today or the prior data point is missing, avoiding false spikes from treating gaps as 0.
+	measure 'Avg Speed Change (km/h)' =
+			VAR LatestDate = [Latest Traffic Date]
+			VAR Today = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_current_speed_kmh]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+			VAR PrevDate =
+			    CALCULATE(
+			        MAX('marts fct_traffic_daily'[date_utc]),
+			        FILTER(ALL('marts fct_traffic_daily'[date_utc]), 'marts fct_traffic_daily'[date_utc] < LatestDate)
+			    )
+			VAR PrevValue = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_current_speed_kmh]), 'marts fct_traffic_daily'[date_utc] = PrevDate)
+			RETURN
+			IF(ISBLANK(Today) || ISBLANK(PrevValue), BLANK(), Today - PrevValue)
+		formatString: +0" km/h";-0" km/h";0" km/h"
+		displayFolder: Sparklines
+		lineageTag: 7288aa4d-a789-4cd9-8a84-526950bb700e
+
+	/// 14-day SVG sparkline of daily avg_congestion_score*100. Red if congestion rose vs 14 days ago (worse), green if it fell (better) - inverted vs speed since rising congestion is bad. Plug into Card visual's Image (Image URL) field.
+	measure 'Congestion Sparkline' =
+			VAR LatestDate = CALCULATE(MAX('marts fct_traffic_daily'[date_utc]), ALLSELECTED('marts fct_traffic_daily'))
+			VAR StartDate = LatestDate - 13
+			VAR TrendTable =
+			    ADDCOLUMNS(
+			        FILTER(
+			            ALL('marts fct_traffic_daily'[date_utc]),
+			            'marts fct_traffic_daily'[date_utc] >= StartDate && 'marts fct_traffic_daily'[date_utc] <= LatestDate
+			        ),
+			        "@Val", CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_congestion_score]) * 100)
+			    )
+			VAR CleanTrend = FILTER(TrendTable, NOT ISBLANK([@Val]))
+			VAR PointCount = COUNTROWS(CleanTrend)
+			VAR RankedTrend =
+			    ADDCOLUMNS(
+			        CleanTrend,
+			        "@Idx", RANKX(CleanTrend, 'marts fct_traffic_daily'[date_utc],, ASC, Dense) - 1
+			    )
+			VAR MinY = MINX(RankedTrend, [@Val])
+			VAR MaxY = MAXX(RankedTrend, [@Val])
+			VAR YRange = IF(MaxY = MinY, 1, MaxY - MinY)
+			VAR W = 120
+			VAR H = 30
+			VAR Pad = 2
+			VAR PlotW = W - 2 * Pad
+			VAR PlotH = H - 2 * Pad
+			VAR PointsStr =
+			    CONCATENATEX(
+			        RankedTrend,
+			        VAR X = Pad + DIVIDE([@Idx], PointCount - 1) * PlotW
+			        VAR YNorm = DIVIDE([@Val] - MinY, YRange)
+			        VAR Y = Pad + (1 - YNorm) * PlotH
+			        RETURN FORMAT(ROUND(X, 2), "General Number", "en-US") & "," & FORMAT(ROUND(Y, 2), "General Number", "en-US")
+			        , " ",
+			        [@Idx], ASC
+			    )
+			VAR PrevVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 2), [@Val])
+			VAR LastVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 1), [@Val])
+			VAR StrokeColor = IF(LastVal <= PrevVal, "%233FB950", "%23F85149")
+			VAR AreaPoints = Pad & "," & (H - Pad) & " " & PointsStr & " " & (W - Pad) & "," & (H - Pad)
+			VAR SvgRaw =
+			    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " & W & " " & H & "'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" & StrokeColor & "' stop-opacity='0.45'/><stop offset='1' stop-color='" & StrokeColor & "' stop-opacity='0'/></linearGradient></defs><polygon points='" & AreaPoints & "' fill='url(%23g)' stroke='none'/><polyline fill='none' stroke='" & StrokeColor & "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' points='" & PointsStr & "'/></svg>"
+			RETURN
+			IF(PointCount < 2, BLANK(), "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20"))
+		displayFolder: Sparklines
+		lineageTag: 6adc69ac-c51c-4878-b5c7-22eb29e42ee6
+		dataCategory: ImageUrl
+
+	/// Absolute change in Avg Congestion % (percentage points) vs. the most recent prior date with data. Used for the Reference label arrow badge - relative % change is unusable here because congestion can be exactly 0% some days, causing divide-by-zero.
+	measure 'Congestion Change (pts)' =
+			VAR LatestDate = [Latest Traffic Date]
+			VAR Today = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_congestion_score]), 'marts fct_traffic_daily'[date_utc] = LatestDate) * 100
+			VAR PrevDate =
+			    CALCULATE(
+			        MAX('marts fct_traffic_daily'[date_utc]),
+			        FILTER(ALL('marts fct_traffic_daily'[date_utc]), 'marts fct_traffic_daily'[date_utc] < LatestDate)
+			    )
+			VAR PrevValue = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_congestion_score]), 'marts fct_traffic_daily'[date_utc] = PrevDate) * 100
+			RETURN
+			IF(ISBLANK(Today) || ISBLANK(PrevValue), BLANK(), Today - PrevValue)
+		formatString: +0" pp";-0" pp";0" pp"
+		displayFolder: Sparklines
+		lineageTag: 0a883415-4bd0-456d-a419-29f6bcec1250
+
+	/// 14-day SVG sparkline of daily avg confidence*100 from fct_traffic_hourly. Green if reliability rose vs 14 days ago (better), red if it fell (worse) - same direction as Speed. Plug into Card visual's Image (Image URL) field.
+	measure 'Travel Time Reliability Sparkline' =
+			VAR LatestDate = CALCULATE(MAX('marts fct_traffic_hourly'[date_utc]), ALLSELECTED('marts fct_traffic_hourly'))
+			VAR StartDate = LatestDate - 13
+			VAR TrendTable =
+			    ADDCOLUMNS(
+			        FILTER(
+			            ALL('marts fct_traffic_hourly'[date_utc]),
+			            'marts fct_traffic_hourly'[date_utc] >= StartDate && 'marts fct_traffic_hourly'[date_utc] <= LatestDate
+			        ),
+			        "@Val", CALCULATE(AVERAGE('marts fct_traffic_hourly'[confidence]) * 100)
+			    )
+			VAR CleanTrend = FILTER(TrendTable, NOT ISBLANK([@Val]))
+			VAR PointCount = COUNTROWS(CleanTrend)
+			VAR RankedTrend =
+			    ADDCOLUMNS(
+			        CleanTrend,
+			        "@Idx", RANKX(CleanTrend, 'marts fct_traffic_hourly'[date_utc],, ASC, Dense) - 1
+			    )
+			VAR MinY = MINX(RankedTrend, [@Val])
+			VAR MaxY = MAXX(RankedTrend, [@Val])
+			VAR YRange = IF(MaxY = MinY, 1, MaxY - MinY)
+			VAR W = 120
+			VAR H = 30
+			VAR Pad = 2
+			VAR PlotW = W - 2 * Pad
+			VAR PlotH = H - 2 * Pad
+			VAR PointsStr =
+			    CONCATENATEX(
+			        RankedTrend,
+			        VAR X = Pad + DIVIDE([@Idx], PointCount - 1) * PlotW
+			        VAR YNorm = DIVIDE([@Val] - MinY, YRange)
+			        VAR Y = Pad + (1 - YNorm) * PlotH
+			        RETURN FORMAT(ROUND(X, 2), "General Number", "en-US") & "," & FORMAT(ROUND(Y, 2), "General Number", "en-US")
+			        , " ",
+			        [@Idx], ASC
+			    )
+			VAR PrevVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 2), [@Val])
+			VAR LastVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 1), [@Val])
+			VAR StrokeColor = IF(LastVal >= PrevVal, "%233FB950", "%23F85149")
+			VAR AreaPoints = Pad & "," & (H - Pad) & " " & PointsStr & " " & (W - Pad) & "," & (H - Pad)
+			VAR SvgRaw =
+			    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " & W & " " & H & "'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" & StrokeColor & "' stop-opacity='0.45'/><stop offset='1' stop-color='" & StrokeColor & "' stop-opacity='0'/></linearGradient></defs><polygon points='" & AreaPoints & "' fill='url(%23g)' stroke='none'/><polyline fill='none' stroke='" & StrokeColor & "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' points='" & PointsStr & "'/></svg>"
+			RETURN
+			IF(PointCount < 2, BLANK(), "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20"))
+		displayFolder: Sparklines
+		lineageTag: a7693b16-a8c6-49ce-bba0-4d42d8192d4a
+		dataCategory: ImageUrl
+
+	/// Absolute change in Travel Time Reliability % (percentage points) vs. the most recent prior date with data in fct_traffic_hourly.
+	measure 'Travel Time Reliability Change' =
+			VAR LatestDate = [Latest Traffic Date]
+			VAR Today = CALCULATE(AVERAGE('marts fct_traffic_hourly'[confidence]), 'marts fct_traffic_hourly'[date_utc] = LatestDate) * 100
+			VAR PrevDate =
+			    CALCULATE(
+			        MAX('marts fct_traffic_hourly'[date_utc]),
+			        FILTER(ALL('marts fct_traffic_hourly'[date_utc]), 'marts fct_traffic_hourly'[date_utc] < LatestDate)
+			    )
+			VAR PrevValue = CALCULATE(AVERAGE('marts fct_traffic_hourly'[confidence]), 'marts fct_traffic_hourly'[date_utc] = PrevDate) * 100
+			RETURN
+			IF(ISBLANK(Today) || ISBLANK(PrevValue), BLANK(), Today - PrevValue)
+		formatString: +0"%";-0"%";0"%"
+		displayFolder: Sparklines
+		lineageTag: b0393bd8-2dda-46ae-84db-68c365fbded0
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	/// 14-day SVG sparkline of daily avg_delay_sec/60 (minutes). Red if delay rose vs 14 days ago (worse), green if it fell (better) - inverted vs speed, same direction as Congestion.
+	measure 'Avg Delay Sparkline' =
+			VAR LatestDate = CALCULATE(MAX('marts fct_traffic_daily'[date_utc]), ALLSELECTED('marts fct_traffic_daily'))
+			VAR StartDate = LatestDate - 13
+			VAR TrendTable =
+			    ADDCOLUMNS(
+			        FILTER(
+			            ALL('marts fct_traffic_daily'[date_utc]),
+			            'marts fct_traffic_daily'[date_utc] >= StartDate && 'marts fct_traffic_daily'[date_utc] <= LatestDate
+			        ),
+			        "@Val", CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_delay_sec]) / 60)
+			    )
+			VAR CleanTrend = FILTER(TrendTable, NOT ISBLANK([@Val]))
+			VAR PointCount = COUNTROWS(CleanTrend)
+			VAR RankedTrend =
+			    ADDCOLUMNS(
+			        CleanTrend,
+			        "@Idx", RANKX(CleanTrend, 'marts fct_traffic_daily'[date_utc],, ASC, Dense) - 1
+			    )
+			VAR MinY = MINX(RankedTrend, [@Val])
+			VAR MaxY = MAXX(RankedTrend, [@Val])
+			VAR YRange = IF(MaxY = MinY, 1, MaxY - MinY)
+			VAR W = 120
+			VAR H = 30
+			VAR Pad = 2
+			VAR PlotW = W - 2 * Pad
+			VAR PlotH = H - 2 * Pad
+			VAR PointsStr =
+			    CONCATENATEX(
+			        RankedTrend,
+			        VAR X = Pad + DIVIDE([@Idx], PointCount - 1) * PlotW
+			        VAR YNorm = DIVIDE([@Val] - MinY, YRange)
+			        VAR Y = Pad + (1 - YNorm) * PlotH
+			        RETURN FORMAT(ROUND(X, 2), "General Number", "en-US") & "," & FORMAT(ROUND(Y, 2), "General Number", "en-US")
+			        , " ",
+			        [@Idx], ASC
+			    )
+			VAR PrevVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 2), [@Val])
+			VAR LastVal = MAXX(FILTER(RankedTrend, [@Idx] = PointCount - 1), [@Val])
+			VAR StrokeColor = IF(LastVal <= PrevVal, "%233FB950", "%23F85149")
+			VAR AreaPoints = Pad & "," & (H - Pad) & " " & PointsStr & " " & (W - Pad) & "," & (H - Pad)
+			VAR SvgRaw =
+			    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 " & W & " " & H & "'><defs><linearGradient id='g' x1='0' y1='0' x2='0' y2='1'><stop offset='0' stop-color='" & StrokeColor & "' stop-opacity='0.45'/><stop offset='1' stop-color='" & StrokeColor & "' stop-opacity='0'/></linearGradient></defs><polygon points='" & AreaPoints & "' fill='url(%23g)' stroke='none'/><polyline fill='none' stroke='" & StrokeColor & "' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' points='" & PointsStr & "'/></svg>"
+			RETURN
+			IF(PointCount < 2, BLANK(), "data:image/svg+xml;utf8," & SUBSTITUTE(SvgRaw, " ", "%20"))
+		displayFolder: Sparklines
+		lineageTag: d72dfb4a-1f9e-46d9-a94b-ad3b2c94ddcb
+		dataCategory: ImageUrl
+
+	/// Absolute change in Avg Delay (minutes) vs. the most recent prior date with data. Positive = delay got worse.
+	measure 'Avg Delay Change (min)' =
+			VAR LatestDate = [Latest Traffic Date]
+			VAR Today = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_delay_sec]), 'marts fct_traffic_daily'[date_utc] = LatestDate) / 60
+			VAR PrevDate =
+			    CALCULATE(
+			        MAX('marts fct_traffic_daily'[date_utc]),
+			        FILTER(ALL('marts fct_traffic_daily'[date_utc]), 'marts fct_traffic_daily'[date_utc] < LatestDate)
+			    )
+			VAR PrevValue = CALCULATE(AVERAGE('marts fct_traffic_daily'[avg_delay_sec]), 'marts fct_traffic_daily'[date_utc] = PrevDate) / 60
+			RETURN
+			IF(ISBLANK(Today) || ISBLANK(PrevValue), BLANK(), Today - PrevValue)
+		formatString: +0.0" min";-0.0" min";0.0" min"
+		displayFolder: Sparklines
+		lineageTag: feaf365c-a080-4d69-b929-63f6b461e017
+
+	/// Avg congestion_score*100 across all available dates, broken out by hour_utc - typical daily congestion pattern. Use hour_utc (from marts dim_hour) as the chart axis for a 24-hour trend chart.
+	measure 'Congestion by Hour (Avg)' = AVERAGE('marts fct_traffic_hourly'[congestion_score]) * 100
+		formatString: 0.0"%"
+		displayFolder: Sparklines
+		lineageTag: dde0308e-11e4-4082-b8bb-f0aa78e45910
+
+	/// Same category breakdown as Incident Breakdown Value, but for the most recent PRIOR date with data (not strictly yesterday - avoids blank points breaking the line in the combo chart).
+	measure 'Incident Breakdown Value Yesterday' =
+			VAR LatestDate = [Latest Traffic Date]
+			VAR SelectedCat = SELECTEDVALUE(IncidentCategory[Category])
+			VAR PrevDate =
+			    CALCULATE(
+			        MAX('marts fct_traffic_daily'[date_utc]),
+			        FILTER(ALL('marts fct_traffic_daily'[date_utc]), 'marts fct_traffic_daily'[date_utc] < LatestDate)
+			    )
+			VAR MajorVal = CALCULATE(SUM('marts fct_traffic_daily'[major_incidents]), 'marts fct_traffic_daily'[date_utc] = PrevDate)
+			VAR ClosureVal = CALCULATE(SUM('marts fct_traffic_daily'[road_closure_count]), 'marts fct_traffic_daily'[date_utc] = PrevDate)
+			VAR TotalVal = CALCULATE(SUM('marts fct_traffic_daily'[total_incidents]), 'marts fct_traffic_daily'[date_utc] = PrevDate)
+			VAR OtherVal = MAX(0, TotalVal - MajorVal - ClosureVal)
+			RETURN
+			SWITCH(
+			    SelectedCat,
+			    "Major Incidents", MajorVal,
+			    "Road Closures", ClosureVal,
+			    "Other Incidents", OtherVal
+			)
+		formatString: 0
+		displayFolder: Sparklines
+		lineageTag: c38b259b-2a2b-4df3-80d4-f0da8bb6ad75
+
+	/// Minimalist SVG line-art road-in-perspective illustration, transparent background. Color and dot density scale with Traffic Index band (same thresholds and colors as Traffic Status: green/amber/orange/red).
+	measure 'Traffic Scene' =
+			VAR Idx = [Traffic Index]
+			RETURN
+			IF(
+			    ISBLANK(Idx),
+			    BLANK(),
+			    VAR RoadColor = SWITCH(TRUE(), Idx < 20, "%233FB950", Idx < 50, "%23E8C547", Idx < 75, "%23F5793C", "%23F85149")
+			    VAR DotCount = SWITCH(TRUE(), Idx < 20, 2, Idx < 50, 3, Idx < 75, 5, 7)
+			    VAR Spacing = DIVIDE(140, DotCount + 1)
+			    VAR DotsStr =
+			        CONCATENATEX(
+			            GENERATESERIES(1, DotCount),
+			            VAR Y = 190 - [Value] * Spacing
+			            RETURN "<circle cx='75' cy='" & FORMAT(ROUND(Y, 1), "General Number", "en-US") & "' r='4' fill='" & RoadColor & "'/>",
+			            "",
+			            [Value], ASC
+			        )
+			    VAR Svg =
+			        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 150 200'><line x1='20' y1='195' x2='65' y2='40' stroke='" & RoadColor & "' stroke-width='3' stroke-linecap='round' opacity='0.5'/><line x1='130' y1='195' x2='85' y2='40' stroke='" & RoadColor & "' stroke-width='3' stroke-linecap='round' opacity='0.5'/><line x1='75' y1='190' x2='75' y2='45' stroke='" & RoadColor & "' stroke-width='3' stroke-linecap='round' stroke-dasharray='10,10' opacity='0.7'/>" & DotsStr & "</svg>"
+			    RETURN "data:image/svg+xml;utf8," & SUBSTITUTE(Svg, " ", "%20")
+			)
+		lineageTag: 3ea89ca4-e76b-4ee3-8296-dab17f186920
+		dataCategory: ImageUrl
+
+	measure 'Road Surface' = VAR M = [Weather Condition] RETURN SWITCH ( TRUE (), ISBLANK ( M ), "Unknown", CONTAINSSTRING ( M, "Snow" ) || CONTAINSSTRING ( M, "Sleet" ), "Snow", CONTAINSSTRING ( M, "Rain" ) || CONTAINSSTRING ( M, "Drizzle" ) || CONTAINSSTRING ( M, "Thunderstorm" ) || CONTAINSSTRING ( M, "Shower" ), "Wet", CONTAINSSTRING ( M, "Fog" ) || CONTAINSSTRING ( M, "Mist" ), "Damp", "Dry" )
+		lineageTag: 2519a00a-70d9-49dd-90b8-0a5088ee08b3
+
+	measure 'Congestion Trend Arrow' = IF([Congestion Change %] >= 0, UNICHAR(11165), UNICHAR(11167))
+		lineageTag: cbdccff0-2f7b-4277-a919-d409d474cdee
+
+	measure 'Congestion Trend Color' = IF([Congestion Change %] <= 0, "#2E7D32", "#C62828")
+		lineageTag: 68758f82-bda9-45d8-a8a0-997313e53a8f
+
+	column Value
+		isHidden
+		formatString: 0
+		lineageTag: 436294a6-03f5-4b24-8cc4-4182fe81bcc9
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [Value]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition _KPIs_Traffic = calculated
+		mode: import
+		source = {BLANK()}
+
+	annotation PBI_Id = d0baea5786be403397a5d1b718b09f81
+

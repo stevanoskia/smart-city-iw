@@ -1,0 +1,17 @@
+table IncidentCategory
+	lineageTag: bd4c5b1d-af72-4b82-8604-49450e52db5e
+
+	column Category
+		lineageTag: a2947c42-5a96-495f-9c6f-2952ddaf2324
+		summarizeBy: none
+		isNameInferred
+		sourceColumn: [Category]
+
+		annotation SummarizationSetBy = Automatic
+
+	partition IncidentCategory = calculated
+		mode: import
+		source = DATATABLE("Category", STRING, {{"Major Incidents"}, {"Road Closures"}, {"Other Incidents"}})
+
+	annotation PBI_Id = ad43901798ec4337a68fa97c651ce374
+

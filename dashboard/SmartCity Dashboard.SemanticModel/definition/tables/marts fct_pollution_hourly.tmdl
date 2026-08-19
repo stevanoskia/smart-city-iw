@@ -1,0 +1,188 @@
+table 'marts fct_pollution_hourly'
+	lineageTag: c694093d-cf0c-47a5-87c8-21289212fa92
+
+	column city_hour_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 202140df-ae2e-4ab2-aff4-6d148294e134
+		summarizeBy: none
+		sourceColumn: city_hour_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 3ab41a7e-1f76-4f43-98f9-95bc200dae73
+		summarizeBy: none
+		sourceColumn: city_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 16539c59-9f67-4909-8601-1ef308a10e45
+		summarizeBy: none
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column hour_utc
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 994caf74-e148-43a6-9863-ab8bf1172310
+		summarizeBy: none
+		sourceColumn: hour_utc
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: faa55812-2e28-466c-b5ea-056b271c9cdb
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_utc
+		dataType: dateTime
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: 43379ea4-d6eb-4a71-86f4-0bcd5a6d927c
+		summarizeBy: none
+		sourceColumn: date_utc
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column observed_at
+		dataType: dateTime
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 44d87292-ef22-4423-9cd5-968589df5441
+		summarizeBy: none
+		sourceColumn: observed_at
+
+		annotation SummarizationSetBy = Automatic
+
+	column aqi
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 69f9bb55-e448-4e01-a0a1-7ba01b86901e
+		summarizeBy: sum
+		sourceColumn: aqi
+
+		annotation SummarizationSetBy = Automatic
+
+	column aqi_label
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 54716f2f-835a-49fb-9315-348d933ce180
+		summarizeBy: none
+		sourceColumn: aqi_label
+
+		annotation SummarizationSetBy = Automatic
+
+	column co_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: ee8ec943-7616-4899-a4e5-9bdbebc15c15
+		summarizeBy: sum
+		sourceColumn: co_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column no_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 8e06a339-fa80-4d2a-b240-c2678b3a5385
+		summarizeBy: sum
+		sourceColumn: no_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column no2_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 2b96527f-f556-4217-ba49-210b587795d1
+		summarizeBy: sum
+		sourceColumn: no2_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column o3_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: a75ca1db-1ee4-45aa-b18a-26586aac048a
+		summarizeBy: sum
+		sourceColumn: o3_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column so2_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: f38f2a89-43ba-464d-b31b-fe6f336e2d5d
+		summarizeBy: sum
+		sourceColumn: so2_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column pm2_5_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 35a8a2bd-f503-4c94-9a9d-414760cb054c
+		summarizeBy: sum
+		sourceColumn: pm2_5_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column pm10_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: d9a5ac12-1d41-433e-8fee-7b470f0c7214
+		summarizeBy: sum
+		sourceColumn: pm10_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column nh3_ug_m3
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: ddd7cfa8-5b96-4791-b6a3-9a27815399cb
+		summarizeBy: sum
+		sourceColumn: nh3_ug_m3
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	partition 'marts fct_pollution_hourly' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_fct_pollution_hourly = Source{[Schema="marts",Item="fct_pollution_hourly"]}[Data]
+				in
+				    marts_fct_pollution_hourly
+

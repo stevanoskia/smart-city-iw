@@ -1,0 +1,140 @@
+relationship ef771a44-e70c-f611-280b-7a7a22f5c01f
+	fromColumn: 'marts mart_city_daily'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship a2183cd5-bde8-b678-e21b-5e5fb2f2ea9d
+	fromColumn: 'marts mart_temperature_trends'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship ed042e05-8abd-c50e-9e33-2275d08b6045
+	fromColumn: 'marts mart_forecast_latest'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship 58c6d7ab-c1a4-ef1a-9f80-5a6fc8f29742
+	fromColumn: 'marts fct_forecast_accuracy'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship aa34baba-a2eb-b21f-ade1-598368b7b152
+	fromColumn: 'marts mart_city_daily'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship 7cd2a40a-b342-44b7-44ff-c733342fbabd
+	fromColumn: 'marts mart_temperature_trends'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship c020efad-93de-d6fd-9a19-b31bba6853c0
+	fromColumn: 'marts fct_forecast_accuracy'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship 44916d32-2e77-17ef-3079-2fd03fa60985
+	fromColumn: 'marts fct_pollution_daily'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship 452d1616-7f33-000b-1775-b81b6b81b0da
+	fromColumn: 'marts fct_pollution_daily'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship e8657ad7-5d56-3cc8-a52a-e8d534a20891
+	fromColumn: 'marts fct_pollution_hourly'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship b83e22dc-53b3-9eff-7d1b-6fd5e6a7b814
+	fromColumn: 'marts fct_pollution_hourly'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship 09d93f7c-0f28-c246-40db-7bda4c1870e2
+	fromColumn: 'marts fct_pollution_hourly'.hour_utc
+	toColumn: 'marts dim_hour'.hour_utc
+
+relationship 5b9f53a0-9e04-5f99-1ad4-134849923975
+	fromColumn: 'marts fct_traffic_daily'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship 837c8571-fad9-8a0c-88c7-ec69b5a20b05
+	fromColumn: 'marts fct_traffic_daily'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship 0a142cd8-d0bc-4015-72bd-e0cce7836ee4
+	fromColumn: 'marts fct_traffic_hourly'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship ad9b6744-8799-d21f-bff5-1b930d9c029a
+	fromColumn: 'marts fct_traffic_hourly'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship a47a23ca-2bf9-f8ba-26ef-c7391aa0a227
+	fromColumn: 'marts fct_traffic_hourly'.hour_utc
+	toColumn: 'marts dim_hour'.hour_utc
+
+relationship 6bfa3dbc-746c-dbe8-2ab9-34131880ad5d
+	fromColumn: 'marts fct_weather_daily'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship 7639f3fa-d181-004c-b283-87785080a4a5
+	fromColumn: 'marts fct_weather_daily'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship f8015a6d-8423-6cd6-6184-b26185a32a3f
+	fromColumn: 'marts fct_weather_hourly'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship 40f48ae3-75d6-f653-ece9-1a05ab6ffc1d
+	fromColumn: 'marts fct_weather_hourly'.date_key
+	toColumn: 'marts dim_date'.date_key
+
+relationship b3d7218c-d034-276a-b457-f157ed4c4f8c
+	fromColumn: 'marts mart_city_current'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship 'ml_predictions aqi_forecast -> dim_city (city)'
+	fromColumn: 'ml_predictions aqi_forecast'.city
+	toColumn: 'marts dim_city'.city
+
+relationship 'ml_predictions temperature_forecast -> dim_city (city)'
+	fromColumn: 'ml_predictions temperature_forecast'.city
+	toColumn: 'marts dim_city'.city
+
+relationship 'ml_predictions traffic_forecast -> dim_city (city)'
+	fromColumn: 'ml_predictions traffic_forecast'.city
+	toColumn: 'marts dim_city'.city
+
+relationship 'ml_predictions city_score_forecast -> dim_city (city)'
+	fromColumn: 'ml_predictions city_score_forecast'.city
+	toColumn: 'marts dim_city'.city
+
+relationship 'ml_predictions pollution_anomaly -> dim_city (city)'
+	fromColumn: 'ml_predictions pollution_anomaly'.city
+	toColumn: 'marts dim_city'.city
+
+relationship 'marts mart_weather_alerts -> dim_city'
+	fromColumn: 'marts mart_weather_alerts'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship 'marts mart_pollution_alerts -> dim_city'
+	fromColumn: 'marts mart_pollution_alerts'.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship '_ML_Forecast_Scored -> dim_city'
+	fromColumn: _ML_Forecast_Scored.city
+	toColumn: 'marts dim_city'.city
+
+relationship '_P2_Alerts -> dim_city'
+	fromColumn: _P2_Alerts.city_key
+	toColumn: 'marts dim_city'.city_key
+
+relationship 'ai_summaries city_daily_summary -> dim_city (city)'
+	fromColumn: 'ai_summaries city_daily_summary'.city
+	toColumn: 'marts dim_city'.city
+
+relationship 'ai_summaries city_daily_summary -> dim_date (date_utc)'
+	fromColumn: 'ai_summaries city_daily_summary'.date_utc
+	toColumn: 'marts dim_date'.date_utc
+
+relationship 'forecast_scored -> dim_city (city)'
+	fromColumn: 'ml_predictions forecast_scored'.city
+	toColumn: 'marts dim_city'.city
+
+relationship 'forecast_scored -> dim_date (target_date)'
+	fromColumn: 'ml_predictions forecast_scored'.target_date
+	toColumn: 'marts dim_date'.date_utc
+

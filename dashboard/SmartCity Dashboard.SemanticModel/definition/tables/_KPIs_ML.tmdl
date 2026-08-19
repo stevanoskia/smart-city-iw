@@ -1,0 +1,309 @@
+table _KPIs_ML
+	isHidden
+	lineageTag: e6fc1bad-08dd-45e6-846d-b8abbc56c996
+
+	measure 'Predicted PM2.5 (24h)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'ml_predictions aqi_forecast', 'ml_predictions aqi_forecast'[predicted_for], DESC)
+			        RETURN AVERAGEX(LatestRow, 'ml_predictions aqi_forecast'[predicted_pm2_5])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: 721958f3-6b36-49d0-b2a0-5acb8c64f0d9
+
+	measure 'Predicted Temp (3h)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'ml_predictions temperature_forecast', 'ml_predictions temperature_forecast'[predicted_for], DESC)
+			        RETURN AVERAGEX(LatestRow, 'ml_predictions temperature_forecast'[predicted_temp])
+			    )
+			)
+		formatString: 0.0
+		lineageTag: 160f004c-e7ba-45cc-b0fb-d14fb2812be0
+
+	measure 'Predicted Congestion (1h)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'ml_predictions traffic_forecast', 'ml_predictions traffic_forecast'[predicted_for], DESC)
+			        RETURN AVERAGEX(LatestRow, 'ml_predictions traffic_forecast'[predicted_congestion])
+			    )
+			) * 100
+		formatString: 0.0
+		lineageTag: d31f45e5-9f13-4981-a185-fee9cf23b772
+
+	measure 'Predicted Comfort (1d)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'ml_predictions city_score_forecast', 'ml_predictions city_score_forecast'[predicted_for], DESC)
+			        RETURN AVERAGEX(LatestRow, 'ml_predictions city_score_forecast'[predicted_comfort_index])
+			    )
+			)
+		formatString: 0.00
+		lineageTag: 5ee844bd-226f-45c9-a771-ece6bf364e98
+
+	measure 'Active Anomalies' =
+			COALESCE(
+			    SUMX(
+			        VALUES('marts dim_city'[city]),
+			        CALCULATE(
+			            VAR LatestRow = TOPN(1, 'ml_predictions pollution_anomaly', 'ml_predictions pollution_anomaly'[observed_at], DESC)
+			            RETURN COUNTROWS(FILTER(LatestRow, 'ml_predictions pollution_anomaly'[is_anomaly]))
+			        )
+			    ),
+			    0
+			)
+		formatString: 0
+		lineageTag: 0d20467d-11ab-4cc9-be4e-440673477030
+
+	measure 'Anomaly Status' = IF([Active Anomalies] > 0, "âš  Anomaly detected", "âœ… Normal")
+		lineageTag: df25053a-145f-4fb3-857a-addc48aa0d60
+
+	measure 'AQI Model MAE' = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "aqi_pm25_24h")
+		formatString: 0.000
+		lineageTag: dc526cba-08b0-41e4-850a-fe810ea4af49
+
+	measure 'AQI Model RMSE' = CALCULATE(SUM('ml_predictions model_metrics'[rmse]), 'ml_predictions model_metrics'[model_name] = "aqi_pm25_24h")
+		formatString: 0.000
+		lineageTag: c87d8980-7322-4895-ba6d-ec073321cf7e
+
+	measure 'AQI Model MAPE' = CALCULATE(SUM('ml_predictions model_metrics'[mape]), 'ml_predictions model_metrics'[model_name] = "aqi_pm25_24h")
+		formatString: 0.0"%"
+		lineageTag: 8fcccb9e-cd99-4a04-a99a-ff5e696e2593
+
+	measure 'AQI Model R2' = CALCULATE(SUM('ml_predictions model_metrics'[r2]), 'ml_predictions model_metrics'[model_name] = "aqi_pm25_24h")
+		formatString: 0.00
+		lineageTag: 6dc03952-126c-4150-a5b8-a6db2ad0bfd6
+
+	measure 'AQI Model Status' =
+			VAR M = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "aqi_pm25_24h")
+			VAR B = CALCULATE(SUM('ml_predictions model_metrics'[baseline_mae]), 'ml_predictions model_metrics'[model_name] = "aqi_pm25_24h")
+			RETURN IF(M < B, "Beats baseline", "Experimental - does not beat baseline")
+		lineageTag: 55040f61-3dc5-4e52-beac-fc5adc7201f4
+
+	measure 'Temperature Model MAE' = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "temperature_3h")
+		formatString: 0.000
+		lineageTag: 47170eae-3bc5-453c-a98f-9ce905d93f04
+
+	measure 'Temperature Model RMSE' = CALCULATE(SUM('ml_predictions model_metrics'[rmse]), 'ml_predictions model_metrics'[model_name] = "temperature_3h")
+		formatString: 0.000
+		lineageTag: d3257bc2-70d5-4ebc-a177-2bb141011b9f
+
+	measure 'Temperature Model MAPE' = CALCULATE(SUM('ml_predictions model_metrics'[mape]), 'ml_predictions model_metrics'[model_name] = "temperature_3h")
+		formatString: 0.0"%"
+		lineageTag: a3e5ed44-88e6-4835-92c1-646a52b08fdf
+
+	measure 'Temperature Model R2' = CALCULATE(SUM('ml_predictions model_metrics'[r2]), 'ml_predictions model_metrics'[model_name] = "temperature_3h")
+		formatString: 0.00
+		lineageTag: e07a1eec-7f54-4bc2-85cc-037ab9f97ba0
+
+	measure 'Temperature Model Status' =
+			VAR M = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "temperature_3h")
+			VAR B = CALCULATE(SUM('ml_predictions model_metrics'[baseline_mae]), 'ml_predictions model_metrics'[model_name] = "temperature_3h")
+			RETURN IF(M < B, "Beats baseline", "Experimental - does not beat baseline")
+		lineageTag: cfb91e4a-18fa-4f70-ac7d-6f728a2e7dfb
+
+	measure 'Traffic Model MAE' = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "traffic_congestion_1h")
+		formatString: 0.000
+		lineageTag: 02386bff-c69b-45cb-b455-155f91548492
+
+	measure 'Traffic Model RMSE' = CALCULATE(SUM('ml_predictions model_metrics'[rmse]), 'ml_predictions model_metrics'[model_name] = "traffic_congestion_1h")
+		formatString: 0.000
+		lineageTag: 10594ef1-6fca-4cc4-8219-9e9910334416
+
+	measure 'Traffic Model MAPE' = CALCULATE(SUM('ml_predictions model_metrics'[mape]), 'ml_predictions model_metrics'[model_name] = "traffic_congestion_1h")
+		formatString: 0.0"%"
+		lineageTag: 78d2df4c-10be-4585-875b-7e8c89ebe7bb
+
+	measure 'Traffic Model R2' = CALCULATE(SUM('ml_predictions model_metrics'[r2]), 'ml_predictions model_metrics'[model_name] = "traffic_congestion_1h")
+		formatString: 0.00
+		lineageTag: 9bc40869-5b44-4f24-a128-dc11729ad817
+
+	measure 'Traffic Model Status' =
+			VAR M = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "traffic_congestion_1h")
+			VAR B = CALCULATE(SUM('ml_predictions model_metrics'[baseline_mae]), 'ml_predictions model_metrics'[model_name] = "traffic_congestion_1h")
+			RETURN IF(M < B, "Beats baseline", "Experimental - does not beat baseline")
+		lineageTag: 2a2be083-ee8b-4d43-8b1f-833f466fcdc9
+
+	measure 'City Score Model MAE' = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "city_score_comfort_1d")
+		formatString: 0.000
+		lineageTag: 69720576-c803-4a8b-9e32-e335fff95e5e
+
+	measure 'City Score Model RMSE' = CALCULATE(SUM('ml_predictions model_metrics'[rmse]), 'ml_predictions model_metrics'[model_name] = "city_score_comfort_1d")
+		formatString: 0.000
+		lineageTag: 9ef3c25b-d538-4a37-8e40-5c19b7d9d506
+
+	measure 'City Score Model MAPE' = CALCULATE(SUM('ml_predictions model_metrics'[mape]), 'ml_predictions model_metrics'[model_name] = "city_score_comfort_1d")
+		formatString: 0.0"%"
+		lineageTag: 13c64ff9-f245-43a2-bd4e-d0ec8d24936e
+
+	measure 'City Score Model R2' = CALCULATE(SUM('ml_predictions model_metrics'[r2]), 'ml_predictions model_metrics'[model_name] = "city_score_comfort_1d")
+		formatString: 0.00
+		lineageTag: 0abdb899-37a7-42dd-84c9-e06277e83132
+
+	measure 'City Score Model Status' =
+			VAR M = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "city_score_comfort_1d")
+			VAR B = CALCULATE(SUM('ml_predictions model_metrics'[baseline_mae]), 'ml_predictions model_metrics'[model_name] = "city_score_comfort_1d")
+			RETURN IF(M < B, "Beats baseline", "Experimental - does not beat baseline")
+		lineageTag: 7b81d044-c957-4bbf-97d4-420ac1089936
+
+	measure 'Predicted PM2.5 Category' =
+			VAR V = [Predicted PM2.5 (24h)]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(V), "No forecast",
+			    V < 7.5,  "Good",
+			    V < 15,   "Fair",
+			    V < 22.5, "Moderate",
+			    V < 37.5, "Poor",
+			    "Very Poor"
+			)
+		lineageTag: bfd714e3-655d-47e4-8b57-34397aaaac6d
+
+	measure 'Predicted PM2.5 Category Color' =
+			SWITCH(
+			    [Predicted PM2.5 Category],
+			    "Good", "#2ECC71",
+			    "Fair", "#A9D751",
+			    "Moderate", "#F1C40F",
+			    "Poor", "#E67E22",
+			    "Very Poor", "#E74C3C",
+			    "#95A5A6"
+			)
+		lineageTag: c45898a7-fd47-4151-a515-cd5f6d89031a
+
+	measure 'AQI Model vs Baseline %' =
+			VAR M = CALCULATE(SUM('ml_predictions model_metrics'[mae]), 'ml_predictions model_metrics'[model_name] = "aqi_pm25_24h")
+			VAR B = CALCULATE(SUM('ml_predictions model_metrics'[baseline_mae]), 'ml_predictions model_metrics'[model_name] = "aqi_pm25_24h")
+			RETURN IF(B > 0, DIVIDE(B - M, B), BLANK())
+		formatString: 0%
+		lineageTag: 018641fd-6422-453e-859a-723f43a4b0c6
+
+	measure 'AQI Model Quality Label' =
+			VAR Imp = [AQI Model vs Baseline %]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    ISBLANK(Imp), "Not evaluated",
+			    Imp <= 0, "No better than baseline",
+			    Imp < 0.15, "Marginally better than baseline",
+			    Imp < 0.35, "Better than baseline",
+			    "Clearly better than baseline"
+			)
+		lineageTag: 957952db-7017-4c5f-b740-9ab570d26ee3
+
+	measure 'Live Forecast MAE (7d)' =
+			CALCULATE(
+			    AVERAGE('_ML_Forecast_Scored'[abs_error]),
+			    '_ML_Forecast_Scored'[predicted_for] >= NOW() - 7
+			)
+		formatString: 0.00
+		lineageTag: 7cee2e00-76c5-4226-95c4-a44edbe70b5e
+
+	measure 'Live Forecast RMSE (7d)' =
+			SQRT(
+			    CALCULATE(
+			        AVERAGE('_ML_Forecast_Scored'[squared_error]),
+			        '_ML_Forecast_Scored'[predicted_for] >= NOW() - 7
+			    )
+			)
+		formatString: 0.00
+		lineageTag: af1411ee-6731-4726-8ee4-2c59f5bb1beb
+
+	measure 'Live Forecast Bias (7d)' =
+			CALCULATE(
+			    AVERAGE('_ML_Forecast_Scored'[bias]),
+			    '_ML_Forecast_Scored'[predicted_for] >= NOW() - 7
+			)
+		formatString: +0.00;-0.00;0.00
+		lineageTag: d2903ec5-95ca-4177-9ab6-fc00630ca8d5
+
+	measure 'Live Forecast Scored (7d)' =
+			COALESCE(
+			    CALCULATE(
+			        COUNTROWS('_ML_Forecast_Scored'),
+			        '_ML_Forecast_Scored'[predicted_for] >= NOW() - 7
+			    ),
+			    0
+			)
+		formatString: 0
+		lineageTag: dd1e18f2-ad94-45ad-9df3-4571a78e1364
+
+	measure 'Live Forecast MAPE (7d)' =
+			VAR Rows7d =
+			    FILTER(
+			        '_ML_Forecast_Scored',
+			        '_ML_Forecast_Scored'[predicted_for] >= NOW() - 7
+			            && '_ML_Forecast_Scored'[actual_pm2_5] >= 1
+			    )
+			RETURN AVERAGEX(Rows7d, DIVIDE('_ML_Forecast_Scored'[abs_error], '_ML_Forecast_Scored'[actual_pm2_5]))
+		formatString: 0.0%
+		lineageTag: a535b79d-f13f-4db9-a4c7-e635a1c1680f
+
+	measure 'Live vs Training MAE' =
+			VAR LiveMAE = [Live Forecast MAE (7d)]
+			VAR TrainMAE = [AQI Model MAE]
+			RETURN IF(TrainMAE > 0 && NOT ISBLANK(LiveMAE), DIVIDE(LiveMAE, TrainMAE), BLANK())
+		formatString: 0.0x
+		lineageTag: c9a44109-ac34-42e4-9c56-76388cd22cd9
+
+	measure 'Live Forecast Note' =
+			VAR N = [Live Forecast Scored (7d)]
+			VAR LiveMAE = [Live Forecast MAE (7d)]
+			VAR TrainMAE = [AQI Model MAE]
+			RETURN
+			IF(
+			    N = 0,
+			    "No matured predictions in the last 7 days yet.",
+			    "Measured on " & N & " predictions whose target hour has passed. " &
+			    IF(
+			        LiveMAE > TrainMAE * 1.5,
+			        "Production error is notably higher than the held-out test estimate - expected, and worth monitoring.",
+			        "Production error is broadly in line with the held-out test estimate."
+			    )
+			)
+		lineageTag: 200db30e-39e7-4104-b1e4-68668039b27c
+
+	/// Short display aliases. A card visual takes its label straight from the
+	/// measure name, and the full names do not fit a ~200px tile - these exist
+	/// only so the model-performance tiles read "MAE (7d)" rather than
+	/// "Live Forecast MAE (7d)". They add no logic of their own.
+	measure 'MAE (7d)' = [Live Forecast MAE (7d)]
+		formatString: 0.00
+		lineageTag: 5d2a7625-1ce1-4a66-941e-eecf5f18bc30
+
+	measure 'RMSE (7d)' = [Live Forecast RMSE (7d)]
+		formatString: 0.00
+		lineageTag: 4e06e5da-7f1d-410d-a7f0-2bdf7a5b7883
+
+	measure 'MAPE (7d)' = [Live Forecast MAPE (7d)]
+		formatString: 0.0%
+		lineageTag: c650859d-a98d-4c70-b47a-c36761f3e838
+
+	measure 'Bias (7d)' = [Live Forecast Bias (7d)]
+		formatString: +0.00;-0.00;0.00
+		lineageTag: 39c518ec-6833-4472-a1fa-07460edd6f16
+
+	measure 'Prediction Icon' =
+			VAR Cat = [Predicted PM2.5 Category]
+			VAR G = "data:image/png;base64,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"
+			VAR O = "data:image/png;base64,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"
+			VAR R = "data:image/png;base64,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"
+			RETURN SWITCH ( Cat, "Good", G, "Fair", O, "Moderate", O, "Poor", R, "Very Poor", R, BLANK () )
+		displayFolder: Prediction
+		lineageTag: 1a16018f-831e-4114-b233-bcb33e3b3428
+		dataCategory: ImageUrl
+
+	column _
+		lineageTag: db8fe3a7-664d-40a4-8d47-0fcedc10df1b
+		isNameInferred
+		sourceColumn: [_]
+
+	partition _KPIs_ML = calculated
+		source = ROW("_", BLANK())
+

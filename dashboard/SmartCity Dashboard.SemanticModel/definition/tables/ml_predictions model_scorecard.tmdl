@@ -1,0 +1,131 @@
+table 'ml_predictions model_scorecard'
+	lineageTag: b28077b6-85c7-4fdf-ba94-9c18d4f14d96
+
+	column model
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 78991cec-c0c2-4df5-993e-05cf28e6ce53
+		summarizeBy: none
+		sourceColumn: model
+
+		annotation SummarizationSetBy = Automatic
+
+	column horizon
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: c88b0517-49d3-4c59-bfbf-6bb0f6eecb15
+		summarizeBy: none
+		sourceColumn: horizon
+
+		annotation SummarizationSetBy = Automatic
+
+	column sort_order
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 492561f4-2949-4fd4-be31-ee9c15f96f19
+		summarizeBy: sum
+		sourceColumn: sort_order
+
+		annotation SummarizationSetBy = Automatic
+
+	column metrics_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: b584c027-6eeb-47a9-b9e8-88d8938a5375
+		summarizeBy: none
+		sourceColumn: metrics_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column mae
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: f727c9b0-a4c4-4e5a-9d5e-4a4a0a3bcb24
+		summarizeBy: none
+		sourceColumn: mae
+
+		annotation SummarizationSetBy = Automatic
+
+	column mae_num
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 1ff1e1b0-ef86-41de-85bd-a346507b638f
+		summarizeBy: sum
+		sourceColumn: mae_num
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column baseline_num
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 2b459666-6604-4b1c-9fed-70c7e9d39fa5
+		summarizeBy: sum
+		sourceColumn: baseline_num
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column r2
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: c844cb20-389b-4de5-a541-257003b1cae0
+		summarizeBy: sum
+		sourceColumn: r2
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column rmse
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: fc598258-92dd-4c2b-837a-ec40a9fb00da
+		summarizeBy: sum
+		sourceColumn: rmse
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column improvement
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: ead68449-df16-4c86-a66f-bfc98f6086b6
+		summarizeBy: sum
+		sourceColumn: improvement
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column vs_baseline
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 86149346-f195-4c5f-89c9-aeb1436d8974
+		summarizeBy: none
+		sourceColumn: vs_baseline
+
+		annotation SummarizationSetBy = Automatic
+
+	column verdict
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: fd82055b-1154-4001-b9c0-6504977ed5a2
+		summarizeBy: none
+		sourceColumn: verdict
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'ml_predictions model_scorecard' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    ml_predictions_model_scorecard = Source{[Schema="ml_predictions",Item="model_scorecard"]}[Data]
+				in
+				    ml_predictions_model_scorecard
+

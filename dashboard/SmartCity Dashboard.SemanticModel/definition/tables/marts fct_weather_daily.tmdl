@@ -1,0 +1,210 @@
+table 'marts fct_weather_daily'
+	lineageTag: a996a3e9-ec24-4f13-83f7-ad2ee3190465
+
+	column city_date_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 598c428f-d1fd-4489-aa7b-c07d27c69353
+		summarizeBy: none
+		sourceColumn: city_date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 0053c995-9579-4edb-9cd9-56229173ee88
+		summarizeBy: none
+		sourceColumn: city_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 6e1e4a01-78c5-4613-90a1-2c4f7bb3840e
+		summarizeBy: none
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: f1e54d40-a5c2-4c25-9560-7d76b148dcf7
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column country
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 803ea850-91c9-4653-bebd-b7b793e85429
+		summarizeBy: none
+		sourceColumn: country
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_utc
+		dataType: dateTime
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: ad45764f-6e88-40b4-a0d5-e3148f3db523
+		summarizeBy: none
+		sourceColumn: date_utc
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column avg_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 4d13bd59-81b6-4bac-9a3a-f2728eb6aa08
+		summarizeBy: sum
+		sourceColumn: avg_temp_celsius
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column min_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: d86aa1f3-a9a0-4fdc-b9aa-6a103017c37e
+		summarizeBy: sum
+		sourceColumn: min_temp_celsius
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column max_temp_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 1087fba2-412f-4eaf-862e-2d2cb4b60ef8
+		summarizeBy: sum
+		sourceColumn: max_temp_celsius
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_feels_like_celsius
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: dd6c7c59-4c11-4f4e-a83c-70ed63715282
+		summarizeBy: sum
+		sourceColumn: avg_feels_like_celsius
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_humidity_pct
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 480803eb-4518-4fb3-81ae-c1af06a4bcbd
+		summarizeBy: sum
+		sourceColumn: avg_humidity_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_pressure_hpa
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 44da4b53-829a-4d41-88be-d93cf8761f97
+		summarizeBy: sum
+		sourceColumn: avg_pressure_hpa
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_wind_speed_ms
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 40eafa67-dcf9-47a9-b61d-6e256ddce9d7
+		summarizeBy: sum
+		sourceColumn: avg_wind_speed_ms
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column max_wind_speed_ms
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 5d57316c-2575-48ea-81c5-e406818e6328
+		summarizeBy: sum
+		sourceColumn: max_wind_speed_ms
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_rain_mm
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: f3cee6d0-dff9-4a85-9e79-21683b52bdf4
+		summarizeBy: sum
+		sourceColumn: total_rain_mm
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column total_snow_mm
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 3c8de99a-f089-42e7-a727-2a934f8d4d35
+		summarizeBy: sum
+		sourceColumn: total_snow_mm
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column avg_cloudiness_pct
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: 83a6421d-1484-4b8c-9fb0-c89b8f728f0f
+		summarizeBy: sum
+		sourceColumn: avg_cloudiness_pct
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column dominant_weather_main
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: d3fc5561-1382-4c75-985c-22ec49468331
+		summarizeBy: none
+		sourceColumn: dominant_weather_main
+
+		annotation SummarizationSetBy = Automatic
+
+	column observation_count
+		dataType: int64
+		formatString: 0
+		sourceProviderType: bigint
+		lineageTag: 3cee7701-782c-458c-8e8a-9f0698eb86aa
+		summarizeBy: sum
+		sourceColumn: observation_count
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'marts fct_weather_daily' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_fct_weather_daily = Source{[Schema="marts",Item="fct_weather_daily"]}[Data]
+				in
+				    marts_fct_weather_daily
+

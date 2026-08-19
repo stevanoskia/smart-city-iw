@@ -1,0 +1,40 @@
+table _Pollutants
+	lineageTag: 2246485a-2ee8-4f04-8cc3-82b5e885d012
+
+	column Pollutant
+		lineageTag: ed61c2a2-4be9-4aa3-9567-56384bc68459
+		isNameInferred
+		sourceColumn: [Pollutant]
+
+	column SortOrder
+		lineageTag: 0b81315e-a771-44c4-9707-7150febb69ed
+		isNameInferred
+		sourceColumn: [SortOrder]
+
+	column WHO_Limit
+		lineageTag: a9dfb9f4-e1ad-481c-8012-572f9afd3909
+		isNameInferred
+		sourceColumn: [WHO_Limit]
+
+	column Color
+		lineageTag: 46b0f2e9-6496-4758-9ea4-60b1f36a42e5
+		isNameInferred
+		sourceColumn: [Color]
+
+	partition _Pollutants = calculated
+		source =
+				DATATABLE(
+				    "Pollutant", STRING,
+				    "SortOrder", INTEGER,
+				    "WHO_Limit", DOUBLE,
+				    "Color", STRING,
+				    {
+				        {"PM2.5", 1, 15,   "#F26522"},
+				        {"PM10",  2, 45,   "#F5C518"},
+				        {"NO2",   3, 25,   "#A855F7"},
+				        {"O3",    4, 100,  "#3B82F6"},
+				        {"CO",    5, 4000, "#22C55E"},
+				        {"SO2",   6, 40,   "#EF4444"}
+				    }
+				)
+

@@ -1,0 +1,141 @@
+/// Page 2 Active Alerts panel. Union of mart_weather_alerts and mart_pollution_alerts so the panel can show both weather and pollution alerts, as the reference layout does.
+table _P2_Alerts
+	lineageTag: eb9e5320-d83e-4ecb-80bd-09d9bee152b3
+
+	column city_key
+		lineageTag: 655a5967-0208-4138-baa4-0625552bfb54
+		isNameInferred
+		sourceColumn: [city_key]
+
+	column city
+		lineageTag: f5dada53-a882-4ae8-b9ea-f1f160d21f83
+		isNameInferred
+		sourceColumn: [city]
+
+	column alert_type
+		lineageTag: 5c005e71-e534-42d1-9d27-760f3ad5fc3a
+		isNameInferred
+		sourceColumn: [alert_type]
+
+	column severity
+		lineageTag: 5c545b02-282c-493a-b1f2-c4c93e955249
+		isNameInferred
+		sourceColumn: [severity]
+
+	column alert_at
+		lineageTag: b6ed9827-f067-41ee-9d08-b7e24ba49627
+		isNameInferred
+		sourceColumn: [alert_at]
+
+	column source
+		lineageTag: 8c779503-db83-4b41-8218-e4177f5d29a1
+		isNameInferred
+		sourceColumn: [source]
+
+	column trigger_value
+		lineageTag: 7a9997f6-476f-44f8-8f4a-13479fff8d6a
+		isNameInferred
+		sourceColumn: [trigger_value]
+
+	column trigger_unit
+		lineageTag: 4fcb0736-351f-4e47-a353-f758477b3e55
+		isNameInferred
+		sourceColumn: [trigger_unit]
+
+	/// Unicode glyph keyed to alert_type. Per-type pictograms like the reference image would need an ImageUrl column, which the model does not have.
+	column alert_icon =
+			SWITCH (
+			    '_P2_Alerts'[alert_type],
+			    "Extreme heat", UNICHAR ( 9888 ),
+			    "Heavy rain", UNICHAR ( 9730 ),
+			    "High PM10", UNICHAR ( 9679 ),
+			    "High PM2.5", UNICHAR ( 9679 ),
+			    "Poor air quality", UNICHAR ( 9679 ),
+			    UNICHAR ( 9675 )
+			)
+		dataType: string
+		lineageTag: 08fbad6c-22b2-4fca-b28f-942666bbfc80
+
+	column alert_icon_color =
+			SWITCH (
+			    '_P2_Alerts'[alert_type],
+			    "Extreme heat", "#F04F45",
+			    "Heavy rain", "#48A5FF",
+			    "High PM10", "#F17632",
+			    "High PM2.5", "#F17632",
+			    "Poor air quality", "#F17632",
+			    "#8B949E"
+			)
+		dataType: string
+		isHidden
+		lineageTag: 197cf84e-a5de-4dbd-bc6e-c049952a5aef
+
+	/// Two-line cell: alert type and city on line 1, a short description on line 2. mart_weather_alerts has no description column, so line 2 is derived from alert_type.
+	column alert_label =
+			'_P2_Alerts'[alert_type] & " " & UNICHAR ( 8212 ) & " " & '_P2_Alerts'[city] & UNICHAR ( 10 )
+			    & SWITCH (
+			        '_P2_Alerts'[alert_type],
+			        "Extreme heat", "High temperature expected",
+			        "Heavy rain", "Strong rainfall expected",
+			        "High PM10", "Elevated particulate levels",
+			        "High PM2.5", "Elevated fine particulates",
+			        "Poor air quality", "Reduced air quality",
+			        ""
+			    )
+		dataType: string
+		lineageTag: de0e22bf-de0e-4723-b29c-f30062f1f99e
+
+	/// Two-line time cell. Relative day is evaluated at model refresh.
+	column alert_time_label =
+			FORMAT ( '_P2_Alerts'[alert_at], "HH:mm" ) & UNICHAR ( 10 )
+			    & SWITCH (
+			        TRUE (),
+			        INT ( '_P2_Alerts'[alert_at] ) = TODAY (), "Today",
+			        INT ( '_P2_Alerts'[alert_at] ) = TODAY () + 1, "Tomorrow",
+			        INT ( '_P2_Alerts'[alert_at] ) = TODAY () - 1, "Yesterday",
+			        FORMAT ( '_P2_Alerts'[alert_at], "dd MMM" )
+			    )
+		dataType: string
+		lineageTag: 953d970e-b3c6-4ac6-86cb-cec079b4d225
+
+	/// Days from today to the alert. Used as the Active Alerts visual filter (-1 to 2) so the panel matches the P2 Alert Count window. Recomputed at model refresh.
+	column alert_horizon_days = INT ( '_P2_Alerts'[alert_at] ) - TODAY ()
+		dataType: int64
+		formatString: 0
+		lineageTag: fbec40e1-e22b-4f79-a74f-8c8e4e187672
+
+	/// Distance in days from today, ignoring direction. The Active Alerts table sorts ascending on this so the most imminent alerts sit at the top, without needing a visual filter.
+	column alert_sort = ABS ( INT ( '_P2_Alerts'[alert_at] ) - TODAY () )
+		dataType: int64
+		isHidden
+		formatString: 0
+		lineageTag: 7c1a4f22-90de-4b31-a5f7-2d6e8c114b03
+
+	partition _P2_Alerts = calculated
+		mode: import
+		source =
+				UNION (
+				    SELECTCOLUMNS (
+				        'marts mart_weather_alerts',
+				        "city_key", 'marts mart_weather_alerts'[city_key],
+				        "city", 'marts mart_weather_alerts'[city],
+				        "alert_type", 'marts mart_weather_alerts'[alert_type],
+				        "severity", 'marts mart_weather_alerts'[severity],
+				        "alert_at", 'marts mart_weather_alerts'[forecast_at],
+				        "source", "Weather",
+				        "trigger_value", 'marts mart_weather_alerts'[trigger_value],
+				        "trigger_unit", 'marts mart_weather_alerts'[trigger_unit]
+				    ),
+				    SELECTCOLUMNS (
+				        'marts mart_pollution_alerts',
+				        "city_key", 'marts mart_pollution_alerts'[city_key],
+				        "city", 'marts mart_pollution_alerts'[city],
+				        "alert_type", 'marts mart_pollution_alerts'[alert_type],
+				        "severity", 'marts mart_pollution_alerts'[severity],
+				        "alert_at", 'marts mart_pollution_alerts'[observed_at],
+				        "source", "Pollution",
+				        "trigger_value", 'marts mart_pollution_alerts'[trigger_value],
+				        "trigger_unit", 'marts mart_pollution_alerts'[trigger_unit]
+				    )
+				)
+

@@ -1,0 +1,97 @@
+table 'marts mart_pollution_alerts'
+	lineageTag: 288b64c3-2b61-488c-8c2b-3d766a5e43ff
+
+	column alert_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: b7495259-93e5-4486-891e-5b3f44331016
+		summarizeBy: none
+		sourceColumn: alert_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city_key
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 96008999-c8d7-4ee6-b5d1-25d6d273d53b
+		summarizeBy: none
+		sourceColumn: city_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_key
+		dataType: int64
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: a98c0241-bf23-4d52-a2d4-1ae717892ff5
+		summarizeBy: sum
+		sourceColumn: date_key
+
+		annotation SummarizationSetBy = Automatic
+
+	column city
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 7ec5a4ec-61c7-4349-8e9f-e94f4d4d9a83
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column observed_at
+		dataType: dateTime
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 9ba32138-7cc8-474f-9050-29d8f6382a08
+		summarizeBy: none
+		sourceColumn: observed_at
+
+		annotation SummarizationSetBy = Automatic
+
+	column alert_type
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 647a3b80-ae29-4822-81f8-6427400b9c4b
+		summarizeBy: none
+		sourceColumn: alert_type
+
+		annotation SummarizationSetBy = Automatic
+
+	column severity
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: a708fef5-6051-43ea-abae-d378f5b837ae
+		summarizeBy: none
+		sourceColumn: severity
+
+		annotation SummarizationSetBy = Automatic
+
+	column trigger_value
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: d05658b7-a99a-4c78-aa29-ad9851d8ec63
+		summarizeBy: sum
+		sourceColumn: trigger_value
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column trigger_unit
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 42e35d5c-1d30-4a8d-8862-ec8b742c228e
+		summarizeBy: none
+		sourceColumn: trigger_unit
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'marts mart_pollution_alerts' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    marts_mart_pollution_alerts = Source{[Schema="marts",Item="mart_pollution_alerts"]}[Data]
+				in
+				    marts_mart_pollution_alerts
+

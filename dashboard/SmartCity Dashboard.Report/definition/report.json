@@ -1,0 +1,275 @@
+{
+  "$schema": "https://developer.microsoft.com/json-schemas/fabric/item/report/definition/report/3.3.0/schema.json",
+  "themeCollection": {
+    "baseTheme": {
+      "name": "CY26SU07",
+      "reportVersionAtImport": {
+        "visual": "2.11.0",
+        "report": "3.4.0",
+        "page": "2.3.1"
+      },
+      "type": "SharedResources"
+    },
+    "customTheme": {
+      "name": "Custom5506161789822115.json",
+      "reportVersionAtImport": {
+        "visual": "2.11.0",
+        "report": "3.4.0",
+        "page": "2.3.1"
+      },
+      "type": "RegisteredResources"
+    }
+  },
+  "objects": {
+    "section": [
+      {
+        "properties": {
+          "verticalAlignment": {
+            "expr": {
+              "Literal": {
+                "Value": "'Top'"
+              }
+            }
+          }
+        }
+      }
+    ],
+    "outspacePane": [
+      {
+        "properties": {
+          "expanded": {
+            "expr": {
+              "Literal": {
+                "Value": "false"
+              }
+            }
+          }
+        }
+      }
+    ]
+  },
+  "publicCustomVisuals": [
+    "massFilter2E7137AC1174403C8CF3456F3EB0B7D7",
+    "iconMapProE938B1CED4834168A55864E1F8E7242E",
+    "donutE4A86F3675B84D178C45F7E034E25D6A",
+    "googleMapsMBPbiVisua82D1232C8868A4D07BE70C78F9F0D3EA7",
+    "advanceCardE03760C5AB684758B56AA29F9E6C257B",
+    "PBI_CV_7B952816_A48F_49B4_9E13_15E3BB2C0337",
+    "Datepicker_1687358625",
+    "InforiverCharts582F6C55AB6442EF8FA129089285CB47",
+    "maps",
+    "sankey02300D1BE6F5427989F3DE31CCA9E0F32020",
+    "powerKPIMatrixEB2381CC88A8425FBEB1B07FF57784E6",
+    "multiKpiEA8DA325489E436991F0E411F2D85FF3",
+    "sparklines50DB3783432B40A69C0B91926CE74CD9",
+    "Tachometer1474636471549",
+    "codexZoneGaugeF1E2D3C4B5A6F7E8D9C0B1A2F3E4D5C6",
+    "enlightenstorytellerE5CA73CE1C2C43878E5C0EBB4652BDD5",
+    "inforiverAppPremium2B7A5FD2992D434DAE0B149479307B7B",
+    "InforiverFilterF39DAE8D57A743EF89F5C3809DEE2B69"
+  ],
+  "resourcePackages": [
+    {
+      "name": "SharedResources",
+      "type": "SharedResources",
+      "items": [
+        {
+          "name": "CY26SU07",
+          "path": "BaseThemes/CY26SU07.json",
+          "type": "BaseTheme"
+        }
+      ]
+    },
+    {
+      "name": "RegisteredResources",
+      "type": "RegisteredResources",
+      "items": [
+        {
+          "name": "876381c6-822f-428f-9ab7-a1db345016229476680455.png",
+          "path": "876381c6-822f-428f-9ab7-a1db345016229476680455.png",
+          "type": "Image"
+        },
+        {
+          "name": "94f8cf3f-f3d4-4764-8f76-1da83609019464728550586.png",
+          "path": "94f8cf3f-f3d4-4764-8f76-1da83609019464728550586.png",
+          "type": "Image"
+        },
+        {
+          "name": "a5f69891-ab12-4a34-baab-c7efa713533792187253257.png",
+          "path": "a5f69891-ab12-4a34-baab-c7efa713533792187253257.png",
+          "type": "Image"
+        },
+        {
+          "name": "bd72b8ae-4851-425d-a3cf-d417a69460260854781214.png",
+          "path": "bd72b8ae-4851-425d-a3cf-d417a69460260854781214.png",
+          "type": "Image"
+        },
+        {
+          "name": "blowing-wind-sign-png6608934971592404.webp",
+          "path": "blowing-wind-sign-png6608934971592404.webp",
+          "type": "Image"
+        },
+        {
+          "name": "c0ae1fa6-6cd1-4c05-9e30-7da0b15442651858662665.png",
+          "path": "c0ae1fa6-6cd1-4c05-9e30-7da0b15442651858662665.png",
+          "type": "Image"
+        },
+        {
+          "name": "calendar-white-icon6839689499646967.webp",
+          "path": "calendar-white-icon6839689499646967.webp",
+          "type": "Image"
+        },
+        {
+          "name": "ChatGPT_Image_Aug_11,_2026,_0236687640395544996.png",
+          "path": "ChatGPT_Image_Aug_11,_2026,_0236687640395544996.png",
+          "type": "Image"
+        },
+        {
+          "name": "ChatGPT_Image_Aug_11,_2026,_10669640858496299.png",
+          "path": "ChatGPT_Image_Aug_11,_2026,_10669640858496299.png",
+          "type": "Image"
+        },
+        {
+          "name": "ChatGPT_Image_Aug_13,_2026,_1028254382427033997.png",
+          "path": "ChatGPT_Image_Aug_13,_2026,_1028254382427033997.png",
+          "type": "Image"
+        },
+        {
+          "name": "ChatGPT_Image_Aug_14,_2026,_02919715812068356.png",
+          "path": "ChatGPT_Image_Aug_14,_2026,_02919715812068356.png",
+          "type": "Image"
+        },
+        {
+          "name": "ChatGPT_Image_Jul_22,_2026,_102199563726619651.png",
+          "path": "ChatGPT_Image_Jul_22,_2026,_102199563726619651.png",
+          "type": "Image"
+        },
+        {
+          "name": "ChatGPT_Image_Jul_24,_2026,_02358571863045413.png",
+          "path": "ChatGPT_Image_Jul_24,_2026,_02358571863045413.png",
+          "type": "Image"
+        },
+        {
+          "name": "ChatGPT_Image_Jul_28,_2026,_106184274976020192.png",
+          "path": "ChatGPT_Image_Jul_28,_2026,_106184274976020192.png",
+          "type": "Image"
+        },
+        {
+          "name": "Custom5506161789822115.json",
+          "path": "Custom5506161789822115.json",
+          "type": "CustomTheme"
+        },
+        {
+          "name": "e2892840-43ca-442b-b541-51eba2850851024452078.png",
+          "path": "e2892840-43ca-442b-b541-51eba2850851024452078.png",
+          "type": "Image"
+        },
+        {
+          "name": "e683a7e0-56f2-4448-ba21-2e437031631261850160575.png",
+          "path": "e683a7e0-56f2-4448-ba21-2e437031631261850160575.png",
+          "type": "Image"
+        },
+        {
+          "name": "error-target-icon-only-transpa7718459336999174.png",
+          "path": "error-target-icon-only-transpa7718459336999174.png",
+          "type": "Image"
+        },
+        {
+          "name": "fc672112-b85d-49e8-944d-531d0d16959932607217054.png",
+          "path": "fc672112-b85d-49e8-944d-531d0d16959932607217054.png",
+          "type": "Image"
+        },
+        {
+          "name": "icon_congestion6853236231553914.svg",
+          "path": "icon_congestion6853236231553914.svg",
+          "type": "Image"
+        },
+        {
+          "name": "icon_flow_readings702116818692709.svg",
+          "path": "icon_flow_readings702116818692709.svg",
+          "type": "Image"
+        },
+        {
+          "name": "icon_incident_count8731810708690729.svg",
+          "path": "icon_incident_count8731810708690729.svg",
+          "type": "Image"
+        },
+        {
+          "name": "icon_road_closures8823890587387023.svg",
+          "path": "icon_road_closures8823890587387023.svg",
+          "type": "Image"
+        },
+        {
+          "name": "icon25457968363808914.png",
+          "path": "icon25457968363808914.png",
+          "type": "Image"
+        },
+        {
+          "name": "image-17853152772568645630325998744.png",
+          "path": "image-17853152772568645630325998744.png",
+          "type": "Image"
+        },
+        {
+          "name": "image-17853155113736130961519327011.png",
+          "path": "image-17853155113736130961519327011.png",
+          "type": "Image"
+        },
+        {
+          "name": "image-17853155182386200431818021002.png",
+          "path": "image-17853155182386200431818021002.png",
+          "type": "Image"
+        },
+        {
+          "name": "image-17853155233416212199235174405.png",
+          "path": "image-17853155233416212199235174405.png",
+          "type": "Image"
+        },
+        {
+          "name": "images4352330960468508.png",
+          "path": "images4352330960468508.png",
+          "type": "Image"
+        },
+        {
+          "name": "location_(2)026215867516682922.png",
+          "path": "location_(2)026215867516682922.png",
+          "type": "Image"
+        },
+        {
+          "name": "no2055238458595488704.png",
+          "path": "no2055238458595488704.png",
+          "type": "Image"
+        },
+        {
+          "name": "o37235644854379004.png",
+          "path": "o37235644854379004.png",
+          "type": "Image"
+        },
+        {
+          "name": "pm256808497982356079.png",
+          "path": "pm256808497982356079.png",
+          "type": "Image"
+        },
+        {
+          "name": "rain-cloud-icon4019335633162415.png",
+          "path": "rain-cloud-icon4019335633162415.png",
+          "type": "Image"
+        },
+        {
+          "name": "weather-intelligence-empty-tem4727560662328042.png",
+          "path": "weather-intelligence-empty-tem4727560662328042.png",
+          "type": "Image"
+        }
+      ]
+    }
+  ],
+  "settings": {
+    "useStylableVisualContainerHeader": true,
+    "exportDataMode": "AllowSummarized",
+    "defaultDrillFilterOtherVisuals": true,
+    "allowChangeFilterTypes": true,
+    "useEnhancedTooltips": true,
+    "useDefaultAggregateDisplayName": true,
+    "customMemoryLimit": "1048576",
+    "customTimeoutLimit": "225"
+  }
+}

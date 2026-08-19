@@ -1,0 +1,22 @@
+table WeatherMetrics
+	lineageTag: 135e1800-0c2e-487c-8920-45d4a7fa0608
+
+	column Metric
+		dataType: string
+		lineageTag: fef070ae-c411-4813-9e0b-0f63cace723a
+		summarizeBy: none
+		sourceColumn: Metric
+
+		annotation SummarizationSetBy = Automatic
+
+	partition WeatherMetrics = m
+		mode: import
+		source =
+				let
+				    Source = Table.FromRows(Json.Document(Binary.Decompress(Binary.FromText("i45W+jB/0nIFj9LczJTMkkqlWB2wyAqF8My8FChvYqNCWGZxZlJmDkLFlBkKAUWpxcWlRalKsbEA", BinaryEncoding.Base64), Compression.Deflate)), let _t = ((type nullable text) meta [Serialized.Text = true]) in type table [Metric = _t]),
+				    #"Changed Type" = Table.TransformColumnTypes(Source,{{"Metric", type text}})
+				in
+				    #"Changed Type"
+
+	annotation PBI_ResultType = Table
+

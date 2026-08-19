@@ -1,0 +1,24 @@
+table _TimeSpine_AQI
+	lineageTag: ce952c83-e31a-4f1f-9526-992da948fee0
+
+	column hour_ts
+		lineageTag: e5a82a02-2398-4365-b29c-115c06285466
+		isNameInferred
+		sourceColumn: [hour_ts]
+
+	partition _TimeSpine_AQI = calculated
+		source =
+				VAR Today0 = TRUNC(NOW())
+				VAR WindowStart = Today0 - 1
+				VAR WindowEnd = Today0 + 2
+				RETURN
+				FILTER(
+				    DISTINCT(
+				        UNION(
+				            SELECTCOLUMNS('marts fct_pollution_hourly', "hour_ts", 'marts fct_pollution_hourly'[observed_at]),
+				            SELECTCOLUMNS('ml_predictions aqi_forecast', "hour_ts", 'ml_predictions aqi_forecast'[predicted_for])
+				        )
+				    ),
+				    [hour_ts] >= WindowStart && [hour_ts] < WindowEnd
+				)
+

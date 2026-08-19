@@ -1,0 +1,863 @@
+table _KPIs_Overview
+	lineageTag: 77c29c05-06dc-469f-98cd-fae9a9c96069
+
+	measure 'Avg Temp' = AVERAGE('marts mart_city_daily'[avg_temp_celsius])
+		lineageTag: 8540037f-1277-4f04-817b-656be036d244
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Avg AQI' = AVERAGE('marts mart_city_daily'[avg_aqi])
+		lineageTag: f0900d44-61ba-4463-afd5-d666de6080c2
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Avg Congestion' = AVERAGE('marts mart_city_daily'[avg_congestion_score])
+		lineageTag: 87a851b4-b26f-4d19-ae32-ba24ad998054
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Comfort Index' = AVERAGE('marts mart_city_daily'[comfort_index])
+		lineageTag: 217f2b1c-eea9-47cc-97ad-5bb1ff1b2e79
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	measure 'Poor Air Days' = CALCULATE(COUNTROWS('marts mart_city_daily'), 'marts mart_city_daily'[aqi_alert] = TRUE())
+		formatString: 0
+		lineageTag: 7fd7c046-e661-4e07-b8b3-b18270deb886
+
+	measure 'Total Incidents' = SUM('marts mart_city_daily'[total_incidents])
+		formatString: 0
+		lineageTag: 5e98e84b-a458-4a71-9fe1-76f4ff4dc79f
+
+	measure 'Current Temp (°C)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_weather_hourly', 'marts fct_weather_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_weather_hourly'[temp_celsius])
+			    )
+			)
+		formatString: 0.0"°C"
+		lineageTag: f2cf59f2-e432-4257-8984-53795664def8
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Feels Like (°C)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_weather_hourly', 'marts fct_weather_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_weather_hourly'[feels_like_celsius])
+			    )
+			)
+		formatString: 0.0"°C"
+		lineageTag: f4d19689-3b8c-4339-acd9-be1b19a1b874
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Humidity %' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_weather_hourly', 'marts fct_weather_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_weather_hourly'[humidity_pct])
+			    )
+			)
+		formatString: 0"%"
+		lineageTag: bacc5c0e-80be-4cd6-8def-afe922cabbfb
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Pressure (hPa)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_weather_hourly', 'marts fct_weather_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_weather_hourly'[pressure_hpa])
+			    )
+			)
+		formatString: 0" hPa"
+		lineageTag: 3236edea-e1d0-4b90-b914-8542530ba60d
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Wind Speed (m/s)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_weather_hourly', 'marts fct_weather_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_weather_hourly'[wind_speed_ms])
+			    )
+			)
+		formatString: 0.0" m/s"
+		lineageTag: b9dd058c-086b-4b27-b4e3-d97fc8118e89
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Avg AQI (Latest)' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_pollution_hourly', 'marts fct_pollution_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_pollution_hourly'[aqi])
+			    )
+			)
+		formatString: 0
+		lineageTag: 75f103fd-e651-47a6-9f85-70e76dd909fc
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Current Congestion' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR LatestRow = TOPN(1, 'marts fct_traffic_hourly', 'marts fct_traffic_hourly'[observed_at], DESC)
+			        RETURN AVERAGEX(LatestRow, 'marts fct_traffic_hourly'[congestion_score])
+			    )
+			) * 100
+		formatString: 0"%"
+		lineageTag: 63f6a79d-af86-493e-af11-65bf32d937ba
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Active Incidents' =
+			
+			VAR LatestDate = CALCULATE(MAX('marts fct_traffic_daily'[date_utc]), ALLSELECTED('marts fct_traffic_daily'))
+			RETURN CALCULATE(SUM('marts fct_traffic_daily'[major_incidents]), 'marts fct_traffic_daily'[date_utc] = LatestDate)
+		formatString: 0
+		lineageTag: b63c80d2-9deb-4b9c-8227-a0f738496326
+
+	measure 'Rain Probability' =
+			
+			CALCULATE(
+			    AVERAGE('marts mart_forecast_latest'[precipitation_probability]),
+			    FILTER('marts mart_forecast_latest', 'marts mart_forecast_latest'[lead_time_hours] = MIN('marts mart_forecast_latest'[lead_time_hours]))
+			) * 100
+		formatString: 0"%"
+		lineageTag: 4db88d42-12c4-489a-95d5-eee4b8f7c81a
+
+		annotation PBI_FormatHint = {"isCustom":true}
+
+	measure 'Last Refresh' =
+			
+			"Updated " & FORMAT(
+			    MAXX(
+			        UNION(
+			            SELECTCOLUMNS('marts fct_weather_hourly', "t", 'marts fct_weather_hourly'[observed_at]),
+			            SELECTCOLUMNS('marts fct_pollution_hourly', "t", 'marts fct_pollution_hourly'[observed_at]),
+			            SELECTCOLUMNS('marts fct_traffic_hourly', "t", 'marts fct_traffic_hourly'[observed_at])
+			        ), [t]
+			    ), "dd MMM, HH:mm"
+			)
+		lineageTag: 0de94917-c177-48b8-ba30-9cd1381b3a28
+
+	measure 'City Status' =
+			
+			VAR ActiveAlerts = CALCULATE(COUNTROWS('marts mart_pollution_alerts'), ALLSELECTED('marts mart_pollution_alerts'))
+			             + CALCULATE(COUNTROWS('marts mart_weather_alerts'), ALLSELECTED('marts mart_weather_alerts'))
+			RETURN IF(ActiveAlerts = 0, "Normal", ActiveAlerts & " Alert" & IF(ActiveAlerts > 1, "s", ""))
+		lineageTag: 64de2c9c-3746-406a-8d5b-bb734adc8b59
+
+	measure 'Weather Condition' =
+			
+			VAR M = SELECTEDVALUE('marts mart_city_current'[weather_main])
+			VAR D = LOWER(SELECTEDVALUE('marts mart_city_current'[weather_description]))
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    M = "Clear", "Clear Sky",
+			    M = "Clouds" && CONTAINSSTRING(D, "few"), "Few Clouds",
+			    M = "Clouds" && CONTAINSSTRING(D, "scattered"), "Scattered Clouds",
+			    M = "Clouds" && CONTAINSSTRING(D, "broken"), "Broken Clouds",
+			    M = "Clouds" && CONTAINSSTRING(D, "overcast"), "Overcast",
+			    M = "Clouds", "Partly Cloudy",
+			    M = "Thunderstorm" && CONTAINSSTRING(D, "light"), "Isolated Thunderstorms",
+			    M = "Thunderstorm" && CONTAINSSTRING(D, "heavy"), "Severe Thunderstorm",
+			    M = "Thunderstorm", "Thunderstorm",
+			    M = "Drizzle" && CONTAINSSTRING(D, "light"), "Light Drizzle",
+			    M = "Drizzle", "Drizzle",
+			    M = "Rain" && CONTAINSSTRING(D, "light"), "Light Rain",
+			    M = "Rain" && CONTAINSSTRING(D, "heavy"), "Heavy Rain",
+			    M = "Rain" && CONTAINSSTRING(D, "shower"), "Rain Showers",
+			    M = "Rain", "Moderate Rain",
+			    M = "Snow" && CONTAINSSTRING(D, "light"), "Light Snow",
+			    M = "Snow" && CONTAINSSTRING(D, "heavy"), "Heavy Snow",
+			    M = "Snow" && CONTAINSSTRING(D, "sleet"), "Sleet",
+			    M = "Snow", "Moderate Snow",
+			    M = "Mist", "Mist",
+			    M = "Fog", "Fog",
+			    M = "Haze", "Haze",
+			    M = "Smoke", "Smoke",
+			    M = "Dust" || M = "Sand", "Dust",
+			    M = "Squall", "Windy",
+			    M = "Tornado", "Severe Weather",
+			    SELECTEDVALUE('marts mart_city_current'[weather_description])
+			)
+		lineageTag: 8d636ca2-6caa-43bb-bcbd-b484b1740317
+
+	measure 'Last Updated (City)' = VAR T = SELECTEDVALUE('marts mart_city_current'[observed_at]) RETURN IF ( ISBLANK ( T ), "All cities", "Last Updated " & FORMAT ( T, "d MMM" ) & " " & UNICHAR ( 183 ) & " " & FORMAT ( T, "HH:mm" ) )
+		lineageTag: 463e1763-6e35-4323-8019-6cbf9c727bf4
+
+	measure Sunrise = VAR T = SELECTEDVALUE('marts mart_city_current'[sunrise_at]) VAR O = SELECTEDVALUE('marts mart_city_current'[timezone_offset_sec]) RETURN IF ( ISBLANK ( T ), UNICHAR ( 8212 ), FORMAT ( T + DIVIDE ( O, 86400 ), "hh:mm AM/PM" ) )
+		lineageTag: 608ef75a-4ed6-4d01-8834-a1735fdb773a
+
+	measure Sunset = VAR T = SELECTEDVALUE('marts mart_city_current'[sunset_at]) VAR O = SELECTEDVALUE('marts mart_city_current'[timezone_offset_sec]) RETURN IF ( ISBLANK ( T ), UNICHAR ( 8212 ), FORMAT ( T + DIVIDE ( O, 86400 ), "hh:mm AM/PM" ) )
+		lineageTag: da66ed78-9dc1-4cf8-bacc-bc56d7b09e1c
+
+	measure 'Weather Condition Count' = COUNTROWS('marts mart_city_current')
+		formatString: 0
+		lineageTag: 51650a9b-4e48-450e-bfbc-c3e8f9df3381
+
+	measure 'Weather Icon URL' =
+			
+			"https://openweathermap.org/img/wn/" & SELECTEDVALUE('marts mart_city_current'[weather_icon_code]) & "@2x.png"
+		lineageTag: 166fe772-b006-451d-9356-1a3b69726170
+		dataCategory: ImageUrl
+
+	measure 'Current Date' = FORMAT(TODAY(), "DD MMM YYYY")
+		lineageTag: 8f938bdb-3028-40db-9585-6e177fc99887
+
+	measure 'Temp 7D vs' =
+			
+			CALCULATE(
+			    AVERAGE('marts fct_weather_hourly'[temp_celsius]),
+			    DATESINPERIOD(
+			        'marts dim_date'[date_key],
+			        MAX('marts dim_date'[date_key]),
+			        -7,
+			        DAY
+			    )
+			)
+		formatString: 0
+		lineageTag: 19fc8020-2e42-4613-b5c7-3c9ac6540d9a
+
+	measure 'Avg Temp vs 7D' =
+			
+			VAR CurrTemp = AVERAGE('marts fct_weather_hourly'[temp_celsius])
+			VAR Avg7D = [Temp 7D vs]
+			VAR _perc = DIVIDE(CurrTemp - Avg7D, Avg7D, 0)
+			VAR _format = FORMAT(_perc, "0.0%;0.0%;0.0%")
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    _perc > 0, UNICHAR(11165) & " " & _format,
+			    _perc < 0, UNICHAR(11167) & " " & _format,
+			    "→ 0.0%"
+			)
+		isHidden
+		lineageTag: b509c5ec-9d8d-4f7b-b36a-1e6723bdf3bb
+
+	measure 'Comfort Index Previous' = AVERAGE('marts mart_city_daily'[prior_7d_comfort])
+		formatString: 0.0
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: c47e62de-5f77-4c4b-b0a5-c73bd936aa2c
+
+	measure 'Comfort Index Change' = AVERAGE('marts mart_city_daily'[rolling_7d_comfort]) - [Comfort Index Previous]
+		formatString: +0.0;-0.0;0.0
+		displayFolder: Trend Indicators
+		lineageTag: 81294ef0-e232-419a-be85-4ebb8b182fc9
+
+	measure 'Comfort Index Arrow' = IF([Comfort Index Change] >= 0, UNICHAR(11165), UNICHAR(11167))
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: d2e277e5-ad9c-478d-b093-9faa7a7e9653
+
+	measure 'Comfort Index Trend Color' = IF([Comfort Index Change] >= 0, "#2E7D32", "#C62828")
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: 34baf00e-5a97-48c0-8033-75dd92bdbecf
+
+	measure 'Comfort Index Trend' =
+			VAR _chg = [Comfort Index Change]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    _chg > 0, UNICHAR(11165) & " " & FORMAT(_chg, "+0.0"),
+			    _chg < 0, UNICHAR(11167) & " " & FORMAT(_chg, "0.0"),
+			    "→ 0.0"
+			)
+		displayFolder: Trend Indicators
+		lineageTag: 923200fd-9f6b-47f2-93d0-c5e5ee2b24a3
+
+	measure 'Rain Probability Previous' =
+			VAR MinLead = CALCULATE(MIN('marts mart_forecast_latest'[lead_time_hours]), ALLSELECTED('marts mart_forecast_latest'))
+			VAR PrevLead = CALCULATE(MIN('marts mart_forecast_latest'[lead_time_hours]), FILTER(ALLSELECTED('marts mart_forecast_latest'), 'marts mart_forecast_latest'[lead_time_hours] > MinLead))
+			RETURN CALCULATE(AVERAGE('marts mart_forecast_latest'[precipitation_probability]), 'marts mart_forecast_latest'[lead_time_hours] = PrevLead) * 100
+		formatString: 0"%"
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: fdd8147e-31fd-4ddc-8fce-adce2398bd6c
+
+	measure 'Rain Probability Change' = [Rain Probability] - [Rain Probability Previous]
+		formatString: +0;-0;0
+		displayFolder: Trend Indicators
+		lineageTag: 71cb173d-fc5c-4b3f-a507-7ce0e66e9ba6
+
+	measure 'Rain Probability Arrow' = IF([Rain Probability Change] >= 0, UNICHAR(11165), UNICHAR(11167))
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: c5faaa50-b7fb-4e82-81e8-5b50b1e07930
+
+	measure 'Rain Probability Trend Color' = IF([Rain Probability Change] >= 0, "#2E7D32", "#C62828")
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: a39a008e-72f2-49f8-96fe-265d2d62150e
+
+	measure 'Rain Probability Trend' =
+			VAR _chg = [Rain Probability Change]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    _chg > 0, UNICHAR(11165) & " " & FORMAT(_chg, "+0") & "pp",
+			    _chg < 0, UNICHAR(11167) & " " & FORMAT(_chg, "0") & "pp",
+			    "→ 0pp"
+			)
+		displayFolder: Trend Indicators
+		lineageTag: 45bde877-ac26-485d-9ba7-1b4ce8b05de3
+
+	measure 'Humidity % Previous' =
+			AVERAGEX(
+			    VALUES('marts dim_city'[city]),
+			    CALCULATE(
+			        VAR Last2 = TOPN(2, 'marts fct_weather_hourly', 'marts fct_weather_hourly'[observed_at], DESC)
+			        VAR PrevRow = TOPN(1, Last2, 'marts fct_weather_hourly'[observed_at], ASC)
+			        RETURN AVERAGEX(PrevRow, 'marts fct_weather_hourly'[humidity_pct])
+			    )
+			)
+		formatString: 0"%"
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: 07144e1a-7b42-4eb8-9a02-e566b819b2f5
+
+	measure 'Humidity % Change' = [Humidity %] - [Humidity % Previous]
+		formatString: +0;-0;0
+		displayFolder: Trend Indicators
+		lineageTag: 0b5d75b7-cbbe-4006-b442-2fe6399e94c9
+
+	measure 'Humidity % Arrow' = IF([Humidity % Change] >= 0, UNICHAR(11165), UNICHAR(11167))
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: f98eebcf-4a1e-45d5-ba1f-71e035f17858
+
+	measure 'Humidity % Trend Color' = IF([Humidity % Change] >= 0, "#2E7D32", "#C62828")
+		isHidden
+		displayFolder: Trend Indicators
+		lineageTag: 865d8ee8-f608-44be-97e1-154bb2893cbf
+
+	measure 'Humidity % Trend' =
+			VAR _chg = [Humidity % Change]
+			RETURN
+			SWITCH(
+			    TRUE(),
+			    _chg > 0, UNICHAR(11165) & " " & FORMAT(_chg, "+0") & "pp",
+			    _chg < 0, UNICHAR(11167) & " " & FORMAT(_chg, "0") & "pp",
+			    "→ 0pp"
+			)
+		displayFolder: Trend Indicators
+		lineageTag: 341c3f81-5928-41f1-a8e4-dcb6e1df8c56
+
+	/// TRUE only when the selected city has traffic coverage. Driven by dim_city[has_traffic_data], never a hardcoded city list.
+	measure 'P2 Has Traffic' = COALESCE ( SELECTEDVALUE ( 'marts dim_city'[has_traffic_data] ), FALSE () )
+		isHidden
+		displayFolder: Page 2 Overview\Foundation
+		lineageTag: 8ff2a4d3-ab71-41df-a543-3a60257ef8f2
+
+	/// Header date readout.
+	measure 'P2 Report Date' = FORMAT ( CALCULATE ( MAX ( 'marts mart_city_current'[observed_at] ), REMOVEFILTERS ( 'marts dim_city' ) ), "dd MMM yyyy" )
+		displayFolder: Page 2 Overview\Foundation
+		lineageTag: 20c887b1-86db-4818-9465-9dbf4a2f9491
+
+	/// Footer under Today's Summary.
+	measure 'P2 Latest Reading' =
+			VAR T = CALCULATE ( MAX ( 'marts mart_city_current'[observed_at] ), REMOVEFILTERS ( 'marts dim_city' ) )
+			RETURN IF ( ISBLANK ( T ), BLANK (), "Latest readings: " & FORMAT ( T, "HH:mm" ) & " UTC" )
+		displayFolder: Page 2 Overview\Foundation
+		lineageTag: a13a119a-1abf-49c7-8308-6a6fc1926264
+
+	/// Good/Fair/Alert from mart_city_current. THRESHOLDS ARE A BUSINESS RULE, not model content: rain >= 4mm or temp >= 35C or <= -10C = Alert; any rain or temp >= 30C or <= 0C = Fair. Review before presenting.
+	measure 'P2 Weather Status' =
+			VAR W = SELECTEDVALUE ( 'marts mart_city_current'[weather_main] )
+			VAR R = COALESCE ( SELECTEDVALUE ( 'marts mart_city_current'[rain_1h_mm] ), 0 )
+			VAR T = SELECTEDVALUE ( 'marts mart_city_current'[temp_celsius] )
+			RETURN
+			SWITCH (
+			    TRUE (),
+			    ISBLANK ( W ) && ISBLANK ( T ), "N/A",
+			    R >= 4 || T >= 35 || T <= -10 || W IN { "Thunderstorm", "Snow" }, "Alert",
+			    R > 0 || T >= 30 || T <= 0 || W IN { "Rain", "Drizzle", "Mist", "Fog" }, "Fair",
+			    "Good"
+			)
+		displayFolder: Page 2 Overview\Status
+		lineageTag: ee56870c-d6d3-4eaf-a4c1-7c237f67ec1c
+
+	measure 'P2 Weather Status Color' = SWITCH ( [P2 Weather Status], "Good", "#46D477", "Fair", "#F5C518", "Alert", "#F04F45", "#5A5F66" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 692b54e0-73a2-492b-be63-ff7b7dc30ce0
+
+	/// Low/Moderate/High/N-A. Returns the literal N/A for cities without traffic coverage; never 0 and never Free Flow.
+	measure 'P2 Traffic Status' =
+			IF (
+			    NOT [P2 Has Traffic],
+			    "N/A",
+			    VAR C = [Current Congestion]
+			    RETURN
+			        SWITCH ( TRUE (), ISBLANK ( C ), "N/A", C >= 40, "High", C >= 20, "Moderate", "Low" )
+			)
+		displayFolder: Page 2 Overview\Status
+		lineageTag: 5994d5fc-b42d-48dc-9545-cd0a1c7069d1
+
+	measure 'P2 Traffic Status Color' = SWITCH ( [P2 Traffic Status], "Low", "#46D477", "Moderate", "#F5C518", "High", "#F04F45", "#5A5F66" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: a953b3ec-a7a6-452f-a3c5-5f0c0445af45
+
+	/// CONGESTION KPI card value. Text so that missing traffic renders N/A rather than 0%.
+	measure 'P2 Congestion Display' =
+			VAR C = [Current Congestion]
+			RETURN IF ( NOT [P2 Has Traffic] || ISBLANK ( C ), "N/A", FORMAT ( C, "0" ) & "%" )
+		displayFolder: Page 2 Overview\KPI
+		lineageTag: c9644289-d18a-432b-a018-7cffdabd070a
+
+	/// ACTIVE window = weather alerts forecast within the next 48h + pollution alerts observed in the last 24h. Window is a documented choice, not a model field.
+	measure 'P2 Alert Count' =
+			VAR NowT = CALCULATE ( MAX ( 'marts mart_city_current'[observed_at] ), REMOVEFILTERS ( 'marts dim_city' ) )
+			VAR W =
+			    CALCULATE (
+			        COUNTROWS ( 'marts mart_weather_alerts' ),
+			        'marts mart_weather_alerts'[forecast_at] >= NowT,
+			        'marts mart_weather_alerts'[forecast_at] <= NowT + 2
+			    )
+			VAR P =
+			    CALCULATE (
+			        COUNTROWS ( 'marts mart_pollution_alerts' ),
+			        'marts mart_pollution_alerts'[observed_at] >= NowT - 1
+			    )
+			RETURN COALESCE ( W, 0 ) + COALESCE ( P, 0 )
+		formatString: 0
+		displayFolder: Page 2 Overview\Alerts
+		lineageTag: e3f17769-fba7-41ff-a1fb-2fb31af20753
+
+	measure 'P2 Alert Count Color' = IF ( [P2 Alert Count] > 0, "#F04F45", "#46D477" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 0135b729-2541-4237-a5b0-a63bc3d95892
+
+	/// 1=Good 2=Watch 3=Alert. C is BLANK for cities without traffic, so the congestion clause simply never fires for them - no fabricated 0.
+	measure 'P2 City Status Level' =
+			VAR A = [Current AQI]
+			VAR N = [P2 Alert Count]
+			VAR C = [Current Congestion]
+			RETURN
+			SWITCH (
+			    TRUE (),
+			    A >= 4 || N >= 2 || C >= 40, 3,
+			    A = 3 || N = 1 || C >= 20, 2,
+			    1
+			)
+		formatString: 0
+		isHidden
+		displayFolder: Page 2 Overview\Status
+		lineageTag: 2d06e548-ddd5-4497-be98-f5cd23518f1f
+
+	/// Good / Caution / Alert. Caution is the middle tier: air quality Moderate, OR exactly one active alert, OR congestion 20-40%. These thresholds are a business rule, not model content.
+	measure 'P2 City Status' = SWITCH ( [P2 City Status Level], 1, "Good", 2, "Caution", 3, "Alert", "N/A" )
+		displayFolder: Page 2 Overview\Status
+		lineageTag: ab004472-0272-4306-ad69-2ad369235d89
+
+	measure 'P2 City Status Color' = SWITCH ( [P2 City Status], "Good", "#46D477", "Caution", "#F5C518", "Alert", "#F04F45", "#5A5F66" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: d830028f-3317-4166-8f14-ca947de70eea
+
+	measure 'P2 Temp Delta' =
+			VAR D = CALCULATE ( MAX ( 'marts mart_city_daily'[date_utc] ), REMOVEFILTERS ( 'marts dim_date' ) )
+			VAR T0 = CALCULATE ( AVERAGE ( 'marts mart_city_daily'[avg_temp_celsius] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D )
+			VAR T1 = CALCULATE ( AVERAGE ( 'marts mart_city_daily'[avg_temp_celsius] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D - 1 )
+			RETURN IF ( ISBLANK ( T0 ) || ISBLANK ( T1 ), BLANK (), T0 - T1 )
+		isHidden
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: f8e42d62-231a-4037-906d-c3ff09800510
+
+	measure 'P2 AQI Delta' =
+			VAR D = CALCULATE ( MAX ( 'marts mart_city_daily'[date_utc] ), REMOVEFILTERS ( 'marts dim_date' ) )
+			VAR A0 = CALCULATE ( AVERAGE ( 'marts mart_city_daily'[avg_aqi] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D )
+			VAR A1 = CALCULATE ( AVERAGE ( 'marts mart_city_daily'[avg_aqi] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D - 1 )
+			RETURN IF ( ISBLANK ( A0 ) || ISBLANK ( A1 ), BLANK (), A0 - A1 )
+		isHidden
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: d2f981a4-3571-4576-8143-ba3b8b110088
+
+	measure 'P2 Congestion Delta' =
+			IF (
+			    NOT [P2 Has Traffic],
+			    BLANK (),
+			    VAR D = CALCULATE ( MAX ( 'marts mart_city_daily'[date_utc] ), REMOVEFILTERS ( 'marts dim_date' ) )
+			    VAR C0 = CALCULATE ( AVERAGE ( 'marts mart_city_daily'[avg_congestion_score] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D )
+			    VAR C1 = CALCULATE ( AVERAGE ( 'marts mart_city_daily'[avg_congestion_score] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D - 1 )
+			    RETURN IF ( ISBLANK ( C0 ) || ISBLANK ( C1 ), BLANK (), ( C0 - C1 ) * 100 )
+			)
+		isHidden
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: 97219660-e7ae-4983-b9be-a95212e07441
+
+	measure 'P2 Alerts Delta' =
+			VAR NowT = CALCULATE ( MAX ( 'marts mart_city_current'[observed_at] ), REMOVEFILTERS ( 'marts dim_city' ) )
+			VAR Today = CALCULATE ( COUNTROWS ( 'marts mart_weather_alerts' ), 'marts mart_weather_alerts'[forecast_at] >= NowT, 'marts mart_weather_alerts'[forecast_at] <= NowT + 2 )
+			VAR Yest = CALCULATE ( COUNTROWS ( 'marts mart_weather_alerts' ), 'marts mart_weather_alerts'[forecast_at] >= NowT - 1, 'marts mart_weather_alerts'[forecast_at] <= NowT + 1 )
+			RETURN COALESCE ( Today, 0 ) - COALESCE ( Yest, 0 )
+		isHidden
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: fd417d2a-1f1a-423e-8540-5884079564f0
+
+	measure 'P2 Temp Delta Label' =
+			VAR D = [P2 Temp Delta]
+			RETURN IF ( ISBLANK ( D ), "—", IF ( D >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( ABS ( D ), "0.0" ) & "°C" )
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: 5b46af8c-9d6b-407a-a24d-ccf9d9a6d1a5
+
+	measure 'P2 Temp Delta Color' = IF ( COALESCE ( [P2 Temp Delta], 0 ) > 0, "#F17632", "#46D477" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 5f3e4696-0f33-4b52-b2f1-0bd3f0140a83
+
+	measure 'P2 AQI Delta Label' =
+			VAR D = [P2 AQI Delta]
+			RETURN IF ( ISBLANK ( D ), "—", IF ( D >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( ABS ( D ), "0.0" ) )
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: aec2b03c-fb6e-4aee-a5e6-3f1c1064f7d8
+
+	measure 'P2 AQI Delta Color' = IF ( COALESCE ( [P2 AQI Delta], 0 ) > 0, "#F17632", "#46D477" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: ca242a95-f8a7-44f3-a321-840751ca3087
+
+	/// Reuses the existing PM2.5 vs Yesterday measure.
+	measure 'P2 PM25 Delta Label' =
+			VAR D = [PM2.5 vs Yesterday]
+			RETURN IF ( ISBLANK ( D ), "—", IF ( D >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( ABS ( D ), "0.0" ) )
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: 02a053da-5667-45d4-9bc8-deb95ac0b4ea
+
+	measure 'P2 PM25 Delta Color' = IF ( COALESCE ( [PM2.5 vs Yesterday], 0 ) > 0, "#F17632", "#46D477" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 89919123-6eec-4de9-acd4-b15713a19dd2
+
+	measure 'P2 Congestion Delta Label' =
+			IF (
+			    NOT [P2 Has Traffic],
+			    "N/A",
+			    VAR D = [P2 Congestion Delta]
+			    RETURN IF ( ISBLANK ( D ), "—", IF ( D >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( ABS ( D ), "0" ) & "%" )
+			)
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: becfa531-3306-4d80-96c5-b7ef1050195a
+
+	measure 'P2 Congestion Delta Color' = IF ( NOT [P2 Has Traffic], "#8B949E", IF ( COALESCE ( [P2 Congestion Delta], 0 ) > 0, "#F17632", "#46D477" ) )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 4abcf14d-9397-44f6-804b-ba4f6e8ce332
+
+	measure 'P2 Alerts Delta Label' =
+			VAR D = [P2 Alerts Delta]
+			RETURN IF ( ISBLANK ( D ), "—", IF ( D >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( ABS ( D ), "0" ) )
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: 982fc063-c1f1-44f3-8cd1-706d7a0ed1cf
+
+	measure 'P2 Alerts Delta Color' = IF ( COALESCE ( [P2 Alerts Delta], 0 ) > 0, "#F04F45", "#46D477" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 838b9b56-4670-493c-9c87-264979ba9da8
+
+	/// City Status has no numeric yesterday equivalent in the model, so the reference label carries the caption only. Flagged rather than fabricated.
+	measure 'P2 Status Delta Label' = "vs yesterday"
+		displayFolder: Page 2 Overview\Deltas
+		lineageTag: 448b518c-c9d1-4156-a69d-adfdaf63d7c6
+
+	/// Matrix column header. Named so the City Conditions matrix header reads exactly 'Weather'.
+	measure Weather = IF ( ISBLANK ( SELECTEDVALUE ( 'marts dim_city'[city] ) ), BLANK (), [P2 Weather Status] )
+		displayFolder: Page 2 Overview\Matrix
+		lineageTag: 18d4da1c-237b-407e-92cb-499a2178764f
+
+	/// Matrix column header. Reuses the existing Current AQI Category (native 1-5 scale: Good/Fair/Moderate/Poor/Very Poor).
+	measure 'Air Quality' = IF ( ISBLANK ( SELECTEDVALUE ( 'marts dim_city'[city] ) ), BLANK (), [Current AQI Category] )
+		displayFolder: Page 2 Overview\Matrix
+		lineageTag: 02e8d3d8-cf8b-4402-8b7e-ed93a7a64abb
+
+	/// Matrix column header. Shows N/A for Bitola, Ohrid, Prilep, Skopje.
+	measure Traffic = IF ( ISBLANK ( SELECTEDVALUE ( 'marts dim_city'[city] ) ), BLANK (), [P2 Traffic Status] )
+		displayFolder: Page 2 Overview\Matrix
+		lineageTag: 39183d3f-bd8a-4a05-8e6d-e229efc3a6c1
+
+	/// Matrix column header.
+	measure Alerts = IF ( ISBLANK ( SELECTEDVALUE ( 'marts dim_city'[city] ) ), BLANK (), [P2 Alert Count] )
+		formatString: 0
+		displayFolder: Page 2 Overview\Matrix
+		lineageTag: 30d10e2c-728c-47d1-8a6c-cb50524cf2e3
+
+	/// 0-1, higher is better. Uses mart_city_daily[comfort_index]. NOT norm_temp, which is a min-max position of temperature (1.00 = hottest city) and would rank a heatwave as excellent weather.
+	measure 'Weather Score' =
+			VAR D = CALCULATE ( MAX ( 'marts mart_city_daily'[date_utc] ), REMOVEFILTERS ( 'marts dim_date' ) )
+			RETURN CALCULATE ( AVERAGE ( 'marts mart_city_daily'[comfort_index] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D )
+		formatString: 0.00
+		displayFolder: Page 2 Overview\Comparison
+		lineageTag: f538e98d-f171-4d14-a726-a1dec516055e
+
+	/// 0-1, higher is better. INVERTED from mart_city_daily[norm_aqi], where 0 = cleanest air. Inversion is required so the chart's stated 0=poor..1=excellent scale is truthful.
+	measure 'Air Quality Score' =
+			VAR D = CALCULATE ( MAX ( 'marts mart_city_daily'[date_utc] ), REMOVEFILTERS ( 'marts dim_date' ) )
+			VAR N = CALCULATE ( AVERAGE ( 'marts mart_city_daily'[norm_aqi] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D )
+			RETURN IF ( ISBLANK ( N ), BLANK (), 1 - N )
+		formatString: 0.00
+		displayFolder: Page 2 Overview\Comparison
+		lineageTag: 8fd44bfb-80d8-4155-8bf5-47f7842255fb
+
+	/// 0-1, higher is better. CRITICAL: mart_city_daily[norm_traffic] is imputed to 0.5 by dbt for cities with no traffic data. Raw use would draw a fabricated half-height bar for Bitola/Ohrid/Prilep/Skopje. The has_traffic guard forces BLANK so no bar is drawn at all.
+	measure 'Traffic Score' =
+			IF (
+			    NOT [P2 Has Traffic],
+			    BLANK (),
+			    VAR D = CALCULATE ( MAX ( 'marts mart_city_daily'[date_utc] ), REMOVEFILTERS ( 'marts dim_date' ) )
+			    RETURN CALCULATE ( AVERAGE ( 'marts mart_city_daily'[norm_traffic] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts mart_city_daily'[date_utc] = D )
+			)
+		formatString: 0.00
+		displayFolder: Page 2 Overview\Comparison
+		lineageTag: 8868f1de-bb04-497c-94cc-adb77e5b9e8c
+
+	/// Today's Summary narrative. Emits the exact mandated sentence 'Traffic data is unavailable for this city.' and never states a congestion figure for uncovered cities.
+	measure 'P2 Summary' =
+			IF (
+			    NOT HASONEVALUE ( 'marts dim_city'[city] ),
+			    "Select a city to see its summary.",
+			    VAR C = SELECTEDVALUE ( 'marts dim_city'[city] )
+			    VAR WeatherT =
+			        SWITCH (
+			            [P2 Weather Status],
+			            "Good", "mild weather",
+			            "Fair", "changeable weather",
+			            "Alert", "severe weather",
+			            "weather data unavailable"
+			        )
+			    VAR AirT = LOWER ( [Current AQI Category] ) & " air quality"
+			    VAR N = [P2 Alert Count]
+			    VAR TrafficT =
+			        IF (
+			            NOT [P2 Has Traffic],
+			            " Traffic data is unavailable for this city.",
+			            SWITCH (
+			                [P2 Traffic Status],
+			                "Low", " Traffic congestion is low,",
+			                "Moderate", " Traffic congestion is moderate,",
+			                "High", " Traffic congestion is high,",
+			                ""
+			            )
+			        )
+			    VAR AlertT =
+			        IF (
+			            [P2 Has Traffic],
+			            IF (
+			                N = 0,
+			                " with no critical alerts currently active.",
+			                " with " & N & " active alert" & IF ( N > 1, "s", "" ) & "."
+			            ),
+			            IF (
+			                N = 0,
+			                " No critical alerts are currently active.",
+			                " There " & IF ( N > 1, "are ", "is " ) & N & " active alert" & IF ( N > 1, "s", "" ) & "."
+			            )
+			        )
+			    RETURN C & " has " & WeatherT & " and " & AirT & "." & TrafficT & AlertT
+			)
+		displayFolder: Page 2 Overview\Narrative
+		lineageTag: 75f8cba9-fae1-40b0-a9a0-bcc3d209ef7a
+
+	/// Conditional font colour for the Active Alerts icon column.
+	measure 'P2 Alert Icon Color' = COALESCE ( SELECTEDVALUE ( '_P2_Alerts'[alert_icon_color] ), "#8B949E" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 33c9166a-4352-4044-9f04-9e03f5b24ed8
+
+	/// Footnote under the City Comparison chart. Counts are read from the model, not hardcoded.
+	measure 'P2 Comparison Note' =
+			VAR N = CALCULATE ( COUNTROWS ( 'marts dim_city' ), 'marts dim_city'[has_traffic_data] = TRUE (), REMOVEFILTERS ( 'marts dim_city' ) )
+			VAR T = CALCULATE ( COUNTROWS ( 'marts dim_city' ), REMOVEFILTERS ( 'marts dim_city' ) )
+			RETURN "Scores are normalized from 0 (poor) to 1 (excellent). Traffic is available for " & N & " of " & T & " cities; no bar means data is not available."
+		displayFolder: Page 2 Overview\Comparison
+		lineageTag: 0d4ca12d-f38b-4209-9616-5addef82ecf1
+
+	/// Page 2 KPI reference label. Combines the arrow, the value and the caption into one string so the card shows "▲ 3.1°C vs yesterday" with no measure name.
+	measure 'P2 Temp Ref' = IF ( ISBLANK ( [P2 Temp Delta] ), "— vs yesterday", [P2 Temp Delta Label] & " vs yesterday" )
+		displayFolder: Page 2 Overview\RefLabels
+		lineageTag: 0a518a3c-0995-484c-8ebb-2d12661dc79d
+
+	measure 'P2 AQI Ref' = IF ( ISBLANK ( [P2 AQI Delta] ), "— vs yesterday", [P2 AQI Delta Label] & " vs yesterday" )
+		displayFolder: Page 2 Overview\RefLabels
+		lineageTag: 9c558e8f-6d26-4de8-af2b-95af626065ef
+
+	measure 'P2 PM25 Ref' = IF ( ISBLANK ( [PM2.5 vs Yesterday] ), "— vs yesterday", [P2 PM25 Delta Label] & " vs yesterday" )
+		displayFolder: Page 2 Overview\RefLabels
+		lineageTag: dba3a238-5c1b-424d-825d-581fc644b3ae
+
+	measure 'P2 Congestion Ref' = IF ( NOT [P2 Has Traffic], "Traffic unavailable", IF ( ISBLANK ( [P2 Congestion Delta] ), "— vs yesterday", [P2 Congestion Delta Label] & " vs yesterday" ) )
+		displayFolder: Page 2 Overview\RefLabels
+		lineageTag: 0442aa2b-742c-4906-b5a8-c35693adb350
+
+	measure 'P2 Alerts Ref' = IF ( ISBLANK ( [P2 Alerts Delta] ), "— vs yesterday", [P2 Alerts Delta Label] & " vs yesterday" )
+		displayFolder: Page 2 Overview\RefLabels
+		lineageTag: c8206be3-1112-4791-baac-ed1dbabfe2af
+
+	/// City Status has no numeric yesterday equivalent anywhere in the model, so this is deliberately blank rather than fabricated.
+	measure 'P2 Status Ref' = BLANK ()
+		displayFolder: Page 2 Overview\RefLabels
+		lineageTag: ff4d3e15-eb43-4200-9fff-26fca28fd6ab
+
+	/// Forecast card values, with units, and N/A where traffic is not covered. Wrappers so the shared _KPIs_ML measures used by Page 3 keep their own formatting.
+	measure 'P2 Forecast PM25' = VAR V = [Predicted PM2.5 (24h)] RETURN IF ( ISBLANK ( V ), "N/A", FORMAT ( V, "0.0" ) & " µg/m³" )
+		displayFolder: Page 2 Overview\Forecast
+		lineageTag: d0bb2500-a3b9-4a69-8130-8d24c1a82016
+
+	measure 'P2 Forecast Temp' = VAR V = [Predicted Temp (3h)] RETURN IF ( ISBLANK ( V ), "N/A", FORMAT ( V, "0.0" ) & " °C" )
+		displayFolder: Page 2 Overview\Forecast
+		lineageTag: 8d262021-4e57-47c8-954e-7eec8294e4d0
+
+	measure 'P2 Forecast Cong' = VAR V = [Predicted Congestion (1h)] RETURN IF ( NOT [P2 Has Traffic] || ISBLANK ( V ), "N/A", FORMAT ( V, "0" ) & " %" )
+		displayFolder: Page 2 Overview\Forecast
+		lineageTag: 0e411a0b-b28f-40d4-9663-7b1b106c4826
+
+	/// Forecast change indicators, explicitly measured against the CURRENT reading and labelled "vs now". The model retains no previous forecast run, so a run-over-run delta is not available and is not implied. These are not confidence figures.
+	measure 'P2 Forecast PM25 Ref' = VAR D = [Predicted PM2.5 (24h)] - [Current PM2.5] RETURN IF ( ISBLANK ( D ), BLANK (), IF ( D >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( ABS ( D ), "0.0" ) & " vs now" )
+		displayFolder: Page 2 Overview\Forecast
+		lineageTag: a9c6ac37-f95a-4eea-982a-30b3b3b660c5
+
+	measure 'P2 Forecast Temp Ref' = VAR D = [Predicted Temp (3h)] - [Current Temp (°C)] RETURN IF ( ISBLANK ( D ), BLANK (), IF ( D >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( ABS ( D ), "0.0" ) & "° vs now" )
+		displayFolder: Page 2 Overview\Forecast
+		lineageTag: 296bf797-40f5-4699-b780-4ff212ee48d1
+
+	measure 'P2 Forecast Cong Ref' = IF ( NOT [P2 Has Traffic], "Traffic unavailable", VAR D = [Predicted Congestion (1h)] - [Current Congestion] RETURN IF ( ISBLANK ( D ), BLANK (), IF ( D >= 0, UNICHAR ( 9650 ), UNICHAR ( 9660 ) ) & " " & FORMAT ( ABS ( D ), "0" ) & " pts vs now" ) )
+		displayFolder: Page 2 Overview\Forecast
+		lineageTag: af6efcb3-846b-47d2-b170-c6328374b3fd
+
+	measure 'P2 Forecast PM25 Color' = VAR D = [Predicted PM2.5 (24h)] - [Current PM2.5] RETURN IF ( COALESCE ( D, 0 ) > 0, "#F17632", "#46D477" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 848f573f-15ff-4aa7-9745-b381c3e5104f
+
+	measure 'P2 Forecast Temp Color' = VAR D = [Predicted Temp (3h)] - [Current Temp (°C)] RETURN IF ( COALESCE ( D, 0 ) > 0, "#F17632", "#46D477" )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: a5f306bc-f315-47e8-991c-e69e0017dfd2
+
+	measure 'P2 Forecast Cong Color' = IF ( NOT [P2 Has Traffic], "#8B949E", VAR D = [Predicted Congestion (1h)] - [Current Congestion] RETURN IF ( COALESCE ( D, 0 ) > 0, "#F17632", "#46D477" ) )
+		isHidden
+		displayFolder: Page 2 Overview\Colors
+		lineageTag: 2014d350-c8cd-4887-8d2f-a3133521b3b8
+
+	/// Latest timestamp within an alert group. Lets the Active Alerts table group by city + type so 19 duplicate Barcelona PM10 rows collapse to one.
+	measure 'P2 Alert When' = VAR T = MAX ( '_P2_Alerts'[alert_at] ) RETURN IF ( ISBLANK ( T ), BLANK (), FORMAT ( T, "HH:mm" ) & UNICHAR ( 10 ) & SWITCH ( TRUE (), INT ( T ) = TODAY (), "Today", INT ( T ) = TODAY () + 1, "Tomorrow", INT ( T ) = TODAY () - 1, "Yesterday", FORMAT ( T, "dd MMM" ) ) )
+		displayFolder: Page 2 Overview\Alerts
+		lineageTag: ed709b8d-afb5-4283-af76-18f0f4dc2324
+
+	measure 'P2 Alert Rank' = MIN ( '_P2_Alerts'[alert_sort] )
+		formatString: 0
+		isHidden
+		displayFolder: Page 2 Overview\Alerts
+		lineageTag: 97e930f4-a9f2-4536-973a-b7fa84c596e4
+
+	/// Comparison chart footer, exact wording requested. Counts read from the model.
+	measure 'P2 Comparison Footer' = "Traffic data is available for " & CALCULATE ( DISTINCTCOUNT ( 'marts dim_city'[city] ), 'marts dim_city'[has_traffic_data] = TRUE (), REMOVEFILTERS ( 'marts dim_city' ) ) & " of " & CALCULATE ( DISTINCTCOUNT ( 'marts dim_city'[city] ), REMOVEFILTERS ( 'marts dim_city' ) ) & " cities."
+		displayFolder: Page 2 Overview\Comparison
+		lineageTag: ee457405-3588-454a-b102-f8a65afdbf4c
+
+	/// Today's Summary. Falls back to an all-cities overview when no single city is selected, instead of a prompt.
+	measure 'P2 Summary Text' =
+			IF (
+			    HASONEVALUE ( 'marts dim_city'[city] ),
+			    [P2 Summary],
+			    VAR NC = CALCULATE ( DISTINCTCOUNT ( 'marts dim_city'[city] ), REMOVEFILTERS ( 'marts dim_city' ) )
+			    VAR NT = CALCULATE ( DISTINCTCOUNT ( 'marts dim_city'[city] ), 'marts dim_city'[has_traffic_data] = TRUE (), REMOVEFILTERS ( 'marts dim_city' ) )
+			    VAR NA = CALCULATE ( [P2 Alert Count], REMOVEFILTERS ( 'marts dim_city' ) )
+			    VAR D = CALCULATE ( MAX ( 'marts mart_city_daily'[date_utc] ), REMOVEFILTERS ( 'marts dim_date' ), REMOVEFILTERS ( 'marts dim_city' ) )
+			    VAR AvgA = CALCULATE ( AVERAGE ( 'marts mart_city_daily'[avg_aqi] ), REMOVEFILTERS ( 'marts dim_date' ), REMOVEFILTERS ( 'marts dim_city' ), 'marts mart_city_daily'[date_utc] = D )
+			    VAR Cat = SWITCH ( TRUE (), ISBLANK ( AvgA ), "not available", AvgA < 1.5, "Good", AvgA < 2.5, "Fair", AvgA < 3.5, "Moderate", AvgA < 4.5, "Poor", "Very Poor" )
+			    RETURN
+			        "Across " & NC & " monitored cities, air quality is mostly " & Cat & ". "
+			            & IF ( NA = 0, "No active alerts require attention. ", NA & " active alert" & IF ( NA > 1, "s", "" ) & " require" & IF ( NA = 1, "s", "" ) & " attention. " )
+			            & "Traffic information is available for " & NT & " cities."
+			)
+		displayFolder: Page 2 Overview\Narrative
+		lineageTag: 0c2483b9-4ada-4e44-9e24-5a8406ecafc2
+
+	/// Page 4 KPI subtitle. Value only - no arrow glyph, add the arrow in the visual formatting.
+	measure 'Sub Humidity' = VAR D = [Humidity % Change] RETURN IF ( ISBLANK ( D ), "no comparison", FORMAT ( ABS ( D ), "0" ) & "% vs yesterday" )
+		displayFolder: KPI Subtitles
+		lineageTag: 73f5eb1a-a5de-4daf-8d41-afe467e85924
+
+	/// Wind BEARING does not exist in the model (no wind_deg column), so a compass direction cannot be shown. Describes strength instead.
+	measure 'Sub Wind' = VAR W = [Wind Speed (m/s)] * 3.6 RETURN SWITCH ( TRUE (), ISBLANK ( W ), "no reading", W < 6, "Calm", W < 20, "Light breeze", W < 39, "Moderate wind", W < 62, "Strong wind", "Gale force" )
+		displayFolder: KPI Subtitles
+		lineageTag: ff2d5e7a-8cb1-4d90-b0c9-f0a386b596e7
+
+	measure 'Sub Pressure' = VAR P = [Pressure (hPa)] RETURN SWITCH ( TRUE (), ISBLANK ( P ), "no reading", P >= 1020, "High pressure", P >= 1005, "Mid pressure", "Low pressure" )
+		displayFolder: KPI Subtitles
+		lineageTag: 36293064-a111-450c-a6a6-7bc7999c6641
+
+	measure 'Sub Visibility' = VAR V = [Avg Visibility (km)] RETURN SWITCH ( TRUE (), ISBLANK ( V ), "no reading", V >= 10, "Clear", V >= 5, "Moderate", V >= 2, "Reduced", "Poor" )
+		displayFolder: KPI Subtitles
+		lineageTag: 9d15a741-1fa8-4d76-91f5-72c633485bc5
+
+	measure 'Sub Rain' = VAR R = [Rain Probability] RETURN SWITCH ( TRUE (), ISBLANK ( R ), "no forecast", R < 20, "No rain expected", R < 60, "Rain possible", "Rain likely" )
+		displayFolder: KPI Subtitles
+		lineageTag: ef3d9559-69f0-467b-b898-d9c6d643cce1
+
+	measure 'Sub Comfort' = VAR C = [Comfort Index] RETURN SWITCH ( TRUE (), ISBLANK ( C ), "no reading", C >= 0.8, "Very comfortable", C >= 0.65, "Comfortable", C >= 0.45, "Acceptable", "Uncomfortable" )
+		displayFolder: KPI Subtitles
+		lineageTag: a84613c9-2005-4074-a1a4-84b7a01f6d38
+
+	/// Signed change - drives arrow direction and conditional colour, since the visible measures show an absolute value.
+	measure 'Sub Humidity Delta' = [Humidity % Change]
+		formatString: 0
+		isHidden
+		displayFolder: KPI Subtitles
+		lineageTag: a2755ea8-ebc2-4057-99fc-e1700b2b0b75
+
+	measure 'Sub Pressure Delta' =
+			VAR D = CALCULATE ( MAX ( 'marts fct_weather_daily'[date_utc] ), REMOVEFILTERS ( 'marts dim_date' ) )
+			VAR P0 = CALCULATE ( AVERAGE ( 'marts fct_weather_daily'[avg_pressure_hpa] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts fct_weather_daily'[date_utc] = D )
+			VAR P1 = CALCULATE ( AVERAGE ( 'marts fct_weather_daily'[avg_pressure_hpa] ), REMOVEFILTERS ( 'marts dim_date' ), 'marts fct_weather_daily'[date_utc] = D - 1 )
+			RETURN IF ( ISBLANK ( P0 ) || ISBLANK ( P1 ), BLANK (), P0 - P1 )
+		formatString: 0
+		isHidden
+		displayFolder: KPI Subtitles
+		lineageTag: 4794360e-edad-4ba5-9d82-2c9afa0044cf
+
+	column _
+		isHidden
+		formatString: 0
+		lineageTag: 61bf6eee-78c8-4b5f-a90b-2c3496ae9696
+		summarizeBy: sum
+		isNameInferred
+		sourceColumn: [_]
+
+		annotation SummarizationSetBy = Automatic
+
+	column TempZone =
+			
+			SWITCH(
+			    TRUE(),
+			    [Avg Temp] >= 28, "Hot (>28°C)",
+			    [Avg Temp] >= 25, "Warm (25–28°C)",
+			    "Cool (<25°C)"
+			)
+		lineageTag: cacd1bb8-a264-4f95-9531-35a26472d117
+		summarizeBy: none
+
+		annotation SummarizationSetBy = Automatic
+
+	partition _KPIs_Overview = calculated
+		mode: import
+		source = ROW("_", BLANK())
+
+	annotation PBI_Id = b3b401208ac146bdb1235ea5f33192ea
+

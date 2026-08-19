@@ -1,0 +1,76 @@
+table 'ai_summaries city_daily_summary'
+	lineageTag: 7dc0d825-6b4b-4d3b-97ba-148a74586a98
+
+	column city
+		dataType: string
+		isNullable: false
+		sourceProviderType: nvarchar(max)
+		lineageTag: 98679fa6-49b8-4cfd-a844-7f2ff8c772d0
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column date_utc
+		dataType: dateTime
+		isNullable: false
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: 0afdb0aa-d9ed-4268-94a1-d3cbc2ce8652
+		summarizeBy: none
+		sourceColumn: date_utc
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column alert_headline
+		dataType: string
+		isNullable: false
+		sourceProviderType: nvarchar(max)
+		lineageTag: daa155d0-ea38-4544-a164-ce4b5dff1c25
+		summarizeBy: none
+		sourceColumn: alert_headline
+
+		annotation SummarizationSetBy = Automatic
+
+	column summary_text
+		dataType: string
+		isNullable: false
+		sourceProviderType: nvarchar(max)
+		lineageTag: 27ae886d-a2c4-4599-9b77-583263a286a8
+		summarizeBy: none
+		sourceColumn: summary_text
+
+		annotation SummarizationSetBy = Automatic
+
+	column model_name
+		dataType: string
+		isNullable: false
+		sourceProviderType: nvarchar(max)
+		lineageTag: 5bd7c819-35e3-4b6d-891e-09e61c7e5204
+		summarizeBy: none
+		sourceColumn: model_name
+
+		annotation SummarizationSetBy = Automatic
+
+	column generated_at
+		dataType: dateTime
+		isNullable: false
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 4c4f33df-fa15-4e0b-ba5d-3bd51d813006
+		summarizeBy: none
+		sourceColumn: generated_at
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'ai_summaries city_daily_summary' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    ai_summaries_city_daily_summary = Source{[Schema="ai_summaries",Item="city_daily_summary"]}[Data]
+				in
+				    ai_summaries_city_daily_summary
+

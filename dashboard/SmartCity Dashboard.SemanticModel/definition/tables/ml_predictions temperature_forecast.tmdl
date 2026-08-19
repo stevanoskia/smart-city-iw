@@ -1,0 +1,75 @@
+table 'ml_predictions temperature_forecast'
+	lineageTag: e75ba0a4-f1c0-4fea-abd5-29317fbac541
+
+	column city
+		dataType: string
+		isNullable: false
+		sourceProviderType: nvarchar(max)
+		lineageTag: 5d1e83a7-3244-4715-b914-f76b7e1e2da5
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column predicted_for
+		dataType: dateTime
+		isNullable: false
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 551fd6b6-8242-4b6d-89d4-d86199a09cb7
+		summarizeBy: none
+		sourceColumn: predicted_for
+
+		annotation SummarizationSetBy = Automatic
+
+	column horizon_hours
+		dataType: int64
+		isNullable: false
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 2a2ce180-b52f-4dd5-ad84-61602bbfef7a
+		summarizeBy: sum
+		sourceColumn: horizon_hours
+
+		annotation SummarizationSetBy = Automatic
+
+	column predicted_temp
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: e58893c5-5e1a-47f9-9435-e2fa5fceb4e1
+		summarizeBy: sum
+		sourceColumn: predicted_temp
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column model_version
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 85f9e45e-4afa-49d6-80fa-8e4f575ead48
+		summarizeBy: none
+		sourceColumn: model_version
+
+		annotation SummarizationSetBy = Automatic
+
+	column scored_at
+		dataType: dateTime
+		isNullable: false
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 9bbacba7-a48c-4df3-8d02-5afcc2257ebe
+		summarizeBy: none
+		sourceColumn: scored_at
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'ml_predictions temperature_forecast' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    ml_predictions_temperature_forecast = Source{[Schema="ml_predictions",Item="temperature_forecast"]}[Data]
+				in
+				    ml_predictions_temperature_forecast
+

@@ -1,0 +1,77 @@
+table 'ml_predictions city_score_forecast'
+	lineageTag: c5bca20c-fa03-43be-b64c-615e0f0b7681
+
+	column city
+		dataType: string
+		isNullable: false
+		sourceProviderType: nvarchar(max)
+		lineageTag: 9a2f4035-2dcf-4cae-a644-612003e35e47
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column predicted_for
+		dataType: dateTime
+		isNullable: false
+		formatString: Long Date
+		sourceProviderType: date
+		lineageTag: c5ea850c-b973-4bd7-ad2a-475330d8eb91
+		summarizeBy: none
+		sourceColumn: predicted_for
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation UnderlyingDateTimeDataType = Date
+
+	column horizon_days
+		dataType: int64
+		isNullable: false
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 6a001cb6-3b30-4fae-ba4e-c618121700bd
+		summarizeBy: sum
+		sourceColumn: horizon_days
+
+		annotation SummarizationSetBy = Automatic
+
+	column predicted_comfort_index
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: a76c1f45-cada-499f-a3df-f684783818a7
+		summarizeBy: sum
+		sourceColumn: predicted_comfort_index
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column model_version
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 61838d55-c832-4d65-8ad3-ff225636b28e
+		summarizeBy: none
+		sourceColumn: model_version
+
+		annotation SummarizationSetBy = Automatic
+
+	column scored_at
+		dataType: dateTime
+		isNullable: false
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: fe37c29c-377a-4d76-815e-645503a5bc30
+		summarizeBy: none
+		sourceColumn: scored_at
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'ml_predictions city_score_forecast' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    ml_predictions_city_score_forecast = Source{[Schema="ml_predictions",Item="city_score_forecast"]}[Data]
+				in
+				    ml_predictions_city_score_forecast
+

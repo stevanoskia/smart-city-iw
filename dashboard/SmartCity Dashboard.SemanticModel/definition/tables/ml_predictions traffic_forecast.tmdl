@@ -1,0 +1,75 @@
+table 'ml_predictions traffic_forecast'
+	lineageTag: 045ada02-9535-46b8-b941-33d9b4058609
+
+	column city
+		dataType: string
+		isNullable: false
+		sourceProviderType: nvarchar(max)
+		lineageTag: a76e0901-0a39-4517-a169-23caf8fee05d
+		summarizeBy: none
+		sourceColumn: city
+
+		annotation SummarizationSetBy = Automatic
+
+	column predicted_for
+		dataType: dateTime
+		isNullable: false
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 65988abf-c065-436b-8881-1657c725099f
+		summarizeBy: none
+		sourceColumn: predicted_for
+
+		annotation SummarizationSetBy = Automatic
+
+	column horizon_hours
+		dataType: int64
+		isNullable: false
+		formatString: 0
+		sourceProviderType: int
+		lineageTag: 2ff9d643-a7fe-43f2-8827-948a7503026f
+		summarizeBy: sum
+		sourceColumn: horizon_hours
+
+		annotation SummarizationSetBy = Automatic
+
+	column predicted_congestion
+		dataType: double
+		sourceProviderType: decimal
+		lineageTag: fa94db5d-8bc0-4981-910c-a46081e41f1c
+		summarizeBy: sum
+		sourceColumn: predicted_congestion
+
+		annotation SummarizationSetBy = Automatic
+
+		annotation PBI_FormatHint = {"isGeneralNumber":true}
+
+	column model_version
+		dataType: string
+		sourceProviderType: nvarchar(max)
+		lineageTag: 9c1bf3c4-fc6c-46d6-803c-a662bcf2f919
+		summarizeBy: none
+		sourceColumn: model_version
+
+		annotation SummarizationSetBy = Automatic
+
+	column scored_at
+		dataType: dateTime
+		isNullable: false
+		formatString: General Date
+		sourceProviderType: datetime2
+		lineageTag: 4321408f-d32f-46b0-a04d-364bad6f579c
+		summarizeBy: none
+		sourceColumn: scored_at
+
+		annotation SummarizationSetBy = Automatic
+
+	partition 'ml_predictions traffic_forecast' = m
+		mode: directQuery
+		source =
+				let
+				    Source = PostgreSQL.Database("localhost:5434", "smart_city"),
+				    ml_predictions_traffic_forecast = Source{[Schema="ml_predictions",Item="traffic_forecast"]}[Data]
+				in
+				    ml_predictions_traffic_forecast
+
